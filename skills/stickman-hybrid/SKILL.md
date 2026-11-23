@@ -236,6 +236,20 @@ objected when this was done in sequence).
   - `skills/loss-aversion-designer`: Credible downside consequence framing.
   - `skills/data-storytelling`: Data/Narrative/Visual 3-pillar narrative progression.
   - `skills/viral-generator-builder`: Screenshot-tested virality formulas and high-shareability identity hooks.
+- **100% Working 3-Second Viral Hook Engine & Procedural Auditory Shock Suite (Rule 46):**
+  1. `viral_hook_engine.py` implements the battle-tested 2025/2026 YouTube Shorts / Reels / TikTok **3-Second A-E-T Hook Architecture**:
+     - **A (Attention Spike, 0–1s):** Procedural frame-0 sub-bass boom (50Hz exponential decay sine) + whoosh riser + radial speedlines to halt thumb scrolling with zero dead air.
+     - **E (Emotional Anchor, 1–2s):** 6 Psychological Archetypes (`barnum`, `counter_intuitive`, `paradox`, `transformation`, `forbidden`, `warning`) that create irresistible curiosity gaps.
+     - **T (Tease the Outcome, 2–3s):** Open-loop cliffhanger that demands completion to achieve >80% APV (Average Percentage Viewed).
+  2. **Zero External Audio Dependency:** Procedural sound synthesis via NumPy & SciPy generates cinematic sub-drops, tension sweeps, and tactile word pop transients mathematically.
+  3. **Hormozi-Style Kinetic Typography:** Generates high-contrast glowing pill badges (`#FFE500` yellow, `#00F0FF` cyan, `#FF0055` crimson) with word-by-word active scale punch and millisecond alignment via `faster-whisper`.
+  4. **Expressive Stickman Vector Animation:** Renders responsive vector characters in 4 distinct emotional shock poses (`shock`, `warning`, `mystery`, `intense`) with dynamic $1.00\times \rightarrow 1.18\times$ camera push-in.
+  5. **Hardware-Accelerated Output:** Compiles 9:16 vertical (1080x1920) or 16:9 landscape (1920x1080) MP4s in seconds using Intel VA-API (`h264_vaapi`) with zero CPU overload.
+  6. **CLI Command:**
+     ```bash
+     python3 scripts/viral_hook_engine.py --topic "Your Topic" --archetype paradox --ratio 9x16 --out hook.mp4
+     python3 scripts/viral_hook_engine.py --list-archetypes
+     ```
 - Text on pictures only for numbers and dates, names, map places and unseen terms. Never
   over a face (render.py places tags itself). 6-10 text cards per 2 minutes.
 - Pick pictures by what they show, not by file number. Flow swaps them in batches.
