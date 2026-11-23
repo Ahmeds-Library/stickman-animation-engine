@@ -104,6 +104,54 @@ HOOK_ARCHETYPES = {
         "power_words": ["SIGNAL", "DO NOT", "IGNORE"],
         "pose": "warning",
         "accent_color": (255, 60, 40) # Bright Alert Red
+    },
+    "modern_inversion": {
+        "name": "Modern Hypnosis to Void Inversion (Ink & Zenn Formula)",
+        "description": "Contrasts a hyper-relatable modern comfort against the terrifying evolutionary baseline (19M+ view benchmark).",
+        "template": "Tonight, you will {topic} without thinking. Now erase all of that. For 99.9 percent of human history, that never existed.",
+        "power_words": ["ERASE", "99.9 PERCENT", "NEVER EXISTED"],
+        "pose": "shock",
+        "accent_color": (255, 170, 40) # Warm Amber Torch
+    },
+    "perspective_inversion": {
+        "name": "Perspective Inversion (Quark Formula)",
+        "description": "Flips the observer role to spark visceral existential curiosity (2M+ view benchmark).",
+        "template": "Have you ever wondered what others actually think of {topic}? Not what they say, but what they secretly believe you are.",
+        "power_words": ["ACTUALLY", "NOT WHAT", "YOU ARE"],
+        "pose": "mystery",
+        "accent_color": (0, 220, 255) # Electric Cyan
+    },
+    "oversimplified_folly": {
+        "name": "Grand Epic vs Petty Folly (OverSimplified 52M Benchmark)",
+        "description": "Contrasts a massive historical conflict with ridiculous human pettiness and exaggerated comedic tension.",
+        "template": "In history, the entire war over {topic} started for the most ridiculous reason you will ever hear.",
+        "power_words": ["RIDICULOUS", "WAR", "STARTED"],
+        "pose": "shock",
+        "accent_color": (255, 75, 75) # Comic Red
+    },
+    "deadpan_quiz": {
+        "name": "Deadpan Clinical Multiple Choice (Casually Explained 23M Benchmark)",
+        "description": "Dissects awkward social anxieties using clinical flowcharts and deadpan understated options.",
+        "template": "Here is a quick quiz to see if you actually understand {topic}. Scenario one: you are completely wrong.",
+        "power_words": ["QUICK QUIZ", "ACTUALLY", "COMPLETELY WRONG"],
+        "pose": "mystery",
+        "accent_color": (160, 160, 160) # Cool Slate Gray
+    },
+    "keys_of_power": {
+        "name": "Systemic Incentive Breakdown (CGP Grey 26M Benchmark)",
+        "description": "Peels back romantic moral myths to reveal cold mechanical incentives and power dynamics.",
+        "template": "You think {topic} is about good intentions. It is not. It is a cold mechanical game of survival.",
+        "power_words": ["NOT ABOUT", "COLD MECHANICAL", "SURVIVAL"],
+        "pose": "warning",
+        "accent_color": (255, 204, 0) # Sovereign Gold
+    },
+    "everyday_axiom": {
+        "name": "The Counter-Intuitive Everyday Axiom (MinutePhysics 10M Benchmark)",
+        "description": "Takes an everyday physical reality and reveals that 99% of common sense explanations are backwards.",
+        "template": "If space is three dimensional, why is {topic} completely flat? The real answer is bizarre.",
+        "power_words": ["WHY IS", "COMPLETELY", "BIZARRE"],
+        "pose": "mystery",
+        "accent_color": (0, 230, 150) # Science Mint
     }
 }
 

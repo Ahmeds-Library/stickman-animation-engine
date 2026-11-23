@@ -23,8 +23,15 @@ it works from ANY chat:
     stickman hybrid continue     carry on where you stopped
 
 You choose the topic (or ask for 10 ideas), the language, the length, the format (Long 16:9, Shorts 9:16, or Both), and whether you want captions (trending kinetic subtitles or clean visuals). Claude
-picks the look that suits the topic (bright, warm, ink, painted or night) and
+picks the look that suits the topic (oversimplified, casually_explained, cgp_grey, minute_physics, warm, ink, painted, bright) and
 shows you three checkpoints: the script, the voice, and the final video.
+
+Direct Terminal Control (Unified Studio Master CLI):
+    python3 studio.py doctor               Check system readiness & hardware acceleration
+    python3 studio.py hook <topic>         Generate 3-second viral hook video (12 archetypes)
+    python3 studio.py heading <title>      Generate animated chapter title card with Ken Burns
+    python3 studio.py vfx <video>          Apply screen shake, flash frame, or vignette
+    python3 studio.py qc [dir]             Run 60-Rule Reinforcement Learning Quality Audit
 
 Good to know: the Urdu / Roman Urdu voice is made on Kaggle's free GPU. Sometimes Kaggle's
 queue is busy and the voice job waits 30 minutes to 2 hours ("QUEUED"). That is
@@ -54,9 +61,15 @@ baad yeh KISI BHI chat se chalega:
     stickman hybrid start        nayi video
     stickman hybrid continue     jahan chhoda tha wahin se
 
-Topic aap do (ya 10 idea maango), bhasha aur length bhi aap chuno. Look (bright,
-warm, ink, painted, night) Claude topic ke hisaab se chunega. Aapko sirf teen
+Topic aap do (ya 10 idea maango), bhasha aur length bhi aap chuno. Look (oversimplified, casually_explained, cgp_grey, minute_physics, warm, ink, bright) Claude topic ke hisaab se chunega. Aapko sirf teen
 cheezein dikhayi jayengi: script, awaaz, aur final video.
+
+Direct Terminal Control (Unified Studio Master CLI):
+    python3 studio.py doctor               System diagnostics aur hardware acceleration check karein
+    python3 studio.py hook <topic>         3-second viral hook video generate karein (12 archetypes)
+    python3 studio.py heading <title>      Animated chapter title card banayein Ken Burns effect k sath
+    python3 studio.py vfx <video>          Screen shake ya flash frame VFX lagayein
+    python3 studio.py qc [dir]             60-Rule Reinforcement Learning Quality Audit run karein
 
 Ghabraiye mat: Urdu / Roman Urdu awaaz Kaggle ke free GPU par banti hai. Kabhi-kabhi Kaggle
 ki queue busy hoti hai aur job 30 minute se 2 ghante tak "QUEUED" dikhata hai.

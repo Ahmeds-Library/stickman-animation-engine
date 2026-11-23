@@ -32,6 +32,17 @@ flowchart LR
 
 ## ⚡ Key Capabilities
 
+### 0. Unified Master Control Plane (`studio.py`)
+Run the entire production studio with a single command from the project root:
+```bash
+python3 studio.py doctor                                                  # System hardware & engine diagnostics
+python3 studio.py hook "Ancient Human Night" --archetype modern_inversion # 3-second viral video hook
+python3 studio.py heading "Chapter 1: The Void" --subtitle "50,000 Years" # Animated chapter title card
+python3 studio.py vfx input.mp4 --effect shake_impact                     # High-impact screen shake
+python3 studio.py qc example/boat_hi                                      # 60-Rule RL Quality Audit
+python3 studio.py create "The French Revolution" --look oversimplified    # Full automated pipeline
+```
+
 ### 1. Dual-Pipeline Decoupling (Rule 22)
 * **Master Long Documentary (16:9 Widescreen - 1920x1080):** Deep historical narrative, dedicated 16:9 Flow art, chapter slugs, and YouTube End Screen interactive outro slates.
 * **Viral Short (9:16 Vertical - 1080x1920):** Fast-paced (40–60s), 0–3s viral hook, snappy cadence (2.6–3.2 words/s), dedicated 9:16 vertical Flow art, and channel subscribe handoff CTA.
@@ -55,19 +66,38 @@ flowchart LR
 * **Model Pre-Fetcher & Verifier:** Pre-warms local Kokoro-82M and Faster-Whisper int8 models.
 * **Resource Self-Healing:** Validates vendored bold fonts (`Montserrat-Black`, `LuckiestGuy`, `Kalam`) and CC0 foley sound effects.
 
-### 5. Psychoacoustic Sound Design & Editing Psychology
+### 5. Psychoacoustic Sound Design & Editing Psychology (Rules 47, 55, 59)
 * **Tactile Synesthesia (Foley for Abstract Concepts):** Assigns organic physical foley (wood clacks, typewriter taps, paper rustles, bubble pops) to abstract 2D graphics so data feels physically heavy.
+* **J-Cut Audio Pre-Lapping:** Entrance foley leads the visual graphic appearance by **90ms to 120ms** (the ear prepares the eye).
 * **The "Scare and Release" Micro-Silence Vacuum:** Cuts all music and room ambience to complete digital silence for 0.4s to 0.8s immediately before a pivotal revelation (*The Vox Drop-Out*).
 * **Infrasonic & Low-End Tension (40–60 Hz Sub-Drones):** Visceral sub-rumble activating the primal threat/curiosity response during mysteries or twists.
 * **Spectral Anti-Masking:** Clean frequency slotting (Voiceover 120Hz–4.5kHz, Highlighters 2.5kHz–8kHz, Sub-bass 40Hz–65Hz, Bed -17 dB).
 * Read the full [Psychoacoustic Editing Guide](skills/stickman-hybrid/references/PSYCHOACOUSTIC_EDITING_GUIDE.md).
 
-### 6. Curiosity Architecture & 4–7s Pattern Interrupts
-* **Loewenstein's Information Gap:** Act 1 opens an unresolved paradoxical premise that sustains curiosity.
-* **Zeigarnik Effect Micro-Bridges:** Chain-link loops deployed every 45–75s (*"Close Loop A $\rightarrow$ Open Loop B"*), eliminating mid-video viewer fatigue.
-* **Dynamic Camera Push-In:** Holds exceeding 3.0s receive a subtle cinematic scale push-in ($1.00\times \rightarrow 1.045\times$ over 4.0s).
+### 6. 12 Psychological Hook Archetypes (Rules 46, 49, 51-54)
+Benchmarked against top 100M+ view YouTube channels:
+1. `modern_inversion`: Hypnotic Modern Comfort $\to$ Evolutionary Void Inversion (**Ink Explainer 19.3M & Zenn 8.1M**).
+2. `oversimplified_folly`: Grand Historical Crisis vs Petty Human Absurdity (**OverSimplified 51.9M**).
+3. `deadpan_quiz`: Clinical Multiple-Choice Decision-Tree Quiz (**Casually Explained 22.8M**).
+4. `keys_of_power`: Cold Game-Theoretic Mechanical Incentives (**CGP Grey 26.1M**).
+5. `everyday_axiom`: Shattering Everyday Intuition with 2D Geometry (**MinutePhysics 9.5M**).
+6. `perspective_inversion`: Animal / Alien Observer Flip (**Quark 1.97M**).
+7. `barnum`: Self-Relevance Mirror (*"Your brain is doing something only 1% notice"*).
+8. `counter_intuitive`: Immediate Disruption of Common Wisdom.
+9. `paradox`: The Impossible Historical Contradiction.
+10. `transformation`: 30-Second Permanent Mindset Shift.
+11. `forbidden`: Reactance Theory Secret Reveal.
+12. `warning`: Threat Detection & Loss Aversion Anchor.
 
-### 7. High-CTR 3-Element Thumbnails (Rule 45)
+### 7. 6 Visual Style Presets (`looks/`)
+* `oversimplified`: Bold 7-9px comic ink, period costumes (wigs, crowns, muskets), exaggerated bug-eyed reactions.
+* `casually_explained`: Ultra-minimal 3px clean black lines, stark white canvas, static deadpan dot eyes, flowcharts.
+* `cgp_grey`: Slate gray architecture (`#2A2E39`), signature rectangular spectacles, sovereign keys, network trees.
+* `minute_physics`: Hand-drawn whiteboard paper texture (`#FAF8F2`), dynamic vector velocity arrows, marker foley.
+* `ink`: Warm vintage parchment (`#F7E8C0` to `#ECD6B4`), felt-pen lines, archival cutout props.
+* `warm`: Golden ochre daylight to Midnight Indigo (`#181A2A`) with Campfire Amber (`#FFAE33`) safety island.
+
+### 8. High-CTR 3-Element Thumbnails (Rule 45)
 * Strictly adheres to the **Three-Element Rule**:
   1. *Hero Subject (50% frame):* Expressive stickman face/silhouette.
   2. *Context Prop (25% frame):* Glowing 3D hero artifact with radial bloom.
@@ -249,9 +279,9 @@ Every asset generated by Stickman Hybrid is **100% compliant with the YouTube Pa
 
 ---
 
-## 📜 Production Rules (Rules 1 to 46)
+## 📜 Production Rules (Rules 1 to 60)
 
-All productions automatically comply with the 46 rules codified in [`skills/stickman-hybrid/PLAYBOOK.md`](skills/stickman-hybrid/PLAYBOOK.md), including:
+All productions automatically comply with the 60 rules codified in [`skills/stickman-hybrid/PLAYBOOK.md`](skills/stickman-hybrid/PLAYBOOK.md), verified continuously by `python3 studio.py qc`:
 - **Rule 20:** Pure 2D hand-drawn stickman aesthetic (no 3D or uncanny photorealism).
 - **Rule 21:** Zero-Crop native scaling (1536x2752 for 9:16, 2752x1536 for 16:9).
 - **Rule 22:** Dual-Pipeline independent Flow generation.
@@ -261,7 +291,21 @@ All productions automatically comply with the 46 rules codified in [`skills/stic
 - **Rule 40 & 44:** 6-Act Tension Curve, Vox Drop-Out Silence, and Loewenstein Information Gap.
 - **Rule 41 & 42:** 4–7s Pattern Interrupts and Visual Metaphor Entropy.
 - **Rule 45:** High-CTR 3-Element Thumbnails with Mobile 140px Readability.
-- **Rule 46:** 100% Working 3-Second A-E-T Viral Hook Architecture with Procedural Auditory Shock Engine.
+- **Rule 46:** 100% Working 3-Second A-E-T Viral Hook Architecture with Procedural Auditory Shock.
+- **Rule 47:** Psychoacoustic Sound Layering, J-Cuts (-120ms lead), and Tactile Synesthesia.
+- **Rule 48:** Autonomous Zero-Setup Self-Healing Guarantee (`auto_bootstrap.py`).
+- **Rule 49:** Hypnotic Modernity $\to$ Evolutionary Void Inversion (**Ink Explainer & Zenn Benchmark**).
+- **Rule 50:** Dual-Tone Canvas Harmony (Warm Parchment `#F7E8C0` + Midnight Indigo `#181A2A` with Campfire Amber).
+- **Rule 51:** OverSimplified Comic Contrast Law (Petty Human Folly vs Grand History).
+- **Rule 52:** Deadpan Flowchart Classification Standard (Casually Explained Clinical Irony).
+- **Rule 53:** Mechanical Incentive & Keyflow Principle (CGP Grey Keys of Power).
+- **Rule 54:** Kinetic Marker & Vector Drawing Standard (MinutePhysics Geometric Resolution).
+- **Rule 55:** Strategic Dead Air & Comedic Timing Law (0.4s-0.8s pre-punchline silence).
+- **Rule 56:** 5-Pillar Visual Effects Anatomy (Screen Shake, Flash Frames, Radial Speedlines, Bloom).
+- **Rule 57:** Dynamic Sticker Physics & Anti-Occlusion Staging (Elastic Spring Overshoot + Face Protection).
+- **Rule 58:** Kinetic Typography & Angled Chapter Headings (`studio.py heading`).
+- **Rule 59:** 5-Layer Broadcast Foley Mix (Sub-bass $\to$ Foley $\to$ Highlighters $\to$ Vox Vacuum $\to$ Ducked Bed).
+- **Rule 60:** Dynamic Camera Kinetics & Multi-Track Editing (Continuous Ken Burns $1.045\times$ Push-In).
 
 ---
 

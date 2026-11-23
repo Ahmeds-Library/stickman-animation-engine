@@ -916,6 +916,91 @@ Visual events, camera physics, and sound effects are automatically mapped from t
 - **Autonomous Auto-Provisioning**: Detects missing packages (`kokoro`, `faster-whisper`, `scipy`, `soundfile`, `pillow`) and installs them automatically via pip.
 - **Pre-Warms Models**: Verifies local Kokoro-82M and Faster-Whisper int8 models, ensuring zero first-run crashes.
 
+### Rule 49: The Hypnotic Modernity $\to$ Evolutionary Void Inversion Standard
+- **The Psychology of the Void Inversion (Ink Explainer 19.3M & Zenn 8.1M Benchmark)**:
+  - Viewers are numb to generic documentary openings ("Thousands of years ago..."). 
+  - To hook the subconscious, the first 0–6 seconds must establish a hyper-relatable modern comfort, then violently erase it:
+    - *0–3s (Modern Sensory Anchor)*: "Tonight, when the sun goes down, you're going to flip a switch. A warm bulb will flood your room..." or "This morning, a machine yelled at you until you woke up."
+    - *3–6s (The Void Inversion)*: "Now erase all of that. Step back 50,000 years. For 99.9% of human history, that switch did not exist."
+    - *6–12s (The Visceral Peril)*: "When the sun went down, your world didn't just get dark—it became lethal."
+- **Visual Staging**: Begin with modern everyday props (alarm clock, light switch, coffee cup), then apply a sound-lapping whoosh wipe (`jcut_whoosh`) that clears the screen, leaving the naked white-head stickman stranded in the ancient dark.
+
+### Rule 50: Dual-Tone Canvas Harmony & Dynamic Contrast Palette
+- **The Visual Contrast Physics (The Zenn & Ink Color Temperature Law)**:
+  - Explainer videos with 100% white backgrounds feel cold, sterile, and amateur. Explainer videos with 100% sepia brown backgrounds feel muddy and cause visual drop-off after 90 seconds.
+  - Top-tier channels maintain audience retention via dynamic color temperature shifts:
+    - *Daytime / Knowledge / Modern Canvas*: Warm vintage parchment (`#F7E8C0` to `#ECD6B4` or `#EEEBE1`) with 6–8px clean charcoal outlines (`#1A1A1A`) and opaque white head fills.
+    - *Night / Peril / Wilderness Canvas*: Midnight Indigo & Deep Space Navy (`#181A2A` to `#303D97`) with high-contrast radiant campfire amber (`#FFAE33` / `#FF7800`).
+- **The Island of Safety Composition**: In night or peril sequences, the firelight forms a warm circular mask ($r \approx 450\text{px}$) around the stickman. Outside the glow, predator silhouettes and cold terrain fade into deep indigo vignette, locking the viewer's eyes onto the protagonist's survival space.
+
+### Rule 51: The OverSimplified Comic Contrast Law (OverSimplified 52M Benchmark)
+- **The Petty Human vs Grand History Tension**:
+  - Never present historical conflicts, revolutions, or treaties as dry dates or academic summaries.
+  - Ground grand geopolitical crises in ridiculous, relatable human pettiness: character vanity, petty arguments, weird habits, or absurd misunderstandings between stickman figures.
+- **Visual Caricature & Exaggeration**:
+  - Use recognizable period costumes (tricorne hats, powdered wigs, crowns) draped on simple stick bodies.
+  - Characters react with extreme comic emotions: oversized white eyes with tiny black pupils for panic, streaming tears for despair, shouting open mouths, and comical slapstick impacts (`chop.ogg`, `impact-light-hard.wav`).
+
+### Rule 52: The Deadpan Flowchart Classification Standard (Casually Explained 23M Benchmark)
+- **The Clinical Irony Architecture**:
+  - Treat emotionally agonizing or awkward human dilemmas (dating signals, social anxiety, fitness plateaus) with the cold, sterile demeanor of a corporate training manual or scientific flowchart.
+  - Deploy multiple-choice decision trees on screen: *Scenario 1: She looks at you and smiles. Option A: She likes you. Option B: She is being polite. Option C: She is from Canada. Option D: Can't really be sure.*
+- **Understated Delivery**:
+  - Narrate in a steady, un-hyped, deadpan cadence.
+  - Pair with ultra-minimal 3px clean black lines on stark white canvas, letting the contrast between the absurd text and the calm visuals generate the humor.
+
+### Rule 53: The Mechanical Incentive & Keyflow Principle (CGP Grey 26M Benchmark)
+- **The Cold Mechanics of Systems**:
+  - In political, economic, or institutional explainers, strip away moral illusions. Explain history through the lens of game theory and selfish mechanical incentives.
+  - "Dictators don't rule alone. There are Keys to Power. Keep your keys loyal, or they replace you."
+- **Visual Node & Flowchart Kinetics**:
+  - Visualize power as concrete objects (glowing golden keys, treasure chests, tax revenue pipes) flowing between stickman node networks.
+  - Maintain a rapid, authoritative rhythmic speech cadence (175–195 WPM) with instant visual state updates synced to mechanical clicks.
+
+### Rule 54: The Kinetic Marker & Vector Drawing Standard (MinutePhysics 10M Benchmark)
+- **The Counter-Intuitive Everyday Axiom**:
+  - Start with a physical truth everyone observes but nobody understands ("Why is the solar system flat? If space is 3D, why isn't it a sphere?").
+  - Reveal that 99% of common intuition is flawed, and resolve the cosmic mystery in under 180 seconds using pure, intuitive 2D geometry.
+- **Dynamic Physics Vectors**:
+  - Animate real-time collision vectors, velocity arrows, and gravitational planes as if sketched with a fresh felt-tip marker on paper, accompanied by tactile marker squeaks and sliding paper foley.
+
+### Rule 55: The Strategic Dead Air & Comedic Timing Law
+- **The Vacuum Before the Punchline**:
+  - Both dramatic revelations and comedic punchlines require auditory breathing room to register in the viewer's brain.
+  - Immediately before any high-stakes punchline or ironic twist, apply a strict **0.4s to 0.8s total audio drop-out** (muting background music and room tone).
+  - The character's frozen reaction lands in absolute silence; the kinetic reaction SFX or vocal punchline fires on the release.
+
+### Rule 56: The 5-Pillar Visual Effects (VFX) Anatomy (`video_editor_studio.py vfx`)
+- **Screen Shake on Impact**: On sub-bass drops, cannon fire, or dramatic punches, displace frame using a damped sine wave:
+  `crop=w=in_w-40:h=in_h-40:x='20+12*sin(2*PI*t*16)*exp(-4.5*t)':y='20+12*cos(2*PI*t*16)*exp(-4.5*t)',scale=1920:1080`
+- **White Flash Frame**: 2 frames (0.06s–0.10s) of pure white flash (`fade=t=in:st=0:d=0.10:c=white`) on sudden reveals, explosions, or reality wipes.
+- **Radial Action Lines (Speed Lines)**: High-energy comic radial speedlines focused toward screen center, leaving a clear focal circle for the stickman protagonist.
+- **Hero Prop Bloom**: 24px gaussian blur ambient glow around focal items (golden keys, glowing bulbs, fire, ancient needles) to signal value.
+- **Micro-Emote Popups**: Expressive comic symbols (question marks, sweat drops, exclamation marks, steam puffs) popping over stickman heads for instant non-verbal storytelling.
+
+### Rule 57: Dynamic Sticker Physics & Anti-Occlusion Staging (`render_pro.py`)
+- **Damped Harmonic Spring Physics**: Stickers enter with an elastic overshoot ($1.15\times \to 1.00\times$) paired with a subtle -3.5° to +4° rotation tilt.
+- **J-Cut Audio Pre-Lapping**: Every sticker entrance sound (bubble pop, wood click, paper slide) leads the visual graphic appearance by **90ms to 120ms**. The ear prepares the eye.
+- **Strict Anti-Occlusion Guard**: Stickers are automatically staged in the outer quadrants (top-left, top-right, or lower-third flank). They must NEVER obscure the stickman's eyes, mouth, or central face.
+- **2.5s Bounded Lifetime**: Overlay props automatically exit after 1.8s–3.2s with a soft zip-out whoosh, preventing screen clutter and visual fatigue.
+
+### Rule 58: Kinetic Typography & Angled Chapter Headings (`video_editor_studio.py heading`)
+- **Single-Word Hormozi Badges**: Displays strictly the active spoken word with millisecond precision, highlighted in high-contrast amber/cyan/crimson with a translucent dark backing pill.
+- **Animated Chapter Heading Cards**: Generated via `video_editor_studio.py heading "Chapter Title"` with double border frames, parchment or slate backdrops, and continuous Ken Burns push-in ($1.00\times \to 1.045\times$).
+- **Angled Text Badges**: Chapter subheadings and curiosity tags tilted at -3.5° to -5.0° with heavy 12–16px dark stroke and soft drop shadow.
+
+### Rule 59: The 5-Layer Broadcast Foley Mix (SFX Hierarchy) (`sfx_smart_designer.py`)
+- **Layer 1 (Sub-Bass Foundation)**: 40Hz–65Hz resonant boom (-1.5 dBFS) at frame 0 and major chapter transitions.
+- **Layer 2 (Tactile Foley)**: Real-world physical textures (wood clacks, paper rustles, marker squeaks, coin drops) at -14 dBFS synced to cuts and stickers.
+- **Layer 3 (Auditory Highlighters)**: Micro-transient pings, chimes, and bell tones at -22 dBFS marking dates, percentages, and metrics.
+- **Layer 4 (The Vox Drop-Out)**: Strict 0.4s–0.8s digital silence vacuum immediately before punchlines or twist reveals.
+- **Layer 5 (Ducked Music Bed)**: 100% CC0 background music ducked to -24 dBFS during voiceover with smooth 120ms release.
+
+### Rule 60: Dynamic Camera Kinetics & Split-Screen Multi-Track Editing
+- **The Ken Burns Law**: Any visual hold exceeding 2.0s must apply a continuous slow scale push-in ($1.00\times \to 1.045\times$). Static, lifeless frames are strictly prohibited.
+- **Dialogue Shot-Reverse-Shot**: During multi-character dialogue (OverSimplified style), camera cuts alternate between characters every 0.8s–1.4s.
+- **Split-Screen Comparisons**: "Then vs Now" or "Expectation vs Reality" visual comparisons split by a clean vertical divider line with sound-swapping audio balance.
+
 ### Multi-Skill Orchestration Ecosystem
 The pipeline is fortified with 7 integrated companion skills:
 - `skills/youtube-seo-optimizer`: High-intent search keyword discovery, optimized descriptions, curiosity timestamps.

@@ -1,20 +1,26 @@
 # ink
 
 **When:** topics full of numbers, comparisons and "this vs that": psychology, money, the
-body, "what happens if". This is the look of the 14M-view stick-figure explainer.
+body, "what happens if", and ancient human daily life explainers. This is the look of **Ink Explainer** (19.3M views) and **Quark** (1.97M views).
 
 **STYLE** (paste this after `look: ink`):
 
-hand-drawn 2D stick figure explainer illustration, clean black ink outlines of even weight like a felt-tip pen, flat colour fills limited to a few clear accents (sky blue, grass green, skin beige, one red), simple readable full-bleed backgrounds drawn in the same ink style (rooms, landscapes, streets), off-white paper tone, generous empty space, 16:9. People are classic stickmen: a perfectly round white head outlined in black, two small black dot eyes, a simple line mouth, thin black stick limbs.
+hand-drawn 2D stick figure explainer illustration, clean black ink outlines of even weight (6-8px felt-tip pen stroke, #1A1A1A), warm vintage cream paper tone backdrop (#F7E8C0 to #ECD6B4 with subtle paper fiber texture and soft radial vignette), flat colour fills limited to clear focal accents (amber yellow, soft crimson, sky blue, skin beige), generous negative breathing space, 16:9 widescreen or 9:16 vertical. The protagonist is a classic minimalist stickman: perfectly round white head outlined in ink, expressive black dot eyes, thin black stick limbs, dynamic body gesture. Full-bleed background with simple architectural or landscape silhouettes.
+
+**Palette & Canvas Tokens:**
+- Backdrop Canvas: Vintage Cream `#F7E8C0` / Off-White Parchment `#ECD6B4`
+- Primary Ink Stroke: Charcoal Ink `#1A1A1A` (6–8px weight)
+- Character Head Fill: Opaque Pure White `#FFFFFF`
+- Focal Accent Colors: Warning Crimson `#E63946`, Information Amber `#F4A261`, Sky Blue `#457B9D`
 
 **Character sheet:**
-- A classic stickman for "you": round plain white head, no clothes.
+- A classic stickman for "you": round plain white head, dot eyes, no clothes.
 - One or two story characters, each with a single identifying feature, such as hair and a
-  tunic, a hat, or glasses.
+  tunic, a hat, glasses, or stone-age tools.
 
 **Notes:**
-- Plain white backgrounds read as empty, and a tester rejected them. Every scene needs a
-  real background; only object icons and diagrams may sit on plain paper.
+- Plain stark white backgrounds read as empty and digital. Always specify warm vintage paper grain backdrop.
+- For props (clocks, phones, tools), keep them simplified 2D flat-vector cutouts with bold black outlines so they "pop" forward when audio J-cuts fire.
 - If the reference is a combined sheet, Flow sometimes pastes the sheet's own line-up into
   the scene. Always split the sheet into one reference per character with
   `pictures.py refs`.

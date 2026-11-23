@@ -107,6 +107,117 @@ def apply_color_grade(input_video, output_video, preset="warm_documentary"):
         print(f"❌ Color grading failed: {res.stderr}")
         return False
 
+def generate_heading_card(title, subtitle="", style="warm_parchment", is_shorts=False, duration=3.0, out_video="heading_card.mp4"):
+    """Generates broadcast-grade animated chapter title cards with angled badge and Ken Burns push-in."""
+    from PIL import Image, ImageDraw, ImageFont
+    
+    width, height = (1080, 1920) if is_shorts else (1920, 1080)
+    bg_color = (247, 238, 220) if style == "warm_parchment" else ((42, 46, 57) if style == "slate_grey" else (18, 20, 26))
+    text_color = (35, 25, 20) if style == "warm_parchment" else (255, 255, 255)
+    accent_color = (212, 122, 24) if style == "warm_parchment" else ((247, 181, 0) if style == "slate_grey" else (255, 60, 60))
+    
+    im = Image.new("RGBA", (width, height), bg_color + (255,))
+    draw = ImageDraw.Draw(im)
+    
+    # Outer elegant double border
+    pad = 48
+    draw.rectangle([(pad, pad), (width - pad, height - pad)], outline=accent_color, width=4)
+    draw.rectangle([(pad + 12, pad + 12), (width - pad - 12, height - pad - 12)], outline=text_color, width=2)
+    
+    # Try finding bold display font
+    font_title = None
+    for f_candidate in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/fonts/Kalam-Bold.ttf",
+        "/home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/fonts/PatrickHand-Regular.ttf"
+    ]:
+        if os.path.exists(f_candidate):
+            try:
+                font_title = ImageFont.truetype(f_candidate, 86 if is_shorts else 96)
+                font_sub = ImageFont.truetype(f_candidate, 42 if is_shorts else 46)
+                break
+            except Exception:
+                pass
+    if not font_title:
+        font_title = font_sub = ImageFont.load_default()
+
+    # Draw centered Title with soft drop shadow
+    bbox_t = draw.textbbox((0, 0), title.upper(), font=font_title)
+    tw, th = bbox_t[2] - bbox_t[0], bbox_t[3] - bbox_t[1]
+    tx = (width - tw) // 2
+    ty = (height - th) // 2 - (60 if subtitle else 0)
+    
+    # Shadow
+    draw.text((tx + 6, ty + 6), title.upper(), font=font_title, fill=(0, 0, 0, 80))
+    # Fill
+    draw.text((tx, ty), title.upper(), font=font_title, fill=text_color)
+    
+    # Accent Underline
+    line_w = min(tw + 80, width - 200)
+    lx0 = (width - line_w) // 2
+    ly0 = ty + th + 28
+    draw.line([(lx0, ly0), (lx0 + line_w, ly0)], fill=accent_color, width=6)
+    
+    if subtitle:
+        bbox_s = draw.textbbox((0, 0), subtitle, font=font_sub)
+        sw, sh = bbox_s[2] - bbox_s[0], bbox_s[3] - bbox_s[1]
+        sx = (width - sw) // 2
+        sy = ly0 + 36
+        draw.text((sx + 3, sy + 3), subtitle, font=font_sub, fill=(0, 0, 0, 60))
+        draw.text((sx, sy), subtitle, font=font_sub, fill=accent_color)
+        
+    tmp_png = "heading_card_tmp.png"
+    im.save(tmp_png)
+    
+    # Render with FFmpeg slow Ken Burns zoom (1.00x -> 1.045x)
+    vf = f"scale={width*2}:{height*2},zoompan=z='min(zoom+0.0015,1.045)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={int(duration*30)}:s={width}x{height}:fps=30"
+    cmd = [
+        "ffmpeg", "-y", "-loop", "1", "-i", tmp_png,
+        "-vf", vf,
+        "-t", str(duration),
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p",
+        out_video
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if os.path.exists(tmp_png):
+        os.remove(tmp_png)
+        
+    if res.returncode == 0:
+        print(f"✅ Generated Animated Heading Card: {out_video}")
+        return True
+    else:
+        print(f"❌ Failed to generate heading card: {res.stderr}")
+        return False
+
+def apply_vfx_filters(input_video, output_video, effect="shake_impact"):
+    """Applies high-impact VFX like screen shake, flash frame, or dramatic vignette."""
+    if not os.path.exists(input_video):
+        print(f"❌ Input video not found: {input_video}")
+        return False
+
+    if effect == "shake_impact":
+        # Displaces video crop by decaying sine wave for first 0.6s
+        vf = "crop=w=in_w-40:h=in_h-40:x='20+12*sin(2*PI*t*16)*exp(-4.5*t)':y='20+12*cos(2*PI*t*16)*exp(-4.5*t)',scale=1920:1080"
+    elif effect == "flash_frame":
+        # Overlays 2 frames of white flash at onset
+        vf = "fade=t=in:st=0:d=0.15:c=white"
+    elif effect == "vignette_amber":
+        # High contrast warm radial vignette
+        vf = "vignette=PI/4,eq=contrast=1.12:saturation=1.15"
+    else:
+        vf = "null"
+
+    cmd = [
+        "ffmpeg", "-y", "-i", input_video,
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "19",
+        "-c:a", "copy",
+        output_video
+    ]
+    print(f"✨ Applying VFX [{effect}] to {input_video}...")
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    return res.returncode == 0
+
 def stitch_outro_slate(main_video, outro_video, output_video):
     """Losslessly concatenates main video with YouTube outro slate."""
     if not os.path.exists(main_video) or not os.path.exists(outro_video):
@@ -169,6 +280,21 @@ def main():
     p_stitch.add_argument("outro_video", help="Outro slate MP4")
     p_stitch.add_argument("--out", default="final_with_outro.mp4", help="Output MP4")
 
+    # Heading Title Card
+    p_head = subparsers.add_parser("heading", help="Generate animated chapter heading card")
+    p_head.add_argument("title", help="Chapter title")
+    p_head.add_argument("--subtitle", default="", help="Optional chapter subtitle")
+    p_head.add_argument("--style", choices=["warm_parchment", "slate_grey", "midnight_dark"], default="warm_parchment")
+    p_head.add_argument("--shorts", action="store_true", help="9:16 Shorts format")
+    p_head.add_argument("--duration", type=float, default=3.0, help="Card duration in seconds")
+    p_head.add_argument("--out", default="heading_card.mp4", help="Output MP4")
+
+    # VFX Filters
+    p_vfx = subparsers.add_parser("vfx", help="Apply visual effects (shake, flash, vignette)")
+    p_vfx.add_argument("input_video", help="Input video MP4")
+    p_vfx.add_argument("--out", default="vfx_output.mp4", help="Output video MP4")
+    p_vfx.add_argument("--effect", choices=["shake_impact", "flash_frame", "vignette_amber"], default="shake_impact")
+
     args = parser.parse_args()
 
     if args.action == "subtitles":
@@ -177,6 +303,10 @@ def main():
         apply_color_grade(args.input_video, args.out, preset=args.preset)
     elif args.action == "stitch":
         stitch_outro_slate(args.main_video, args.outro_video, args.out)
+    elif args.action == "heading":
+        generate_heading_card(args.title, subtitle=args.subtitle, style=args.style, is_shorts=args.shorts, duration=args.duration, out_video=args.out)
+    elif args.action == "vfx":
+        apply_vfx_filters(args.input_video, args.out, effect=args.effect)
     else:
         parser.print_help()
 

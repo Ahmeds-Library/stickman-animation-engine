@@ -260,6 +260,56 @@ objected when this was done in sequence).
   2. Automatically audits and installs missing Python packages (`kokoro`, `faster-whisper`, `scipy`, `soundfile`, `pillow`) via pip.
   3. Auto-discovers hardware acceleration (Intel VA-API, Nvidia NVENC, Apple VideoToolbox, or CPU fallback).
   4. Pre-warms Kokoro-82M and Faster-Whisper models, preventing first-run crashes.
+- **The Hypnotic Modernity to Void Inversion Standard (Rule 49):**
+  1. Benchmarked from **Ink Explainer** (19.3M views) and **Zenn** (8.1M views).
+  2. In the first 0–6 seconds, hook subconscious retention by contrasting a hyper-relatable modern sensory comfort against the brutal evolutionary baseline.
+  3. Structural Formula: *Modern Habit (0–3s)* $\to$ *Void Inversion Wipe (3–6s)* $\to$ *Visceral Survival Stakes (6–12s)*.
+  4. Available natively in `viral_hook_engine.py --archetype modern_inversion` and `--archetype perspective_inversion`.
+- **Dual-Tone Canvas Harmony & Dynamic Contrast Palette (Rule 50):**
+  1. Benchmarked from the top 1% explainer channels to eliminate monochrome visual fatigue.
+  2. Daytime / Modern scenes: Warm vintage parchment (`#F7E8C0` to `#ECD6B4`) with charcoal ink (`#1A1A1A`) and white head fills.
+  3. Night / Peril scenes: Midnight Indigo & Navy Shadow (`#181A2A` to `#303D97`) with radiant campfire amber (`#FFAE33`).
+  4. Firelight Island of Safety: Campfire light acts as a focal circle of safety; outer shadows contain low-opacity silhouettes of lurking threats to maximize psychological retention.
+- **The OverSimplified Comic Contrast Law (Rule 51):**
+  1. Benchmarked from **OverSimplified** (8.3M subscribers, 52M+ views).
+  2. Ground grand historical crises in ridiculous human pettiness and exaggerated stickman facial expressions (oversized bug-eyes, shouting mouths, slapstick impacts).
+  3. Supported via `look: oversimplified` and `viral_hook_engine.py --archetype oversimplified_folly`.
+- **The Deadpan Flowchart Classification Standard (Rule 52):**
+  1. Benchmarked from **Casually Explained** (4.4M subscribers, 23M+ views).
+  2. Dissect agonizing social or lifestyle dilemmas with clinical decision trees, multiple-choice options, and un-hyped monotone delivery.
+  3. Supported via `look: casually_explained` and `viral_hook_engine.py --archetype deadpan_quiz`.
+- **The Mechanical Incentive & Keyflow Principle (Rule 53):**
+  1. Benchmarked from **CGP Grey** (6.2M subscribers, 26M+ views).
+  2. Strip away moral illusions and explain political/economic history through cold mathematical game theory and "Keys to Power".
+  3. Supported via `look: cgp_grey` and `viral_hook_engine.py --archetype keys_of_power`.
+- **The Kinetic Marker & Vector Drawing Standard (Rule 54):**
+  1. Benchmarked from **MinutePhysics** (5.7M subscribers, 10M+ views).
+  2. Shatter everyday intuition on physics/cosmic topics and solve paradoxes using real-time hand-drawn vector arrows and whiteboard marker squeaks in under 180 seconds.
+  3. Supported via `look: minute_physics` and `viral_hook_engine.py --archetype everyday_axiom`.
+- **The Strategic Dead Air & Comedic Timing Law (Rule 55):**
+  1. Insert a strict 0.4s to 0.8s total audio drop-out immediately before punchlines or twist reveals.
+  2. The visual reaction freezes in absolute silence; the reaction SFX or vocal punchline fires on the release.
+- **The 5-Pillar Visual Effects (VFX) Anatomy (Rule 56):**
+  1. Screen shake on bass impacts via decaying sine crop displacement.
+  2. 2-frame pure white flash frames on sudden reality wipes.
+  3. Radial speedlines focused on the stickman protagonist.
+  4. 24px ambient bloom on hero props.
+  5. Comic micro-emotes (sweat drops, question marks, steam puffs).
+- **Dynamic Sticker Physics & Anti-Occlusion Staging (Rule 57):**
+  1. Elastic spring entrance ($1.15\times \to 1.00\times$) with subtle tilt.
+  2. J-cut audio pre-lapping leads visual by 90ms–120ms.
+  3. Anti-occlusion guard prevents covering stickman face.
+  4. 2.5s bounded lifetime before smooth zip-out whoosh.
+- **Kinetic Typography & Angled Chapter Headings (Rule 58):**
+  1. Single-word Hormozi kinetic badges in active glowing pills.
+  2. Animated chapter heading cards via `video_editor_studio.py heading` with Ken Burns push-in ($1.00\times \to 1.045\times$).
+  3. -3.5° to -5.0° angled text badges with 14px dark outline.
+- **The 5-Layer Broadcast Foley Mix (SFX Hierarchy) (Rule 59):**
+  1. Sub-bass boom (40–65Hz) $\to$ Tactile foley $\to$ Auditory highlighters $\to$ Vox drop-out silence $\to$ Sidechain ducked music bed (-24 dB).
+- **Dynamic Camera Kinetics & Multi-Track Editing (Rule 60):**
+  1. Continuous Ken Burns slow push-in on any hold $>2.0\text{s}$.
+  2. OverSimplified dialogue cuts alternating every 0.8s–1.4s.
+  3. Split-screen comparisons with thin vertical divider.
 - Text on pictures only for numbers and dates, names, map places and unseen terms. Never
   over a face (render.py places tags itself). 6-10 text cards per 2 minutes.
 - Pick pictures by what they show, not by file number. Flow swaps them in batches.

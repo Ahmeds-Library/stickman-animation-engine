@@ -164,6 +164,18 @@ SEMANTIC_SFX_MAP = {
     ],
     ("watch", "channel", "click", "video", "cta", "bell"): [
         "interface/button-soft.wav", "office/b3_desk_bell_a.mp3", "ui/switch3.ogg"
+    ],
+    ("slap", "idiot", "weirdo", "absurd", "ridiculous", "punish", "revolution", "crazy", "overthrow"): [
+        "impacts/impact-light-hard.wav", "rpg/chop.ogg", "cinematic-hits/cinematic-slam-big.wav", "emphasis/impactWood_light_000.ogg"
+    ],
+    ("quiz", "scenario", "option", "maybe", "awkward", "signal", "dating", "deadpan"): [
+        "digital/threeTone1.ogg", "interface/button-soft.wav", "data/b4_notification_ping_h.mp3"
+    ],
+    ("ruler", "dictator", "power", "key", "treasury", "bureaucracy", "tax", "rule", "incentive"): [
+        "money/coin-drop.wav", "digital/digital-process-clear.wav", "cinematic-hits/cinematic-drum-big.wav", "money/register.wav"
+    ],
+    ("flat", "disc", "orbit", "planet", "solar", "gravity", "dimension", "geometry", "space"): [
+        "digital/digital-process-clear.wav", "shimmers/shimmer-short-sparkle.wav", "tonal/s1_drone_dark_a.mp3"
     ]
 }
 
