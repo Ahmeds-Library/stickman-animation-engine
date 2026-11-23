@@ -49,13 +49,25 @@ flowchart LR
 * **Stereo Haas Widening:** Music bed expanded across the stereo field (`extrastereo=m=1.12`) while narrator speech remains locked dead-center mono.
 * **Broadcast Standard:** Mastered to **-14.0 LUFS** ($\pm 1.0$) with true peak $\le -1.0\text{ dBTP}$.
 
-### 4. Curiosity Architecture & 4–7s Pattern Interrupts
+### 4. Autonomous Zero-Setup Self-Bootstrapper (`auto_bootstrap.py`)
+* **Clone & Run Anywhere:** When a user clones this repository onto a fresh machine (Linux, macOS, Windows) with zero setup, running any video generation command automatically triggers self-bootstrapping.
+* **Auto-Installs Missing Packages:** Audits and auto-installs `kokoro`, `faster-whisper`, `scipy`, `soundfile`, `pillow`, and dependencies on the fly.
+* **Model Pre-Fetcher & Verifier:** Pre-warms local Kokoro-82M and Faster-Whisper int8 models.
+* **Resource Self-Healing:** Validates vendored bold fonts (`Montserrat-Black`, `LuckiestGuy`, `Kalam`) and CC0 foley sound effects.
+
+### 5. Psychoacoustic Sound Design & Editing Psychology
+* **Tactile Synesthesia (Foley for Abstract Concepts):** Assigns organic physical foley (wood clacks, typewriter taps, paper rustles, bubble pops) to abstract 2D graphics so data feels physically heavy.
+* **The "Scare and Release" Micro-Silence Vacuum:** Cuts all music and room ambience to complete digital silence for 0.4s to 0.8s immediately before a pivotal revelation (*The Vox Drop-Out*).
+* **Infrasonic & Low-End Tension (40–60 Hz Sub-Drones):** Visceral sub-rumble activating the primal threat/curiosity response during mysteries or twists.
+* **Spectral Anti-Masking:** Clean frequency slotting (Voiceover 120Hz–4.5kHz, Highlighters 2.5kHz–8kHz, Sub-bass 40Hz–65Hz, Bed -17 dB).
+* Read the full [Psychoacoustic Editing Guide](skills/stickman-hybrid/references/PSYCHOACOUSTIC_EDITING_GUIDE.md).
+
+### 6. Curiosity Architecture & 4–7s Pattern Interrupts
 * **Loewenstein's Information Gap:** Act 1 opens an unresolved paradoxical premise that sustains curiosity.
 * **Zeigarnik Effect Micro-Bridges:** Chain-link loops deployed every 45–75s (*"Close Loop A $\rightarrow$ Open Loop B"*), eliminating mid-video viewer fatigue.
-* **The Vox Drop-Out Silence:** Drops background music for 0.8s–1.2s right before pivotal twist revelations.
 * **Dynamic Camera Push-In:** Holds exceeding 3.0s receive a subtle cinematic scale push-in ($1.00\times \rightarrow 1.045\times$ over 4.0s).
 
-### 5. High-CTR 3-Element Thumbnails (Rule 45)
+### 7. High-CTR 3-Element Thumbnails (Rule 45)
 * Strictly adheres to the **Three-Element Rule**:
   1. *Hero Subject (50% frame):* Expressive stickman face/silhouette.
   2. *Context Prop (25% frame):* Glowing 3D hero artifact with radial bloom.
@@ -184,6 +196,7 @@ The system will interactively ask you the **5 Intake Questions**:
 
 | Command | Purpose |
 |---|---|
+| `python3 auto_bootstrap.py` | Autonomous zero-setup audit: auto-installs missing dependencies & pre-warms models. |
 | `python3 skills/stickman-hybrid/scripts/viral_hook_engine.py --topic <topic> --archetype <type>` | Generates complete 3-Second A-E-T viral hook video with procedural audio & kinetic text. |
 | `python3 skills/stickman-hybrid/scripts/low_resource_engine.py --profile` | Detects hardware acceleration (Intel VA-API / QSV) & memory limits. |
 | `python3 skills/stickman-hybrid/scripts/low_resource_whisper.py <audio.wav>` | Transcribes & aligns word timestamps at 17x speed on CPU (<200MB RAM). |

@@ -13,6 +13,13 @@ Features:
 import os, sys, argparse, csv, json, time, subprocess
 import numpy as np
 
+# Autonomous Zero-Setup Bootstrapper
+try:
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 def load_audio_pcm(audio_path, sr=16000):
     """Decodes audio directly using FFmpeg to float32 NumPy array, bypassing PyAV container bugs."""
     cmd = [

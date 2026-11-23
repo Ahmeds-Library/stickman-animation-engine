@@ -15,6 +15,16 @@ import csv
 import json
 
 SKILL_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+if SKILL_SCRIPTS not in sys.path:
+    sys.path.insert(0, SKILL_SCRIPTS)
+
+# Autonomous Zero-Setup Bootstrapper
+try:
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 VOX_SCRIPTS = os.path.abspath(os.path.join(SKILL_SCRIPTS, "../../../vox-doc-sound/scripts"))
 SMART_GEN = os.path.join(SKILL_SCRIPTS, "flow_smart_generator.py")
 RENDER_PRO = os.path.join(SKILL_SCRIPTS, "render_pro.py")

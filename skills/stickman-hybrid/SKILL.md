@@ -250,6 +250,16 @@ objected when this was done in sequence).
      python3 scripts/viral_hook_engine.py --topic "Your Topic" --archetype paradox --ratio 9x16 --out hook.mp4
      python3 scripts/viral_hook_engine.py --list-archetypes
      ```
+- **Psychoacoustic Sound Layering, J-Cuts & Tactile Synesthesia (Rule 47):**
+  1. **Audio Pre-Lapping (J-Cuts):** Scene transition whooshes lead by 120ms; sticker entrance foley leads by 90ms before visual graphic appearance so the ear prepares the eye.
+  2. **Tactile Synesthesia:** Organic foley (wood taps, paper rustles, typewriter ticks) assigned to 2D vector elements so data feels physically weighty.
+  3. **The "Scare & Release" Micro-Silence Vacuum:** Cuts music bed and ambient noise to complete digital silence for 0.4s to 0.8s immediately before the twist reveal (*The Vox Drop-Out*).
+  4. **Frequency Slotting:** Voice (120Hz–4.5kHz), Highlighters (2.5kHz–8kHz at -22 dB), Sub-Bass (40Hz–65Hz), Bed (-17 dB with -4 dB sidechain ducking).
+- **Autonomous Zero-Setup Self-Healing Standard (Rule 48):**
+  1. `auto_bootstrap.py` provides a **Clone-and-Run Guarantee**: Any user cloning this repository on Linux, macOS, or Windows can run any script immediately with zero manual dependency installation.
+  2. Automatically audits and installs missing Python packages (`kokoro`, `faster-whisper`, `scipy`, `soundfile`, `pillow`) via pip.
+  3. Auto-discovers hardware acceleration (Intel VA-API, Nvidia NVENC, Apple VideoToolbox, or CPU fallback).
+  4. Pre-warms Kokoro-82M and Faster-Whisper models, preventing first-run crashes.
 - Text on pictures only for numbers and dates, names, map places and unseen terms. Never
   over a face (render.py places tags itself). 6-10 text cards per 2 minutes.
 - Pick pictures by what they show, not by file number. Flow swaps them in batches.

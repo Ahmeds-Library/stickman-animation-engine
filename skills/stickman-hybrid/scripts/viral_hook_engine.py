@@ -34,6 +34,13 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
+# Autonomous Zero-Setup Bootstrapper (Auto-provisions dependencies on new machines)
+try:
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 try:
     from low_resource_engine import get_optimal_ffmpeg_flags
 except ImportError:

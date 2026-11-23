@@ -10,8 +10,18 @@
 --speed  1.0 is normal standard English pace (crisp, engaging, natural prosody)
 --force  overwrite existing takes (default: False, resumes existing)
 """
-import argparse, csv, os, re
+import argparse, csv, os, re, sys
 import numpy as np, soundfile as sf
+
+# Autonomous Zero-Setup Bootstrapper
+try:
+    boot_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../stickman-hybrid/scripts"))
+    if boot_path not in sys.path:
+        sys.path.insert(0, boot_path)
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
 
 
 def synthesize_line(pipe, text, voice="am_michael", speed=1.0):

@@ -11,6 +11,13 @@ Generates rich, high-density, multi-layered sound design (cues_pro.tsv) for Stic
 
 import os, sys, csv, random, subprocess, glob, re
 
+# Autonomous Zero-Setup Bootstrapper
+try:
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 SKILL_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SFX_ROOTS = [
     os.path.abspath(os.path.join(SKILL_SCRIPTS, "../../vox-doc-sound/sfx")),
@@ -267,7 +274,22 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             "fade_out": "2.0"
         })
 
-    # 3. Transitions on Scene Cuts & Overlays
+    # Frame-0 Auditory Attention Shock (50Hz Sub-Bass Impact on opening frame)
+    booms = catalog.get("booms-and-bass", catalog.get("cinematic-hits", []))
+    sub_impact = booms[0] if booms else None
+    if sub_impact:
+        cues.append({
+            "label": "frame0_sub_shock",
+            "kind": "one",
+            "file": sub_impact,
+            "at": "0.0",
+            "dur": "-",
+            "gain_db": "-16",
+            "fade_in": "0",
+            "fade_out": "0"
+        })
+
+    # 3. Transitions on Scene Cuts & Overlays (with Psychoacoustic 120ms J-Cut Pre-Lapping)
     whooshes = catalog.get("whooshes", catalog.get("whoosh", catalog.get("ui", [])))
     zip_outs = [p for p in catalog.get("swishes-and-zips", []) if "zip-out" in p.lower()]
     pop_outs = [p for p in catalog.get("pops", []) if "pop" in p.lower() and "out" in p.lower()]
@@ -281,26 +303,28 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                 if not cue or cue.startswith("#"):
                     continue
                 if not cue.startswith("+"):
-                    # Scene Cut Transition Whoosh
+                    # Scene Cut Transition Whoosh (Pre-lapped J-Cut: 120ms before visual switch)
                     cur_scene_t0 = words_map.get(cue, float(cue) if cue.replace(".", "", 1).isdigit() else cur_scene_t0)
                     if whooshes and cue != "@01": # Skip very first frame whoosh to allow clean hook onset
                         wf = random.choice(whooshes)
+                        j_cut_time = max(0.0, cur_scene_t0 - 0.12)
                         cues.append({
-                            "label": f"cut_{cue.replace('@', '')}",
+                            "label": f"jcut_whoosh_{cue.replace('@', '')}",
                             "kind": "one",
                             "file": wf,
-                            "at": cue,
+                            "at": f"{j_cut_time:.2f}",
                             "dur": "-",
                             "gain_db": "-21",
                             "fade_in": "0",
                             "fade_out": "0"
                         })
                 else:
-                    # Sticker Overlay Entrance SFX: Voice-keyword synchronized
+                    # Sticker Overlay Entrance SFX: Voice-keyword synchronized with 90ms audio pre-lap
                     label_txt = r.get("text", "") or r.get("img", "")
                     sfx_file = pick_sfx_for_text(label_txt, catalog, default_cat="pops")
                     resolved_t = resolve_word_time(cue, words_list, words_map, cur_scene_t0)
-                    cue_at_str = f"{resolved_t:.2f}"
+                    j_pop_t = max(0.0, resolved_t - 0.09)
+                    cue_at_str = f"{j_pop_t:.2f}"
                     
                     if sfx_file:
                         cues.append({

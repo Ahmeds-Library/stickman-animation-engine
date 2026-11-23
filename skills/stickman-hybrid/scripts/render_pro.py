@@ -17,6 +17,13 @@ import argparse, csv, os, shutil, subprocess, sys, math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
 
+# Autonomous Zero-Setup Bootstrapper
+try:
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 FONTS = os.path.join(SKILL_ROOT, "fonts")

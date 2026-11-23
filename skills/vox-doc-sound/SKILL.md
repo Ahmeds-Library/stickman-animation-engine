@@ -260,6 +260,14 @@ invent a filename.**
 | **Kurzgesagt Auditory Highlighter (dates, years, numbers, stats)** | tactile bubble pop, digital process tick, parchment slide | -22 |
 | **The Vox Drop-Out Silence beat** | 0.8s–1.2s sudden music bed mute (`--dip`) before the twist line | -inf |
 | **Sub-Bass Paradigm Shift Hit** | 60Hz resonant sub-thud on major statistical shock or catastrophe | -17 |
+| **Audio Pre-Lapping (J-Cuts)** | Transition whooshes lead by 120ms; sticker foley pops lead by 90ms before graphic appears | -21 / -16 |
+
+### Frequency Slotting & Spectral Anti-Masking
+To ensure dialogue is 100% intelligible while keeping cinematic impact:
+- **Voiceover Core:** 120Hz – 4.5kHz (80Hz high-pass to clear mud).
+- **Sub-Bass Impacts & Drones:** 40Hz – 65Hz (visceral physical tension; ducked under voice).
+- **Tactile Highlighters:** 2.5kHz – 8.0kHz (crisp 80-120ms bubble pops and clicks at -22 dB).
+- **Music Bed:** -17 dB (Long) / -16 dB (Shorts) with stereo widening and -4 dB vocal pocket sidechain ducking.
 
 **Tonal accents** (Tonal: a soft piano note, a pizzicato pluck, a marimba hit,
 a string swell) are musical hits in the same family as the suggested music. Use

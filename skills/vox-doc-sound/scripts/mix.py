@@ -46,6 +46,16 @@ Mix chain:
 """
 import argparse, csv, os, re, subprocess, sys
 
+# Autonomous Zero-Setup Bootstrapper
+try:
+    boot_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../stickman-hybrid/scripts"))
+    if boot_path not in sys.path:
+        sys.path.insert(0, boot_path)
+    import auto_bootstrap
+    auto_bootstrap.ensure_environment()
+except Exception:
+    pass
+
 KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLLING = re.compile(r"(?i)/Numbers/|counter|counting|odometer|ticking")   # start on the cue, not peak
 
