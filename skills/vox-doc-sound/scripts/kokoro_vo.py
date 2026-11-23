@@ -1,0 +1,53 @@
+"""LINES.tsv -> takes/NN.wav with Kokoro (local, CPU, Apache 2.0, commercial OK)
+
+    python scripts/kokoro_vo.py LINES.tsv --lang a --voice am_michael --out takes
+
+--lang   a American English · b British English · e Spanish · f French
+         i Italian · p Brazilian Portuguese · h Hindi / Urdu · j Japanese · z Mandarin
+         (j needs: python -m pip install "misaki[ja]"; z needs "misaki[zh]")
+--voice  e.g. af_heart, af_bella, am_michael, am_fenrir (US); bf_emma, bm_george (UK).
+         The full list is at https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+--speed  1.0 is normal standard English pace (crisp, engaging, natural prosody)
+--force  overwrite existing takes (default: False, resumes existing)
+"""
+import argparse, csv, os, re
+import numpy as np, soundfile as sf
+
+
+def synthesize_line(pipe, text, voice="am_michael", speed=1.0):
+    """Synthesizes text with natural English prosody at normal 1.0x speed.
+    Kokoro's neural phonemizer automatically handles English punctuation,
+    inflection, and clause cadence smoothly without dragging or artificial gaps.
+    """
+    clean_text = text.strip()
+    gen = pipe(clean_text, voice=voice, speed=speed)
+    audios = [np.asarray(x[2], np.float32) for x in gen]
+    return np.concatenate(audios) if audios else np.zeros(0, dtype=np.float32)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("lines")
+    ap.add_argument("--lang", default="a")
+    ap.add_argument("--voice", default="am_michael")
+    ap.add_argument("--speed", type=float, default=1.0)
+    ap.add_argument("--out", default="takes")
+    ap.add_argument("--force", action="store_true", help="Overwrite existing takes")
+    a = ap.parse_args()
+    from kokoro import KPipeline
+    pipe = KPipeline(lang_code=a.lang)
+    os.makedirs(a.out, exist_ok=True)
+    with open(a.lines, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f, delimiter="\t"))
+    for r in rows:
+        p = f"{a.out}/{r['id']}.wav"
+        if os.path.exists(p) and not a.force:
+            continue                     # re-run safe unless --force
+        audio = synthesize_line(pipe, r["text"], voice=a.voice, speed=a.speed)
+        sf.write(p, audio, 24000)
+        print(f"[{r['id']}] {len(audio) / 24000:.2f}s: {r['text'][:40]}...", flush=True)
+    print(f"takes in {a.out}/ -- next: python scripts/vo_join.py {a.out} {a.lines}")
+
+
+if __name__ == "__main__":
+    main()

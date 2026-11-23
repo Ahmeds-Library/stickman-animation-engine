@@ -1,0 +1,8 @@
+# Core Python dependencies for Stickman Hybrid Animation Studio
+numpy>=1.24.0
+pillow>=10.0.0
+scipy>=1.11.0
+soundfile>=0.12.1
+faster-whisper>=1.0.0
+torch>=2.0.0
+requests>=2.31.0
