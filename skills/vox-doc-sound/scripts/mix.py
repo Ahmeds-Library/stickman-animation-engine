@@ -67,7 +67,8 @@ def start_time(t, peak, file):
 
 def tsv(path):
     with open(path, encoding="utf-8") as f:
-        return list(csv.DictReader(f, delimiter="\t"))
+        non_comments = [line for line in f if not line.strip().startswith("#")]
+        return list(csv.DictReader(non_comments, delimiter="\t"))
 
 
 def clean(w):
@@ -94,9 +95,18 @@ class Resolver:
         if base.startswith("w:"):
             base = base[2:]
         elif base.startswith("@"):
-            if base[1:] not in self.lines:
-                raise SystemExit(f"cue {at!r}: no VO line {base[1:]} (pass --lines VO.tsv)")
-            return max(0.0, self.lines[base[1:]] + off)
+            raw_line = base[1:]
+            if ":" in raw_line:
+                line_id, _, word_part = raw_line.partition(":")
+                target_word = clean(word_part).lower()
+                for t_w, w_txt in self.words:
+                    if target_word in w_txt.lower():
+                        return max(0.0, t_w + off)
+                if line_id in self.lines:
+                    return max(0.0, self.lines[line_id] + off)
+            if raw_line not in self.lines:
+                raise SystemExit(f"cue {at!r}: no VO line {raw_line} (pass --lines VO.tsv)")
+            return max(0.0, self.lines[raw_line] + off)
         for k in range(self.pos, len(self.words)):
             if base in self.words[k][1]:
                 self.pos = k
@@ -168,19 +178,13 @@ def build(cues, vo, out, dur, dip):
             sfx.append(f"[a{i}]")
 
     n = len(cues)
-    if bed_idx is not None and sfx:
-        bed = f"[a{bed_idx}]"
-        parts.append("".join(sfx) + f"amix=inputs={len(sfx)}:normalize=0:dropout_transition=0[sfx]")
-        parts.append("[sfx]asplit=2[sfxmix][key]")
-        # Gentle ducking under SFX impacts (2.5:1 ratio, smooth 350ms release)
-        parts.append(f"{bed}[key]sidechaincompress=threshold=0.08:ratio=2.5:attack=20:release=350[duck]")
-        parts.append("[duck][sfxmix]amix=inputs=2:normalize=0[world]")
-    elif bed_idx is not None:
-        parts.append(f"[a{bed_idx}]anull[world]")
-    else:
-        parts.append("".join(f"[a{i}]" for i in range(n)) + f"amix=inputs={n}:normalize=0[world]")
-
     tail = f"apad=whole_dur={dur:.3f},atrim=0:{dur:.3f},loudnorm=I=-14:TP=-1.0:LRA=10[out]"
+
+    # Prepare SFX sub-mix stem if any SFX cues exist (un-ducked, tactile and crisp!)
+    has_sfx = len(sfx) > 0
+    if has_sfx:
+        parts.append("".join(sfx) + f"amix=inputs={len(sfx)}:normalize=0:dropout_transition=0,apad=whole_dur={dur:.3f}[sfxmix]")
+
     if vo:
         cmd += ["-i", vo]
         # Broadcast Documentary Vocal Mastering Chain:
@@ -199,15 +203,37 @@ def build(cues, vo, out, dur, dip):
             "aresample=48000,volume=1.2dB,asplit=2[vomix][vokey]"
         )
         parts.append(vox_chain)
-        # Storytelling Golden Ratio Ducking:
-        # threshold=0.08 (catches spoken words, ignores breath/silence),
-        # ratio=2.8 (gentle 4-5.5 dB musical dip, NOT squashing!),
-        # attack=25ms (smooth musical ramp-down),
-        # release=550ms (swells up warmly during breathing & narrative pauses)
-        parts.append("[world][vokey]sidechaincompress=threshold=0.08:ratio=2.8:attack=25:release=550[wd]")
-        parts.append(f"[vomix][wd]amix=inputs=2:normalize=0,{tail}")
+
+        # Mix Stems:
+        mix_inputs = ["[vomix]"]
+
+        # 1. SFX Stem: Directly included WITHOUT voice sidechain ducking!
+        if has_sfx:
+            mix_inputs.append("[sfxmix]")
+
+        # 2. Bed Stem: Sidechain ducked under voice key (gentle 1.9:1 ratio, max 6dB ducking, stays audible and warm)
+        if bed_idx is not None:
+            parts.append(f"[a{bed_idx}][vokey]sidechaincompress=threshold=0.15:ratio=1.9:attack=30:release=450,apad=whole_dur={dur:.3f}[bed_ducked]")
+            mix_inputs.append("[bed_ducked]")
+
+        if len(mix_inputs) > 1:
+            parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,{tail}")
+        else:
+            parts.append(f"[vomix]{tail}")
     else:
-        parts.append(f"[world]{tail}")
+        # No VO:
+        mix_inputs = []
+        if has_sfx:
+            mix_inputs.append("[sfxmix]")
+        if bed_idx is not None:
+            mix_inputs.append(f"[a{bed_idx}]")
+
+        if len(mix_inputs) > 1:
+            parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,{tail}")
+        elif len(mix_inputs) == 1:
+            parts.append(f"{mix_inputs[0]}{tail}")
+        else:
+            parts.append("".join(f"[a{i}]" for i in range(n)) + f"amix=inputs={max(1, n)}:normalize=0,{tail}")
     r = subprocess.run(cmd + ["-filter_complex", ";".join(parts), "-map", "[out]",
                               "-c:a", "pcm_s16le", "-ar", "48000", out])
     if r.returncode:

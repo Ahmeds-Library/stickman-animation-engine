@@ -9,7 +9,7 @@ Generates rich, high-density, multi-layered sound design (cues_pro.tsv) for Stic
 6. Thematically Matched 100% CC0 Music Bed (ducked at -24 dB with smooth fade-in/fade-out).
 """
 
-import os, sys, csv, random, subprocess, glob, re
+import os, sys, csv, random, subprocess, glob, re, hashlib
 
 # Autonomous Zero-Setup Bootstrapper
 try:
@@ -49,9 +49,13 @@ def collect_audio_catalog(sfx_root):
     for ext in ("*.mp3", "*.ogg", "*.wav"):
         for path in glob.glob(f"{sfx_root}/**/{ext}", recursive=True):
             rel = os.path.relpath(path, sfx_root)
-            parts = rel.split(os.sep)
-            cat = parts[1] if len(parts) > 1 else parts[0]
-            catalog.setdefault(cat.lower(), []).append(path)
+            parts = [p.lower() for p in rel.split(os.sep)]
+            for part in parts[:-1]:
+                catalog.setdefault(part, []).append(path)
+                if part.endswith("s"):
+                    catalog.setdefault(part[:-1], []).append(path)
+                else:
+                    catalog.setdefault(part + "s", []).append(path)
             catalog.setdefault("all", []).append(path)
     return catalog
 
@@ -179,7 +183,7 @@ SEMANTIC_SFX_MAP = {
     ]
 }
 
-def pick_sfx_for_text(text, catalog, default_cat="pops"):
+def pick_sfx_for_text(text, catalog, default_cat="paper"):
     txt = text.lower()
     for triggers, candidates in SEMANTIC_SFX_MAP.items():
         if any(tr in txt for tr in triggers):
@@ -187,7 +191,11 @@ def pick_sfx_for_text(text, catalog, default_cat="pops"):
                 for p in catalog.get("all", []):
                     if cand.lower() in p.lower():
                         return p
-    cat_list = catalog.get(default_cat.lower(), catalog.get("all", []))
+    # Default for tactile sticker pop: authentic paper card-place sounds (boat_hi target)
+    paper_places = [p for p in catalog.get("paper", []) if "card-place" in p.lower()]
+    if paper_places:
+        return random.choice(paper_places)
+    cat_list = catalog.get(default_cat.lower()) or catalog.get("pops") or catalog.get("all", [])
     return random.choice(cat_list) if cat_list else None
 
 def select_music_track(music_root, script_text=""):
@@ -213,7 +221,57 @@ def select_music_track(music_root, script_text=""):
     chill = [p for p in candidates if any(m in p.lower() for m in ["chillin", "lofi", "roomscene", "arcade"])]
     return chill[0] if chill else candidates[0]
 
-def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False):
+def compute_inputs_signature(project_dir="."):
+    """Computes a SHA256 signature of SCENES_HYBRID.tsv and WORDS.tsv."""
+    hasher = hashlib.sha256()
+    scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
+    if not os.path.exists(scenes_path):
+        scenes_path = os.path.join(project_dir, "SCENES.tsv")
+    if os.path.exists(scenes_path):
+        with open(scenes_path, "rb") as f:
+            hasher.update(f.read())
+            
+    words_path = os.path.join(project_dir, "WORDS.tsv")
+    if os.path.exists(words_path):
+        with open(words_path, "rb") as f:
+            hasher.update(f.read())
+            
+    return hasher.hexdigest()[:16]
+
+
+def is_cues_cache_fresh(project_dir=".", cues_file="cues_pro.tsv"):
+    """Enforces Condition 3: Replaces broken >= 12 lines check with sha256 & mtime validation."""
+    target = os.path.join(project_dir, cues_file)
+    if not os.path.exists(target) or os.path.getsize(target) < 100:
+        return False
+        
+    target_mtime = os.path.getmtime(target)
+    scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
+    if not os.path.exists(scenes_path):
+        scenes_path = os.path.join(project_dir, "SCENES.tsv")
+        
+    if os.path.exists(scenes_path) and os.path.getmtime(scenes_path) > target_mtime:
+        return False
+        
+    words_path = os.path.join(project_dir, "WORDS.tsv")
+    if os.path.exists(words_path) and os.path.getmtime(words_path) > target_mtime:
+        return False
+        
+    current_sig = compute_inputs_signature(project_dir)
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("# sig:"):
+                    stored_sig = line.strip().split(":", 1)[1].strip()
+                    if stored_sig == current_sig:
+                        return True
+    except Exception:
+        pass
+        
+    return False
+
+
+def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False, force=False):
     scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
     if not os.path.exists(scenes_path):
         scenes_path = os.path.join(project_dir, "SCENES.tsv")
@@ -238,8 +296,13 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                 end_t = float(r["end"])
                 line_id = r.get("line", "")
                 w_clean = r["word"].lower().strip('.,!?":;')
+                cue_idx = f"{line_id}.{r['i']}" if "line" in r and "i" in r else r.get("cue", "")
+                if cue_idx:
+                    words_map[cue_idx] = start_t
                 words_map[f"@{line_id}"] = words_map.get(f"@{line_id}", start_t)
+                words_map[line_id] = words_map.get(line_id, start_t)
                 words_map[f"@{line_id}:{w_clean}"] = start_t
+                words_map[f"{line_id}:{w_clean}"] = start_t
                 words_list.append({
                     "cue": f"w{len(words_list)+1:03d}",
                     "line": line_id,
@@ -250,10 +313,10 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
         
     cues = []
     
-    # 1. Background Music Bed (Storytelling Golden Ratio: -17 dB Long / -16 dB Shorts with Vocal Pocket EQ)
+    # 1. Background Music Bed (Golden Ratio: -11 dB Shorts / -12 dB Long with Vocal Pocket EQ & Gentle Ducking)
     script_txt = open(script_path, encoding="utf-8").read().lower() if os.path.exists(script_path) else ""
     bg_music = select_music_track(music_root, script_txt)
-    music_gain = "-16" if is_shorts else "-17"
+    music_gain = "-11" if is_shorts else "-12"
     if bg_music:
         cues.append({
             "label": "bed",
@@ -262,7 +325,7 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             "at": "0.0",
             "dur": "all",
             "gain_db": music_gain,
-            "fade_in": "1.2",
+            "fade_in": "1.0",
             "fade_out": "2.0"
         })
 
@@ -281,8 +344,8 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             "file": amb_file,
             "at": "0.0",
             "dur": "all",
-            "gain_db": "-23",
-            "fade_in": "1.5",
+            "gain_db": "-16",
+            "fade_in": "1.2",
             "fade_out": "2.0"
         })
 
@@ -296,7 +359,7 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             "file": sub_impact,
             "at": "0.0",
             "dur": "-",
-            "gain_db": "-16",
+            "gain_db": "-9",
             "fade_in": "0",
             "fade_out": "0"
         })
@@ -315,28 +378,91 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                 if not cue or cue.startswith("#"):
                     continue
                 if not cue.startswith("+"):
-                    # Scene Cut Transition Whoosh (Pre-lapped J-Cut: 120ms before visual switch)
+                    # Scene Cut Transition (Whoosh on scene changes, Paper Slam on text cards, Swish on split compare, Ping on data cards)
                     cur_scene_t0 = words_map.get(cue, float(cue) if cue.replace(".", "", 1).isdigit() else cur_scene_t0)
-                    if whooshes and cue != "@01": # Skip very first frame whoosh to allow clean hook onset
+                    img_raw = r.get("img", "").strip()
+                    is_card = (img_raw in ("card", "card_stat", "card_phrase") or img_raw.startswith("card_"))
+                    is_split = (img_raw in ("split_compare", "split_contrast") or img_raw.startswith("split_"))
+                    is_data = (img_raw in ("bar_timeline", "stat_pie", "grid_week") or img_raw.startswith("timeline_"))
+
+                    if is_card:
+                        card_slams = [p for p in catalog.get("emphasis", []) if "paper_slam" in p.lower()] or \
+                                     [p for p in catalog.get("paper", []) if "card-place-2" in p.lower()]
+                        sf = random.choice(card_slams) if card_slams else None
+                        if sf:
+                            cues.append({
+                                "label": f"card_slam_{cue.replace('@', '').replace('.', '_')}",
+                                "kind": "one",
+                                "file": sf,
+                                "at": f"{cur_scene_t0:.2f}",
+                                "dur": "-",
+                                "gain_db": "-10",
+                                "fade_in": "0",
+                                "fade_out": "0"
+                            })
+                    elif is_split:
+                        swishes = [p for p in catalog.get("swishes-and-zips", []) if "swish" in p.lower()] or whooshes
+                        sf = random.choice(swishes) if swishes else None
+                        if sf:
+                            cues.append({
+                                "label": f"split_swish_{cue.replace('@', '').replace('.', '_')}",
+                                "kind": "one",
+                                "file": sf,
+                                "at": f"{max(0.0, cur_scene_t0 - 0.08):.2f}",
+                                "dur": "-",
+                                "gain_db": "-11",
+                                "fade_in": "0",
+                                "fade_out": "0"
+                            })
+                    elif is_data:
+                        pings = [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower() or "notification_ping" in p.lower()]
+                        sf = pings[0] if pings else (whooshes[0] if whooshes else None)
+                        if sf:
+                            cues.append({
+                                "label": f"data_ping_{cue.replace('@', '').replace('.', '_')}",
+                                "kind": "one",
+                                "file": sf,
+                                "at": f"{cur_scene_t0:.2f}",
+                                "dur": "-",
+                                "gain_db": "-11",
+                                "fade_in": "0",
+                                "fade_out": "0"
+                            })
+                    elif whooshes and cue not in ("@01", "00.0", "0.0", "01.0"): # Skip very first frame whoosh to allow clean hook onset
                         wf = random.choice(whooshes)
                         j_cut_time = max(0.0, cur_scene_t0 - 0.12)
                         cues.append({
-                            "label": f"jcut_whoosh_{cue.replace('@', '')}",
+                            "label": f"jcut_whoosh_{cue.replace('@', '').replace('.', '_')}",
                             "kind": "one",
                             "file": wf,
                             "at": f"{j_cut_time:.2f}",
                             "dur": "-",
-                            "gain_db": "-21",
+                            "gain_db": "-11",
                             "fade_in": "0",
                             "fade_out": "0"
                         })
                 else:
                     # Sticker Overlay Entrance SFX: Voice-keyword synchronized with 90ms audio pre-lap
-                    label_txt = r.get("text", "") or r.get("img", "")
-                    sfx_file = pick_sfx_for_text(label_txt, catalog, default_cat="pops")
+                    o_img = r.get("img", "").strip()
+                    label_txt = r.get("text", "") or o_img
                     resolved_t = resolve_word_time(cue, words_list, words_map, cur_scene_t0)
                     j_pop_t = max(0.0, resolved_t - 0.09)
                     cue_at_str = f"{j_pop_t:.2f}"
+                    
+                    if o_img in ("stamp_x", "stamp_false", "stamp_myth"):
+                        stamp_hits = [p for p in catalog.get("cinematic-hits", []) if "impact" in p.lower() or "slam" in p.lower()] or \
+                                     [p for p in catalog.get("emphasis", []) if "boom" in p.lower()]
+                        sfx_file = random.choice(stamp_hits) if stamp_hits else None
+                        sfx_gain = "-10"
+                    elif o_img in ("stamp_check", "stamp_true"):
+                        chimes = [p for p in catalog.get("jingle", []) if "win" in p.lower()] or \
+                                 [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower()] or \
+                                 [p for p in catalog.get("pops", []) if "bubble" in p.lower()]
+                        sfx_file = random.choice(chimes) if chimes else None
+                        sfx_gain = "-11"
+                    else:
+                        sfx_file = pick_sfx_for_text(label_txt, catalog, default_cat="pops")
+                        sfx_gain = "-11"
                     
                     if sfx_file:
                         cues.append({
@@ -345,7 +471,7 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                             "file": sfx_file,
                             "at": cue_at_str,
                             "dur": "-",
-                            "gain_db": "-16",
+                            "gain_db": sfx_gain,
                             "fade_in": "0",
                             "fade_out": "0"
                         })
@@ -360,28 +486,33 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                             "file": random.choice(exit_sfx_pool),
                             "at": f"{exit_t:.2f}",
                             "dur": "-",
-                            "gain_db": "-26",
+                            "gain_db": "-13",
                             "fade_in": "0",
                             "fade_out": "0"
                         })
 
     # 4. Spoken Keyword Audio Impacts & Auditory Highlighter Pens (Vox/Kurzgesagt)
     EMPHATIC_WORDS = {
-        "freezing": ("nature/b2_ice_crack_a.mp3", "-18"),
-        "danger": ("cinematic-hits/cinematic-slam-big.wav", "-17"),
-        "blackout": ("booms-and-bass/boom-hit-medium.wav", "-17"),
-        "peril": ("emphasis/b2_boom_soft_a.mp3", "-18"),
-        "starvation": ("tonal/s1_drone_dark_a.mp3", "-19"),
-        "impossible": ("reveal/s1_swell_reverse_a.mp3", "-18"),
-        "conquered": ("jingle/jingle_win_00.ogg", "-17"),
-        "millionaire": ("money/coin-drop.wav", "-16"),
-        "miracle": ("shimmers/shimmer-short-sparkle.wav", "-17"),
-        "zero": ("digital/digital-glitch-clear.wav", "-18"),
-        "fatal": ("cinematic-hits/cinematic-slam-big.wav", "-17"),
-        "secret": ("reveal/s1_swell_reverse_a.mp3", "-19"),
-        "truth": ("shimmers/shimmer-short-sparkle.wav", "-19"),
-        "collapse": ("booms-and-bass/boom-hit-medium.wav", "-17"),
-        "discovered": ("shimmers/shimmer-short-sparkle.wav", "-18")
+        "freezing": ("nature/b2_ice_crack_a.mp3", "-12"),
+        "danger": ("cinematic-hits/cinematic-slam-big.wav", "-11"),
+        "blackout": ("booms-and-bass/boom-hit-medium.wav", "-11"),
+        "peril": ("emphasis/b2_boom_soft_a.mp3", "-12"),
+        "starvation": ("tonal/s1_drone_dark_a.mp3", "-13"),
+        "impossible": ("reveal/s1_swell_reverse_a.mp3", "-12"),
+        "conquered": ("jingle/jingle_win_00.ogg", "-11"),
+        "millionaire": ("money/coin-drop.wav", "-11"),
+        "miracle": ("shimmers/shimmer-short-sparkle.wav", "-12"),
+        "zero": ("digital/digital-glitch-clear.wav", "-12"),
+        "fatal": ("cinematic-hits/cinematic-slam-big.wav", "-11"),
+        "secret": ("reveal/s1_swell_reverse_a.mp3", "-12"),
+        "truth": ("shimmers/shimmer-short-sparkle.wav", "-12"),
+        "collapse": ("booms-and-bass/boom-hit-medium.wav", "-11"),
+        "discovered": ("shimmers/shimmer-short-sparkle.wav", "-12"),
+        "ambush": ("cinematic-hits/cinematic-slam-big.wav", "-11"),
+        "war": ("emphasis/b2_boom_soft_a.mp3", "-11"),
+        "battle": ("cinematic-hits/cinematic-slam-big.wav", "-11"),
+        "empire": ("jingle/jingle_win_00.ogg", "-12"),
+        "legion": ("emphasis/b2_boom_soft_a.mp3", "-12")
     }
     
     # Kurzgesagt Auditory Highlighter Pens: Subtly punctuate metrics, dates & statistical shifts
@@ -402,8 +533,7 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                     matched = [p for p in catalog.get("all", []) if cand_rel.lower() in p.lower()]
                     if matched:
                         placed_times.add(t_start)
-                        line_id = r.get("line", "")
-                        cue_tag = f"@{line_id}:{w_clean}" if line_id else f"{t_start:.2f}"
+                        cue_tag = f"{t_start:.2f}"
                         cues.append({
                             "label": f"hit_{w_clean}",
                             "kind": "one",
@@ -420,32 +550,38 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                     matched = [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower() or HIGHLIGHT_METRIC_SFX in p.lower()]
                     if matched:
                         placed_times.add(t_start)
-                        line_id = r.get("line", "")
-                        cue_tag = f"@{line_id}:{w_clean}" if line_id else f"{t_start:.2f}"
+                        cue_tag = f"{t_start:.2f}"
                         cues.append({
                             "label": f"highlighter_{w_clean}",
                             "kind": "one",
                             "file": matched[0],
                             "at": cue_tag,
                             "dur": "-",
-                            "gain_db": "-22",
+                            "gain_db": "-13",
                             "fade_in": "0",
                             "fade_out": "0"
                         })
 
-    # Write cues_pro.tsv
+    # Write cues_pro.tsv with cryptographic signature
     target_out = os.path.join(project_dir, out_tsv)
+    sig = compute_inputs_signature(project_dir)
     with open(target_out, "w", encoding="utf-8", newline="") as out_f:
         fieldnames = ["label", "kind", "file", "at", "dur", "gain_db", "fade_in", "fade_out"]
         writer = csv.DictWriter(out_f, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()
+        out_f.write(f"# sig:{sig}\n")
         for c in cues:
             writer.writerow(c)
             
-    print(f"✅ Generated {len(cues)} smart sound cues in {target_out}")
+    print(f"✅ Generated {len(cues)} smart sound cues in {target_out} (sig: {sig})")
     return True
 
 if __name__ == "__main__":
     p_dir = sys.argv[1] if len(sys.argv) > 1 else "."
     is_s = "--short" in sys.argv or "--shorts" in sys.argv or "short" in p_dir.lower()
-    generate_smart_cues(p_dir, is_shorts=is_s)
+    force_gen = "--force" in sys.argv or "-f" in sys.argv
+    if "--check-cache" in sys.argv:
+        fresh = is_cues_cache_fresh(p_dir)
+        print("FRESH" if fresh else "STALE")
+        sys.exit(0 if fresh else 1)
+    generate_smart_cues(p_dir, is_shorts=is_s, force=force_gen)

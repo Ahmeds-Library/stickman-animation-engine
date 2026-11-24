@@ -124,6 +124,8 @@ def submit(a):
     layout_check()
     st = style()
     batch = os.environ.get("STICK_BATCH", "4")
+    is_shorts = "short" in os.path.basename(os.getcwd()).lower() or "--shorts" in a or "--aspect-ratio=9:16" in a or "9:16" in a
+    aspect_ratio = "9:16" if is_shorts else "16:9"
     n = 0
     for r in shots():
         i = int(r["id"])
@@ -131,18 +133,39 @@ def submit(a):
             continue
         ref, prompt = r["ref"].strip(), r["prompt"].strip()
         side = (r.get("space") or "").strip().lower()
-        if side in ("left", "right"):             # leave room for stickers so they never cover the subject
-            keep = "left" if side == "right" else "right"
-            prompt += (f" Composition: a complete, natural, full scene that fills the whole frame, with the main "
-                       f"character and the main subject placed slightly towards the {keep}, and a calmer, less busy "
-                       f"area on the {side} side (open sky, plain wall, ground or water) without important details. "
-                       f"The scene must still look finished and rich, not empty.")
-        elif side == "top":
-            prompt += (" Composition: a complete, natural, full scene that fills the whole frame, with the main "
-                       "character and the main subject in the lower part and a calm open sky or plain upper wall above "
-                       "them without important details. The scene must still look finished and rich, not empty.")
+        if is_shorts:
+            # Front-load vertical framing tokens & sanitize horizontal words
+            sanitized = prompt
+            for horiz_w, vert_rep in [
+                (r"\blandscape\b", "vertical scene"),
+                (r"\bhorizon\b", "tall sky"),
+                (r"\bpanoramic\b", "tall vertical scene"),
+                (r"\bwide shot\b", "full-height vertical shot"),
+                (r"\bsplit screen\b", "vertical stacked comparison")
+            ]:
+                sanitized = re.sub(horiz_w, vert_rep, sanitized, flags=re.IGNORECASE)
+            prefix = "A true full-height vertical 9:16 portrait illustration, tall mobile smartphone wallpaper framing: "
+            if side in ("left", "right"):
+                keep = "left" if side == "right" else "right"
+                comp = f" Framing: Strictly vertical 9:16 mobile phone portrait framing, subject towards {keep}, open background on {side}. Absolutely no landscape composition, zero letterbox, zero pillarbox, no black bars."
+            elif side == "top":
+                comp = " Framing: Strictly vertical 9:16 mobile phone portrait framing, subject in lower half, open space at top. Absolutely no landscape composition, zero letterbox, zero pillarbox, no black bars."
+            else:
+                comp = " Framing: Strictly vertical 9:16 mobile phone portrait framing, subject centered vertically. Absolutely no landscape composition, zero letterbox, zero pillarbox, no black bars."
+            prompt = f"{prefix}{sanitized}.{comp}"
+        else:
+            if side in ("left", "right"):             # leave room for stickers so they never cover the subject
+                keep = "left" if side == "right" else "right"
+                prompt += (f" Composition: a complete, natural, full scene that fills the whole frame, with the main "
+                           f"character and the main subject placed slightly towards the {keep}, and a calmer, less busy "
+                           f"area on the {side} side (open sky, plain wall, ground or water) without important details. "
+                           f"The scene must still look finished and rich, not empty.")
+            elif side == "top":
+                prompt += (" Composition: a complete, natural, full scene that fills the whole frame, with the main "
+                           "character and the main subject in the lower part and a calm open sky or plain upper wall above "
+                           "them without important details. The scene must still look finished and rich, not empty.")
         cmd = [exe, "generate", "create", "flow-text-to-image" if ref == "-" else "flow-image-to-image",
-               "--model", MODEL, "--aspect-ratio", "16:9", "--outputs", "1", "--batch", batch,
+               "--model", MODEL, "--aspect-ratio", aspect_ratio, "--outputs", "1", "--batch", batch,
                "--index", str(i), "--folder", folder()]
         if new and n == 0:
             cmd.append("--new-project")              # one project per RUN: only on the first prompt

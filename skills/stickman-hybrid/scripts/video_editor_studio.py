@@ -189,6 +189,131 @@ def generate_heading_card(title, subtitle="", style="warm_parchment", is_shorts=
         print(f"❌ Failed to generate heading card: {res.stderr}")
         return False
 
+def generate_plain_paper_page(main_text, sub_text="", stickman_pose="think", is_shorts=False, duration=2.5, out_video="plain_page.mp4"):
+    """Generates the signature Ink Explainer (19.3M views) Plain Paper Palate Cleanser page.
+    Features:
+    - 100% clean plain paper canvas (#FAF8F2) with zero background clutter.
+    - Hand-drawn bold felt-pen typography (#1A1A1A) with organic spacing.
+    - Minimalist stickman looking at the text (shock, think, point).
+    - Subtle 1.00x -> 1.025x Ken Burns camera push-in.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    
+    width, height = (1080, 1920) if is_shorts else (1920, 1080)
+    bg_color = (252, 250, 245) # Clean antique paper
+    ink_color = (26, 26, 26) # Charcoal felt-pen black
+    accent_color = (205, 55, 55) # Highlight Crimson or Amber
+    
+    im = Image.new("RGBA", (width, height), bg_color + (255,))
+    draw = ImageDraw.Draw(im)
+    
+    # Try finding Patrick Hand or Kalam font
+    font_main = None
+    for f_candidate in [
+        "/home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/fonts/PatrickHand-Regular.ttf",
+        "/home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/fonts/Kalam-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    ]:
+        if os.path.exists(f_candidate):
+            try:
+                font_main = ImageFont.truetype(f_candidate, 78 if is_shorts else 88)
+                font_sub = ImageFont.truetype(f_candidate, 46 if is_shorts else 52)
+                break
+            except Exception:
+                pass
+    if not font_main:
+        font_main = font_sub = ImageFont.load_default()
+
+    # Draw centered main text (multi-line supported)
+    lines = main_text.split("|") if "|" in main_text else [main_text]
+    line_images = []
+    for l in lines:
+        bbox = draw.textbbox((0, 0), l.upper(), font=font_main)
+        lw, lh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        line_images.append((l.upper(), lw, lh))
+        
+    total_h = sum(lh for _, _, lh in line_images) + (len(lines) - 1) * 24
+    if sub_text:
+        bbox_sub = draw.textbbox((0, 0), sub_text.upper(), font=font_sub)
+        sub_w, sub_h = bbox_sub[2] - bbox_sub[0], bbox_sub[3] - bbox_sub[1]
+        total_h += sub_h + 36
+    else:
+        sub_w, sub_h = 0, 0
+
+    curr_y = (height - total_h) // 2
+    for l_text, lw, lh in line_images:
+        lx = (width - lw) // 2
+        draw.text((lx, curr_y), l_text, font=font_main, fill=ink_color)
+        curr_y += lh + 24
+
+    if sub_text:
+        curr_y += 12
+        sx = (width - sub_w) // 2
+        # Clean subtle dash underline or text
+        draw.text((sx, curr_y), sub_text.upper(), font=font_sub, fill=accent_color)
+
+    # Optional minimal stickman in lower corner (Ink Explainer style)
+    if stickman_pose:
+        sm_x = 240 if is_shorts else 320
+        sm_y = height - 280
+        # Head
+        head_r = 38
+        draw.ellipse([sm_x - head_r, sm_y - head_r, sm_x + head_r, sm_y + head_r], fill=(255, 255, 255), outline=ink_color, width=5)
+        # Dot eyes looking toward text (up and right)
+        draw.ellipse([sm_x + 8, sm_y - 10, sm_x + 16, sm_y - 2], fill=ink_color)
+        draw.ellipse([sm_x + 22, sm_y - 10, sm_x + 30, sm_y - 2], fill=ink_color)
+        
+        # Body
+        neck_y = sm_y + head_r
+        pelvis_y = neck_y + 110
+        draw.line([(sm_x, neck_y), (sm_x, pelvis_y)], fill=ink_color, width=5)
+        
+        # Legs
+        draw.line([(sm_x, pelvis_y), (sm_x - 35, pelvis_y + 100)], fill=ink_color, width=5)
+        draw.line([(sm_x, pelvis_y), (sm_x + 35, pelvis_y + 100)], fill=ink_color, width=5)
+        
+        # Arms based on pose
+        if stickman_pose == "shock":
+            # Hands on head
+            draw.line([(sm_x, neck_y + 20), (sm_x - 45, neck_y)], fill=ink_color, width=5)
+            draw.line([(sm_x - 45, neck_y), (sm_x - 25, sm_y - 20)], fill=ink_color, width=5)
+            draw.line([(sm_x, neck_y + 20), (sm_x + 45, neck_y)], fill=ink_color, width=5)
+            draw.line([(sm_x + 45, neck_y), (sm_x + 25, sm_y - 20)], fill=ink_color, width=5)
+            # Open mouth
+            draw.ellipse([sm_x + 12, sm_y + 10, sm_x + 26, sm_y + 24], outline=ink_color, width=4)
+        elif stickman_pose == "point":
+            # Pointing arm up-right towards text
+            draw.line([(sm_x, neck_y + 20), (sm_x + 80, neck_y - 30)], fill=ink_color, width=5)
+            draw.line([(sm_x, neck_y + 20), (sm_x - 30, neck_y + 60)], fill=ink_color, width=5)
+        else: # think
+            # Hand on chin
+            draw.line([(sm_x, neck_y + 20), (sm_x + 30, neck_y + 10)], fill=ink_color, width=5)
+            draw.line([(sm_x + 30, neck_y + 10), (sm_x + 20, sm_y + head_r - 10)], fill=ink_color, width=5)
+            draw.line([(sm_x, neck_y + 20), (sm_x - 30, neck_y + 60)], fill=ink_color, width=5)
+
+    tmp_png = "plain_card_tmp.png"
+    im.save(tmp_png)
+    
+    # Render with FFmpeg subtle push-in (1.00x -> 1.025x)
+    vf = f"scale={width*2}:{height*2},zoompan=z='min(zoom+0.0008,1.025)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={int(duration*30)}:s={width}x{height}:fps=30"
+    cmd = [
+        "ffmpeg", "-y", "-loop", "1", "-i", tmp_png,
+        "-vf", vf,
+        "-t", str(duration),
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p",
+        out_video
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if os.path.exists(tmp_png):
+        os.remove(tmp_png)
+        
+    if res.returncode == 0:
+        print(f"✅ Generated Plain Paper Text Page: {out_video}")
+        return True
+    else:
+        print(f"❌ Failed to generate plain paper page: {res.stderr}")
+        return False
+
 def apply_vfx_filters(input_video, output_video, effect="shake_impact"):
     """Applies high-impact VFX like screen shake, flash frame, or dramatic vignette."""
     if not os.path.exists(input_video):
@@ -289,6 +414,15 @@ def main():
     p_head.add_argument("--duration", type=float, default=3.0, help="Card duration in seconds")
     p_head.add_argument("--out", default="heading_card.mp4", help="Output MP4")
 
+    # Plain Paper Text Page (Ink Explainer style)
+    p_page = subparsers.add_parser("page", help="Generate Ink Explainer style plain paper text page")
+    p_page.add_argument("text", help="Main text statement (use | for multiple lines)")
+    p_page.add_argument("--subtitle", default="", help="Optional subtitle or metric")
+    p_page.add_argument("--pose", choices=["think", "shock", "point", "none"], default="think", help="Stickman reaction pose")
+    p_page.add_argument("--shorts", action="store_true", help="9:16 Shorts format")
+    p_page.add_argument("--duration", type=float, default=2.5, help="Card duration in seconds")
+    p_page.add_argument("--out", default="plain_page.mp4", help="Output MP4")
+
     # VFX Filters
     p_vfx = subparsers.add_parser("vfx", help="Apply visual effects (shake, flash, vignette)")
     p_vfx.add_argument("input_video", help="Input video MP4")
@@ -305,6 +439,9 @@ def main():
         stitch_outro_slate(args.main_video, args.outro_video, args.out)
     elif args.action == "heading":
         generate_heading_card(args.title, subtitle=args.subtitle, style=args.style, is_shorts=args.shorts, duration=args.duration, out_video=args.out)
+    elif args.action == "page":
+        pose_arg = None if args.pose == "none" else args.pose
+        generate_plain_paper_page(args.text, sub_text=args.subtitle, stickman_pose=pose_arg, is_shorts=args.shorts, duration=args.duration, out_video=args.out)
     elif args.action == "vfx":
         apply_vfx_filters(args.input_video, args.out, effect=args.effect)
     else:

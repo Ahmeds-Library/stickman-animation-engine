@@ -158,6 +158,49 @@ until the reviewer approved them.
     - **Universal Negative Prompt**: Appended to every Flow prompt to permanently ban photorealism, 3D
       renders, realistic faces, anime, and style drift.
 
+21. **Mutual Sticker & Asset Registry Standard (Zero-Waste Reuse).**
+    - **Zero Duplicate Cutouts**: Transparent prop cutouts are format-agnostic 1:1 elements. A sticker made for Shorts can and must be reused in Long (and vice versa).
+    - **Registry Query (`asset_registry.py`)**: Sibling pipelines check `<project_root>/STICKERS_REGISTRY.json` before prompting Google Flow.
+    - **Semantic NLP Matching**: Token containment and synonym trees prevent duplicate generation (e.g. "sabertooth skull" matches "sabretooth tiger skull").
+    - **Centralized Assets**: Cutouts are saved to `<project_root>/elements/cut/` and symlinked/copied to `short/` and `long/`.
+
+22. **Strict Native Vertical 9:16 Flow Architecture & Letterbox Guard.**
+    - **Positional Token Weighting**: Flow/Imagen text encoders prioritize the first 15–20 tokens. Prompts must be front-loaded with:
+      `"A true full-height vertical 9:16 portrait illustration, tall mobile smartphone wallpaper framing: {scene}. Tall vertical composition filling the complete mobile screen from top to bottom, vertical smartphone portrait orientation."`
+    - **Keyword Sanitizer**: Automatically converts horizontal words (`landscape` $\to$ `vertical scene`, `horizon` $\to$ `vertical vista`, `panoramic` $\to$ `tall framing`).
+    - **Universal Shorts Negative Prompt**: Enforces exclusion of horizontal composition, widescreen framing, letterbox bars, and borders.
+    - **Validation Guard (`verify_vertical_layout`)**: Before rendering, every image is tested for vertical aspect ratio ($\le 0.65$) and top/bottom band variance ($\sigma > 3.5$) to reject letterbox bars.
+
+23. **Deterministic Audio-Visual Synchronization (`align_hybrid_scenes.py`).**
+    - All cuts, transitions, and sticker reveals are mathematically time-locked to Whisper `WORDS.tsv` coordinates (`line.i` notation).
+    - Resolves timeline drift and orphan overlays.
+
+24. **Intelligent Emotion & Contextual VFX Directing (`vfx_smart_designer.py`).**
+    - Automatically enriches scenes with contextual visual effects: `blood`/`danger` (pulsing crimson vignette), `ice`/`cold` (cyan crystalline frost vignette), `bw`/`grayscale` (flashback), `zoom_punch` (kinetic snap), `shake`/`rumble` (peril impacts), and `hover` (living motion).
+
+25. **3-Stem Psychoacoustic Audio Mastering (`mix.py`).**
+    - Audio is routed into 3 dedicated stems: `[vomix]` (voiceover), `[sfxmix]` (SFX and foley), and `[bed_ducked]` (music bed).
+    - **SFX is NOT ducked by voice**, ensuring tactile pops, whooshes, and paper slides remain crisp and punchy while dialogue speaks. Music bed is sidechain-ducked under voice. Broadcast target: -14.0 LUFS.
+
+26. **Mandatory Visual Sticker Verification & Zero-Empty-Scene Gate.**
+    - Every non-card scene must feature at least one contextual sticker cutout, dynamic counter, or infographic bar chart landing on a spoken keyword.
+    - Bare image holds exceeding 3.5s with zero stickers or counters are strictly flagged as defective.
+
+27. **Overlay Placement & Local Parenting Gate.**
+    - In `SCENES_HYBRID.tsv`, every `+` overlay row MUST be placed immediately under the scene row it belongs to.
+    - Appending overlays at the end of the TSV file is strictly forbidden. `render_pro.py` and `align_hybrid_scenes.py` enforce automatic chronological re-parenting.
+
+28. **Multi-Column VFX & Transition Robustness Gate.**
+    - `render_pro.py` inspects `extra`, `pos`, and `space` for transition tags (`fade`, `crossfade`, `flash`, `cut`) and VFX tags (`danger`, `blood`, `ice`, `shake`, `zoom_punch`, `bw`).
+    - Eliminates silent VFX dropouts caused by minor TSV column misalignments.
+
+29. **Semantic Asset Naming Standard (Ban on Numeric IDs).**
+    - Sticker files must use descriptive semantic nouns/slugs (e.g., `mattress.png`, `sabertooth_skull.png`) rather than arbitrary numeric filenames (`01.png`, `02.png`).
+    - Eliminates cross-pipeline namespace collisions between Shorts and Long.
+
+30. **Adaptive Sticker Lifetime & Screen Density Standard.**
+    - In long-form documentary scenes ($>5.0\text{s}$), sticker hold duration must dynamically adapt to $3.5\text{s} - 5.5\text{s}$ ($\approx 70\%$ of scene duration) to prevent premature disappearance and empty screens.
+
 ---
 
 ## Part 2: The pipeline
@@ -1000,6 +1043,16 @@ Visual events, camera physics, and sound effects are automatically mapped from t
 - **The Ken Burns Law**: Any visual hold exceeding 2.0s must apply a continuous slow scale push-in ($1.00\times \to 1.045\times$). Static, lifeless frames are strictly prohibited.
 - **Dialogue Shot-Reverse-Shot**: During multi-character dialogue (OverSimplified style), camera cuts alternate between characters every 0.8s–1.4s.
 - **Split-Screen Comparisons**: "Then vs Now" or "Expectation vs Reality" visual comparisons split by a clean vertical divider line with sound-swapping audio balance.
+
+### Rule 61: The Plain Paper Palate Cleanser Standard (Ink Explainer 19.3M Benchmark)
+- **The Visual Reset Principle**: Instead of flashy lower-third badges or 3D title cards, the visual cuts every 45–75 seconds to a **100% Plain Off-White Paper Page** (`#FAF8F2` or `#FFFFFF`).
+- **Cognitive Purpose**: Acts as a biological sensory palate cleanser. Breaks visual overstimulation, resets eye fatigue, and concentrates 100% of the viewer's cognitive bandwidth onto a single shocking statistic, study attribution, or existential question.
+- **Visual Composition**:
+  1. **Background**: Pure, uncluttered off-white parchment with ultra-subtle grain.
+  2. **Typography**: Hand-drawn felt-pen aesthetic (`#1A1A1A` charcoal ink), centered with generous negative breathing space ($>70\%$ empty canvas).
+  3. **Reaction Stickman**: Optional minimalist stickman positioned in a lower third or side corner in an expressive reaction pose (`shock`, `think`, or `point`), silently processing the text alongside the audience.
+  4. **Kinetics**: Micro push-in ($1.00\times \to 1.025\times$) over 2.0s–3.0s duration; never static.
+  5. **CLI Generation**: `python3 studio.py page "40,000 HOURS" --subtitle "OF YOUR LIFE — WORKING" --pose shock`
 
 ### Multi-Skill Orchestration Ecosystem
 The pipeline is fortified with 7 integrated companion skills:

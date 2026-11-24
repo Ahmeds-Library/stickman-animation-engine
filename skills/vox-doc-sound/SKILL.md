@@ -345,12 +345,11 @@ just had a dense list of facts gets air before the next one.
 
 ## Levels and mix QC
 
-mix.py:
-- applies broadcast vocal warmth chain (highpass 75 Hz, +1.8 dB at 220 Hz chest warmth, +2.2 dB at 3.4 kHz presence, +1.2 dB air) and normalizes voice to -19 LUFS
-- carves vocal pocket notch EQ in the music bed
-- applies each file's catalog level offset
-- applies gentle 2.8:1 ducking with 550ms release
-- finishes at -14 LUFS integrated, true peak -1.0 dBTP (YouTube standard)
+mix.py (3-Stem Mastering Chain):
+- **Voice Stem (`[vomix]`):** applies broadcast vocal warmth chain (highpass 75 Hz, +1.8 dB at 220 Hz chest warmth, +2.2 dB at 3.4 kHz presence, +1.2 dB air) and normalizes voice to -19 LUFS.
+- **SFX Stem (`[sfxmix]`):** routes all tactile pops, scene transition whooshes, and foley hits directly with catalog level offsets. **SFX is NOT ducked by voice**, ensuring tactile sounds remain crisp and audible throughout narration.
+- **Music Bed (`[bed_ducked]`):** carves vocal pocket notch EQ (-3.2 dB at 1.8 kHz) and applies gentle 2.8:1 sidechain ducking under `[vomix]` with 550ms release.
+- **Master Bus:** mixes `[vomix]`, `[sfxmix]`, and `[bed_ducked]` to **-14.0 LUFS** integrated, true peak ≤ -1.0 dBTP (YouTube standard).
 
 Check before handing over:
 - `ffmpeg -i mix.wav -af ebur128=peak=true -f null -` → I ≈ -14, peak ≤ -1.5

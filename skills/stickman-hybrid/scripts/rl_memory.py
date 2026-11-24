@@ -36,12 +36,15 @@ DEFAULT_POLICY = {
             "allow_headings_on_cards_only": True
         },
         "rule_26_image_frequency": {
-            "shorts_target_cut_duration_sec": 2.6,
-            "shorts_max_hold_sec": 3.4,
-            "shorts_min_shots_per_minute": 24,
-            "long_target_cut_duration_sec": 4.8,
-            "long_max_hold_sec": 6.8,
-            "long_min_shots_per_minute": 14
+            "opening_hook_target_pace_sec": 1.6,
+            "opening_hook_max_hold_sec": 2.2,
+            "shorts_target_cut_duration_sec": 2.0,
+            "shorts_max_hold_sec": 3.0,
+            "shorts_min_shots_per_minute": 28,
+            "long_target_cut_duration_sec": 3.0,
+            "long_max_hold_sec": 4.5,
+            "long_min_shots_per_minute": 18,
+            "rapid_list_micro_beat_sec": 1.1
         },
         "rule_27_audio_sound_design": {
             "broadcast_integrated_lufs": -14.0,
@@ -49,14 +52,14 @@ DEFAULT_POLICY = {
             "true_peak_max_dbfs": -1.0,
             "min_sfx_cues_per_minute": 16,
             "enforce_four_audio_layers": True,
-            "music_bed_gain_long_db": -17.0,
-            "music_bed_gain_shorts_db": -16.0,
-            "ambient_foley_gain_db": -23.0,
+            "music_bed_gain_long_db": -12.0,
+            "music_bed_gain_shorts_db": -11.0,
+            "ambient_foley_gain_db": -16.0,
             "vocal_pocket_eq_enabled": True,
             "vocal_warmth_eq_enabled": True,
-            "sidechain_ducking_ratio": 2.8,
-            "sidechain_ducking_threshold": 0.08,
-            "sidechain_ducking_release_ms": 550
+            "sidechain_ducking_ratio": 1.9,
+            "sidechain_ducking_threshold": 0.15,
+            "sidechain_ducking_release_ms": 450
         },
         "rule_28_dynamic_vfx": {
             "camera_shake_on_catastrophe": True,
@@ -214,13 +217,28 @@ def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warn
     # If pacing received deductions, tighten cut duration in policy
     if any("pacing" in d.lower() or "hold" in d.lower() for d in deductions):
         if "short" in format_type.lower():
-            memory["rules"]["rule_26_image_frequency"]["shorts_target_cut_duration_sec"] = max(2.0, memory["rules"]["rule_26_image_frequency"]["shorts_target_cut_duration_sec"] - 0.2)
+            curr = memory["rules"]["rule_26_image_frequency"].get("shorts_target_cut_duration_sec", 2.6)
+            new_val = max(2.0, round(curr - 0.2, 2))
+            memory["rules"]["rule_26_image_frequency"]["shorts_target_cut_duration_sec"] = new_val
+            print(f"🎯 [RL Self-Correction] Tightened Shorts target cut duration: {curr}s -> {new_val}s")
         else:
-            memory["rules"]["rule_26_image_frequency"]["long_target_cut_duration_sec"] = max(4.0, memory["rules"]["rule_26_image_frequency"]["long_target_cut_duration_sec"] - 0.3)
+            curr = memory["rules"]["rule_26_image_frequency"].get("long_target_cut_duration_sec", 4.8)
+            new_val = max(4.0, round(curr - 0.3, 2))
+            memory["rules"]["rule_26_image_frequency"]["long_target_cut_duration_sec"] = new_val
+            print(f"🎯 [RL Self-Correction] Tightened Long target cut duration: {curr}s -> {new_val}s")
             
     # If loudness deviated, strictly reinforce target
     if any("lufs" in d.lower() for d in deductions):
         memory["rules"]["rule_27_audio_sound_design"]["broadcast_integrated_lufs"] = -14.0
+        print("🎯 [RL Self-Correction] Reset broadcast integrated loudness target to strict -14.0 LUFS")
+
+    # If crowding / clutter deduction: enforce strict active cap & scale damping (preserving subtitle buffer)
+    if any("crowd" in d.lower() or "clutter" in d.lower() or "overlap" in d.lower() for d in deductions):
+        if "rule_24_spatial_hierarchy" in memory["rules"]:
+            memory["rules"]["rule_24_spatial_hierarchy"]["max_active_stickers_shorts"] = 1
+            memory["rules"]["rule_24_spatial_hierarchy"]["max_active_stickers_long"] = 2
+            memory["rules"]["rule_24_spatial_hierarchy"]["crowded_auto_scale"] = 0.78
+            print("🎯 [RL Self-Correction] Enforced active sticker cap (1 Shorts, 2 Long) & 0.78 scale damping (subtitle buffer preserved)")
 
     save_rl_memory(memory)
     return memory

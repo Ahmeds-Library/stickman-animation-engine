@@ -23,6 +23,7 @@ contains "loop", or it is longer than 8 s. Every file in music/ is music.
 """
 import csv, os, subprocess
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(KIT, "CATALOG.tsv")
@@ -55,12 +56,27 @@ def kind_of(rel, cat, secs_hint=None):
     return "loop" if (secs_hint or 0) > 8 else "one"
 
 
+def process_item(item):
+    p, rel, cat, source, st, prev = item
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                "-of", "csv=p=0", p], capture_output=True, text=True).stdout or 0)
+    kind = kind_of(rel, cat, dur)
+    m = measure(p, kind)
+    if not m:
+        return None, rel
+    secs, peak_t, off = m
+    return [rel, source, cat, kind, f"{secs:.2f}", f"{peak_t:.3f}", f"{off:.1f}",
+            (prev or {}).get("use_for", ""), (prev or {}).get("licence", ""),
+            str(st.st_size), f"{st.st_mtime:.0f}"], None
+
+
 def main():
     old = {}
     if os.path.exists(OUT):
         with open(OUT, encoding="utf-8") as f:
             old = {r["file"]: r for r in csv.DictReader(f, delimiter="\t")}
     rows, new, skipped = [], 0, []
+    to_measure = []
     for top in ("sfx", "music"):
         for d, _, files in os.walk(os.path.join(KIT, top)):
             for fn in sorted(files):
@@ -76,18 +92,19 @@ def main():
                     continue
                 cat = parts[-2] if len(parts) > 2 else top
                 source = parts[1] if len(parts) > 3 else "own"
-                dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                            "-of", "csv=p=0", p], capture_output=True, text=True).stdout or 0)
-                kind = kind_of(rel, cat, dur)
-                m = measure(p, kind)
-                if not m:
-                    skipped.append(rel)
-                    continue
-                secs, peak_t, off = m
-                rows.append([rel, source, cat, kind, f"{secs:.2f}", f"{peak_t:.3f}", f"{off:.1f}",
-                             (prev or {}).get("use_for", ""), (prev or {}).get("licence", ""),
-                             str(st.st_size), f"{st.st_mtime:.0f}"])
-                new += 1
+                to_measure.append((p, rel, cat, source, st, prev))
+
+    if to_measure:
+        print(f"⚡ Measuring {len(to_measure)} audio files with 8 parallel workers...")
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            results = ex.map(process_item, to_measure)
+            for res_row, sk in results:
+                if res_row:
+                    rows.append(res_row)
+                    new += 1
+                elif sk:
+                    skipped.append(sk)
+
     with open(OUT, "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f, delimiter="\t", lineterminator="\n")
         w.writerow(COLS)

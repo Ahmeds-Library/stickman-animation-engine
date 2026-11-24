@@ -4,6 +4,7 @@ Provides a single-command interface for the entire production pipeline:
 - Video Generation (Dual 16:9 Master + 9:16 Shorts)
 - 3-Second Viral Hook Engine (12 Psychological Archetypes)
 - Animated Chapter Heading Cards & Visual Effects (VFX)
+- Mandatory Pre-Render Quality Gate (validate_pipeline.py)
 - System Self-Diagnostic & Hardware Doctor (Kokoro, Whisper, VA-API)
 - 60-Rule Reinforcement Learning Quality Audit (RL-QC)
 - Trending Topic Research & Retention Curve Analytics
@@ -39,9 +40,19 @@ def run_doctor():
 
     # 2. Hardware Acceleration
     try:
-        from low_resource_engine import get_optimal_ffmpeg_flags, get_system_specs
-        hw = get_system_specs()
-        opt = get_optimal_ffmpeg_flags()
+        import importlib
+        try:
+            lre = importlib.import_module("low_resource_engine")
+        except ImportError:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("low_resource_engine", os.path.join(SCRIPTS_DIR, "low_resource_engine.py"))
+            if spec and spec.loader:
+                lre = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(lre)
+            else:
+                raise ImportError("low_resource_engine could not be loaded")
+        hw = lre.get_system_specs()
+        opt = lre.get_optimal_ffmpeg_flags()
         flags = opt.get("flags", [])
         accel_name = "Intel VA-API" if "vaapi" in " ".join(flags) else ("Nvidia NVENC" if "nvenc" in " ".join(flags) else "CPU (Multi-thread)")
         print(f"⚡ Hardware Acceleration: {accel_name} ({hw.get('threads', 4)} threads, {hw.get('ram_gb', 8):.1f} GB RAM) -> ✅ ACTIVE")
@@ -82,6 +93,10 @@ def run_doctor():
     eval_path = os.path.join(SCRIPTS_DIR, "evaluate_rl.py")
     print(f"🧠 RL Quality Evaluator: {'✅ 60-RULE ACTIVE POLICY' if os.path.exists(eval_path) else '❌ MISSING'}")
 
+    # 9. Pre-Render Quality Gate
+    gate_path = os.path.join(SCRIPTS_DIR, "validate_pipeline.py")
+    print(f"🛡️ Pre-Render Quality Gate: {'✅ ACTIVE PRE-FLIGHT SHIELD' if os.path.exists(gate_path) else '❌ MISSING'}")
+
     print("==================================================")
     print("✅ SYSTEM READY FOR 100% ERROR-FREE PRODUCTION")
     print("==================================================")
@@ -111,10 +126,29 @@ def run_heading(args):
     subprocess.run(cmd)
 
 
+def run_page(args):
+    """Generates the signature Ink Explainer Plain Paper Palate Cleanser page."""
+    script = os.path.join(SCRIPTS_DIR, "video_editor_studio.py")
+    cmd = [sys.executable, script, "page", args.text]
+    if args.subtitle:
+        cmd.extend(["--subtitle", args.subtitle])
+    cmd.extend(["--pose", args.pose, "--duration", str(args.duration), "--out", args.out])
+    if args.shorts:
+        cmd.append("--shorts")
+    subprocess.run(cmd)
+
+
 def run_vfx(args):
     """Applies high-impact VFX like screen shake or flash frame."""
     script = os.path.join(SCRIPTS_DIR, "video_editor_studio.py")
     cmd = [sys.executable, script, "vfx", args.input_video, "--effect", args.effect, "--out", args.out]
+    subprocess.run(cmd)
+
+
+def run_gate(args):
+    """Runs the mandatory Pre-Render Quality Gate."""
+    script = os.path.join(SCRIPTS_DIR, "validate_pipeline.py")
+    cmd = [sys.executable, script, args.target, "--format", args.format]
     subprocess.run(cmd)
 
 
@@ -128,9 +162,22 @@ def run_qc(args):
 
 
 def run_create(args):
-    """Runs the full automated production pipeline (Dual 16:9 + 9:16)."""
+    """Runs the full automated production pipeline with unified parameter routing."""
     script = os.path.join(SCRIPTS_DIR, "pipeline_dual.py")
-    cmd = [sys.executable, script, "--topic", args.topic, "--look", args.look]
+    cmd = [
+        sys.executable, script,
+        "--topic", args.topic,
+        "--format", args.format,
+        "--lang", args.lang,
+        "--look", args.look,
+        "--length", args.length,
+        "--captions", args.captions,
+        "--resume", args.resume
+    ]
+    if args.blueprint:
+        cmd.extend(["--blueprint", args.blueprint])
+    if args.dry_run:
+        cmd.append("--dry-run")
     subprocess.run(cmd)
 
 
@@ -141,12 +188,11 @@ def main():
         epilog="""
 Examples:
   python3 studio.py doctor
+  python3 studio.py create "Ancient Human Night" --format both --lang en --look bright
+  python3 studio.py gate short/ --format 9:16
   python3 studio.py hook "Ancient Human Night" --archetype modern_inversion --ratio 9x16
-  python3 studio.py hook --list-archetypes
   python3 studio.py heading "Chapter 1: The Void" --subtitle "50,000 Years Ago"
-  python3 studio.py vfx input.mp4 --effect shake_impact --out shaken.mp4
   python3 studio.py qc example/boat_hi
-  python3 studio.py create "The War of Jenkins Ear" --look oversimplified
 """
     )
     subparsers = parser.add_subparsers(dest="command", help="Studio commands")
@@ -154,7 +200,12 @@ Examples:
     # 1. Doctor
     subparsers.add_parser("doctor", help="Run system diagnostics and verify zero-setup readiness")
 
-    # 2. Hook
+    # 2. Gate (Pre-Render Validator)
+    p_gate = subparsers.add_parser("gate", help="Run mandatory Pre-Render Quality Gate on a project folder")
+    p_gate.add_argument("target", nargs="?", default=".", help="Target project directory")
+    p_gate.add_argument("--format", choices=["9:16", "16:9"], default="9:16", help="Target aspect ratio")
+
+    # 3. Hook
     p_hook = subparsers.add_parser("hook", help="Generate high-retention 3-second viral hook videos")
     p_hook.add_argument("topic", nargs="?", default="Black Holes", help="Video topic")
     p_hook.add_argument("--archetype", default="modern_inversion", help="Psychological hook archetype")
@@ -162,7 +213,7 @@ Examples:
     p_hook.add_argument("--out", default="hook_output.mp4", help="Output MP4 filename")
     p_hook.add_argument("--list-archetypes", action="store_true", help="List all 12 psychological archetypes")
 
-    # 3. Heading
+    # 4. Heading
     p_head = subparsers.add_parser("heading", help="Generate animated chapter title cards with Ken Burns push-in")
     p_head.add_argument("title", help="Chapter heading title")
     p_head.add_argument("--subtitle", default="", help="Optional subtitle")
@@ -171,29 +222,49 @@ Examples:
     p_head.add_argument("--duration", type=float, default=3.0, help="Duration in seconds")
     p_head.add_argument("--out", default="heading_card.mp4", help="Output MP4 filename")
 
-    # 4. VFX
+    # 5. Plain Paper Page (Rule 61)
+    p_page = subparsers.add_parser("page", help="Generate signature Ink Explainer Plain Paper Palate Cleanser page with felt-pen typography")
+    p_page.add_argument("text", help="Main shocking statement, metric, or question")
+    p_page.add_argument("--subtitle", default="", help="Optional secondary context")
+    p_page.add_argument("--pose", choices=["none", "shock", "think", "point"], default="think", help="Stickman reaction pose")
+    p_page.add_argument("--duration", type=float, default=2.5, help="Duration in seconds (default: 2.5s)")
+    p_page.add_argument("--shorts", action="store_true", help="9:16 Shorts format")
+    p_page.add_argument("--out", default="plain_page.mp4", help="Output MP4 filename")
+
+    # 6. VFX
     p_vfx = subparsers.add_parser("vfx", help="Apply visual effects (screen shake, flash frame, radial vignette)")
     p_vfx.add_argument("input_video", help="Input MP4 video file")
     p_vfx.add_argument("--effect", choices=["shake_impact", "flash_frame", "vignette_amber"], default="shake_impact")
     p_vfx.add_argument("--out", default="vfx_output.mp4", help="Output MP4 filename")
 
-    # 5. QC / RL Evaluation
-    p_qc = subparsers.add_parser("qc", help="Execute 60-Rule Reinforcement Learning Quality Audit")
+    # 7. QC / RL Evaluation
+    p_qc = subparsers.add_parser("qc", help="Execute 61-Rule Reinforcement Learning Quality Audit")
     p_qc.add_argument("target", nargs="?", default=".", help="Target project directory")
 
-    # 6. Create Pipeline
-    p_create = subparsers.add_parser("create", help="Generate full stickman documentary pipeline")
+    # 8. Create Pipeline (Unified Master Intake)
+    p_create = subparsers.add_parser("create", help="Generate full stickman documentary pipeline from 5 intake questions")
     p_create.add_argument("topic", help="Documentary topic")
-    p_create.add_argument("--look", choices=["warm", "ink", "oversimplified", "casually_explained", "cgp_grey", "minute_physics", "bright"], default="warm")
+    p_create.add_argument("--format", choices=["short", "long", "both"], default="both", help="Production format (Short 9:16, Long 16:9, or Both)")
+    p_create.add_argument("--lang", choices=["en", "ur", "roman_urdu"], default="en", help="Narration language")
+    p_create.add_argument("--length", default="auto", help="Target duration target (e.g. '60s', '5m')")
+    p_create.add_argument("--captions", choices=["yes", "no"], default="yes", help="Include Alex Hormozi single-word kinetic subtitles")
+    p_create.add_argument("--look", choices=["bright", "warm", "ink", "oversimplified", "casually_explained", "cgp_grey", "minute_physics"], default="bright", help="Canonical visual art style")
+    p_create.add_argument("--resume", choices=["all", "script", "voice", "assets", "render", "audit"], default="all", help="Resume from a specific pipeline stage")
+    p_create.add_argument("--blueprint", default=None, help="Path to rich agent-authored narrative blueprint JSON")
+    p_create.add_argument("--dry-run", action="store_true", help="Run end-to-end wiring check without rendering full video")
 
     args = parser.parse_args()
 
     if args.command == "doctor":
         run_doctor()
+    elif args.command == "gate":
+        run_gate(args)
     elif args.command == "hook":
         run_hook(args)
     elif args.command == "heading":
         run_heading(args)
+    elif args.command == "page":
+        run_page(args)
     elif args.command == "vfx":
         run_vfx(args)
     elif args.command == "qc":

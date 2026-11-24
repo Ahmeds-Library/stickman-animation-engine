@@ -24,3 +24,10 @@ hand-drawn 2D stick figure explainer illustration, clean black ink outlines of e
 - If the reference is a combined sheet, Flow sometimes pastes the sheet's own line-up into
   the scene. Always split the sheet into one reference per character with
   `pictures.py refs`.
+
+**The Plain Paper Palate Cleanser Standard (Rule 61):**
+- In **Ink Explainer**, do NOT use lower-third title banners or digital cards.
+- Instead, every 45–75 seconds, cut to a **Plain Off-White Paper Page** (`#FAF8F2`) featuring only a single bold felt-pen statement (e.g., *"WHAT SHOULD I DO TODAY?"*, *"1963 — RICHARD LEE"*, *"40,000 HOURS OF YOUR LIFE — WORKING"*).
+- Accompany with an expressive reaction stickman in the corner (`shock`, `think`, or `point`) to anchor audience empathy and retention.
+- Generate directly via:
+  `python3 studio.py page "STATEMENT" --subtitle "CONTEXT" --pose think`

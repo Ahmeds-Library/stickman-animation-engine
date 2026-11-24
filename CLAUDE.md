@@ -21,6 +21,8 @@ When the user asks to make an animation or says "start":
    - **B) Edit / Continue**: Only if the user says "continue", "edit", or specifies an existing project name.
 
 2. **If Starting a NEW Video (Fresh 0-Start)**:
+   > [!CAUTION]
+   > **HARD RULE: NEVER start generating scripts, assets, or running studio creation until all 5 answers are collected.** Do NOT assume defaults.
    Respond in the user's language (Roman Urdu / Urdu / English) and ask the **5 Intake Questions** in ONE concise message (with no pre-selected defaults):
    - **1. Topic**: What topic do you want the video on? (Aap apna topic bata dein ya main 10 viral topics suggest karoon?)
    - **2. Language**: Narration kis language me chahiye?
@@ -63,7 +65,13 @@ Follow `skills/stickman-hybrid/PLAYBOOK.md` Rules 1–45:
 - **Rule 24 (Spatial Hierarchy & Clutter-Free Layout)**:
   - Shorts (9:16): Opening title banner at $y \in [190, 250]$ only during first 2.5s; scene tag at $y = 230$ (suppressed during first 2.5s); right 220px margin preserved ($x \le 860$); bottom 660px preserved ($y > 1250$); kinetic subtitles at $y = 1180$; sticker bottom strictly above $y = 1040$ ($\ge 140\text{px}$ buffer above subtitles).
   - Long Form (16:9): Chapter slug at Top-Left ($x \approx 140, y \approx 100$); subtitles at $y = 920-940$; stickers at $y \le 820$.
-- **Stage 6 (Render & QC)**: `render_pro.py` with 4-7s pattern interrupts, slow push-ins, and single still frame checks (`--frame T`) first. **Never render final video without user explicit command!**
+- **Stage 6 (Render & QC - Phase 2 Intelligence)**:
+  - **Single-Entry Orchestrator**: Run `studio.py create "<Topic>" --format both --captions [--dry-run]`.
+  - **Rule 25 (Autonomous Spatial Placement)**: `render_pro.py` runs `calculate_intelligent_sticker_anchor` with negative-space luminance/gradient scoring, zero subtitle overlap ($\ge 140\text{px}$ buffer in Shorts, $\ge 80\text{px}$ in Long), and 0.82x auto-scaling in dense frames.
+  - **Rule 26 (Calibrated Tasteful Motion)**: Damped spring pop-in physics `spring_p(p) = 1.0 - exp(-8.5 * p) * cos(8.0 * p)`, micro Ken Burns drift (1.0 to 1.025), and edge restraint dampening near boundaries.
+  - **Rule 27 (Bounded Flow Visual QC)**: `verify_sticker_cutout` detects magenta halo (>1.8%) and canvas edge clipping (>15%); `verify_vertical_layout` detects letterboxing; bounded auto-rebuild loop retries up to 3 attempts with prompt refinement.
+  - **Rule 28 (4 Mandatory Pre-Render Quality Gates)**: `validate_pipeline.py` enforces Gate 1 (Manifest & Cutouts), Gate 2 (9:16 Vertical Framing), Gate 3 (3-Stem Audio), and Gate 4 (Multi-Track Sync <100ms drift).
+  - Single still frame test (`--frame T`) first before full video render. **Never render final video without user explicit command!**
 - **Stage 7 (Viral SEO & Packaging)**: Run `viral_seo_intelligence.py` for 5 high-CTR psychological titles, search description, curiosity timestamps, and 3-element thumbnail blueprint. Run `flow_thumbnail_generator.py` for native Flow thumbnails.
 
 Prerequisite: Flow Connector extension CLI (`flow-auto`). Never ask for API keys in chat.

@@ -5,6 +5,9 @@ description: Make a complete stickman documentary explainer in the HYBRID look, 
 
 # Stickman documentary, hybrid look, end to end
 
+> [!IMPORTANT]
+> **MANDATORY AI AGENT INSTRUCTION**: Before generating or editing, read [AGENT_START_GUIDE.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/AGENT_START_GUIDE.md) and [AI_AGENT_GUIDE.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/AI_AGENT_GUIDE.md). Follow the 10 Golden Directives: Mutual sticker sharing across formats, Flow-only high-density generation, true vertical 9:16 prompts, tactile sound design with 3-stem mixing (un-ducked SFX), exact word sync, and strict adherence to the `boat_hi` bright aesthetic.
+
 You make the whole video for the user. They choose the topic, language and length; you do
 the rest and show them only three checkpoints: the script, the voice and the finished video.
 
@@ -50,6 +53,7 @@ asks for them.
          5. **Subtitles & Layout:** Change kinetic caption size, positioning, colors, or safe zones.
        - Apply surgical modifications ONLY to the targeted files and re-render only the affected sub-pipeline without destroying other assets.
      - **MODE B: NEW VIDEO (Trigger: "start", "read the file and make a stickman animation video", "nayi video", names a topic from scratch):**
+       - **HARD RULE: NEVER start generating scripts, assets, or running studio.py until all 5 answers are collected.**
        - **DO NOT assume, reuse, or mix files from any previous project.** Everything starts completely from 0.
        - Ask in ONE short, structured message in the user's language (Urdu / Roman Urdu / English), with no pre-selected defaults:
          - **Topic**: Their own, or "Want me to suggest 10 viral topics?" (PLAYBOOK §1). For Urdu / Roman Urdu audiences provide bilingual titles.
@@ -310,6 +314,97 @@ objected when this was done in sequence).
   1. Continuous Ken Burns slow push-in on any hold $>2.0\text{s}$.
   2. OverSimplified dialogue cuts alternating every 0.8s–1.4s.
   3. Split-screen comparisons with thin vertical divider.
+- **The Plain Paper Palate Cleanser Standard (Rule 61):**
+  1. Plain off-white paper page (`#FAF8F2`) cut every 45–75s for sensory reset.
+  2. Bold hand-drawn felt-pen typography with $>70\%$ negative breathing space.
+  3. Expressive reaction stickman in the corner (`shock`, `think`, `point`).
+  4. Subtle micro push-in ($1.00\times \to 1.025\times$) over 2.0s–3.0s via `studio.py page`.
+- **Mutual Sticker & Asset Registry Standard (Zero-Waste Reuse - Rule 62):**
+  1. **Zero Duplicate Generations**: Cutout props (`elements/cut/*.png`) are format-agnostic 1:1 transparent stickers. A sticker generated for Shorts can and must be reused in Long (and vice versa).
+  2. **Registry Lookup (`asset_registry.py`)**: Before submitting any element to Google Flow, the engine queries `<project_root>/STICKERS_REGISTRY.json`.
+  3. **Semantic NLP Token Matching**: Automatic resolution of synonyms and plural forms (e.g. "sabertooth skull" matches "sabretooth tiger skull" or "skull").
+  4. **Centralized Repository**: Reusable elements are centralized in `<project_root>/elements/cut/` and automatically symlinked or copied into active pipelines (`short/` and `long/`). Flow is prompted only if no semantic match exists.
+- **Strict Native Vertical 9:16 Flow Architecture & Letterbox Guard (Rule 63):**
+  1. **Positional Token Weighting**: Google Flow / Imagen models place primary spatial attention on the first 15–20 tokens. Prompts that mention landscape terms early produce letterboxed horizontal compositions even with `--aspect 9:16`.
+  2. **Front-Loaded Vertical Directives**: All 9:16 prompts must be front-loaded with:
+     `"A true full-height vertical 9:16 portrait illustration, tall mobile smartphone wallpaper framing: {scene}. Tall vertical composition filling the complete mobile screen from top to bottom, vertical smartphone portrait orientation."`
+  3. **Horizontal Keyword Sanitizer**: Automatically converts horizontal tokens (`landscape` $\to$ `vertical scene`, `horizon` $\to$ `vertical vista`, `panoramic` $\to$ `tall framing`, `wide shot` $\to$ `full-body tall shot`, `split screen` $\to$ `vertically stacked frame`).
+  4. **Universal Shorts Negative Prompt**: Enforced across all Shorts prompts:
+     `horizontal composition, widescreen framing, landscape layout, 16:9, letterbox bars, pillarbox, black bars, white borders, split frame horizontally, cinematic letterbox, panoramic view, wide angle horizon, distorted vertical stretch`.
+  5. **Mandatory Letterbox Guard (`verify_vertical_layout`)**: Every generated image is verified before rendering: aspect ratio must be $\le 0.65$ and top/bottom 12% pixel bands must have variance $\sigma > 3.5$ (detecting solid/near-solid letterbox bars). Flagged images are rejected and re-prompted.
+- **Deterministic Word-Level Audio-Visual Synchronization (Rule 64):**
+  1. **Zero Guessed Timestamps**: Scene cuts and sticker overlay entrances are strictly time-locked to Whisper word timestamps from `WORDS.tsv` using `line.i` coordinates (`01.0` for sentence onset, `+01.6` for keyword sticker reveal).
+  2. **Deterministic Alignment (`align_hybrid_scenes.py`)**: Automatically resolves timeline drift, locks scene durations to narration beats, and ensures overlays never linger beyond their intended time-to-live.
+- **Intelligent Emotion & Contextual Visual Effects (VFX) Director (Rule 65):**
+  1. **Narrative Emotion Parsing (`vfx_smart_designer.py`)**: Script lines are analyzed for emotional arousal, danger, tension, and temperature.
+  2. **Contextual VFX Application**:
+     - `blood` / `danger`: Dynamic 1.2 Hz pulsating crimson perimeter vignette for predator attacks and biological peril.
+     - `ice` / `cold`: Cyan crystalline edge vignette for freezing temperatures and blizzards.
+     - `bw` / `grayscale`: 92% desaturation with ink contrast tinting for deep-time historical flashbacks.
+     - `zoom_punch`: Kinetic 0.22s snap-in ($1.04\times \to 1.00\times$) for shocking paradigm shifts and opening hooks.
+     - `shake` / `rumble`: Camera shake ($\pm 12\text{px}$) for physical impacts, explosions, and catastrophe.
+     - `hover` / `breathing`: Sinusoidal vertical hovering ($\pm 5\text{px}$) to keep stickers organically alive on screen.
+- **Mandatory Visual Sticker Verification & Zero-Empty-Scene Gate (Rule 66):**
+  1. **Zero Empty Scenes**: Every standard illustrated scene (`shots/*.png`) must contain at least one contextual sticker cutout, dynamic rolling counter, or infographic bar chart that lands on a spoken keyword. Videos with stretches of bare illustrations without stickers are strictly rejected.
+  2. **Pre-Render Manifest Verification Gate**: Before starting `render_pro.py`, the pipeline must parse `SCENES_HYBRID.tsv` and verify that each scene's `ov` list is populated and that all referenced cutouts exist on disk in `elements/cut/`.
+- **Overlay Ordering & Chronological Placement Gate (Rule 67):**
+  1. **Strict Local Parenting**: In `SCENES_HYBRID.tsv`, every `+` overlay row MUST be placed immediately under the scene row it belongs to. Never append overlay rows at the bottom of the file.
+  2. **Automatic Re-Parenting Guard**: `render_pro.py` and `align_hybrid_scenes.py` must automatically re-parent any misplaced or out-of-order overlay row to the active scene whose `[t0, t1)` window contains the overlay's timestamp.
+- **Multi-Column VFX Robustness & Schema Enforcement Gate (Rule 68):**
+  1. **6-Column TSV Schema Integrity**: All TSV files must strictly enforce the 6-column header: `cue \t img \t text \t pos \t extra \t space`.
+  2. **Multi-Column Extraction**: `render_pro.py` must inspect `extra`, `pos`, and `space` for transition tags (`fade`, `crossfade`, `flash`, `cut`) and VFX tags (`danger`, `blood`, `ice`, `shake`, `zoom_punch`, `bw`), ensuring that minor column misalignments never cause VFX to fail silently.
+- **Semantic Asset Naming Standard (Ban on Conflicting Numeric IDs - Rule 69):**
+  1. **Descriptive Semantic Slugs**: Sticker cutouts must be named by descriptive nouns or concept slugs (e.g. `mattress.png`, `sabertooth_skull.png`, `deadbolt_lock.png`) rather than arbitrary numeric filenames (`01.png`, `02.png`).
+  2. **Cross-Format Collision Prevention**: Prevents namespace collisions between Shorts and Long pipelines where `01.png` could refer to two completely different objects.
+- **Adaptive Sticker Lifetime & Screen Density Standard (Rule 70):**
+  1. **Long-Form Scene Hold Adaptation**: In long-form documentary scenes ($>5.0\text{s}$), sticker hold time must dynamically scale to $3.5\text{s} - 5.5\text{s}$ (or $\approx 70\%$ of scene duration) rather than prematurely expiring after 2.2s.
+  2. **Seamless Exit**: The sticker smoothly scales down and fades out during the final 0.28s of its lifetime, transitioning smoothly into the next visual beat.
+- **Autonomous Spatial & Negative Space Placement Solver (Rule 71):**
+  1. **Dynamic Negative Space Evaluation**: `render_pro.py` evaluates candidate docking anchors (`top_right`, `top_left`, `mid_right`, `mid_left`, `center_high`) by computing background luminance and spatial edge density gradients (`compute_negative_space_score`).
+  2. **Zero Subtitle Overlap**: Guaranteed vertical buffer ($\ge 140\text{px}$ in Shorts, $\ge 80\text{px}$ in Long) prevents stickers from touching or obscuring subtitles.
+  3. **Platform UI Clearance**: Shorts layout strictly reserves right-side engagement column ($x \le 860$) and bottom control overlay ($y \le 1250$).
+  4. **Crowding Auto-Scale**: Automatically downscales stickers to $0.82\times$ if background scene elements are visually dense.
+- **Calibrated Tasteful Motion Physics (Rule 72):**
+  1. **Tactile Damped Spring**: Pop-in physics use calibrated spring function `spring_p(p) = 1.0 - exp(-8.5 * p) * cos(8.0 * p)`, producing a crisp, organic 2D sticker reveal settling in 240ms without oscillating jitter.
+  2. **Micro Ken Burns Drift**: Slow background scale ($1.00\times \to 1.025\times$) imparts subtle documentary life without dizzying motion.
+  3. **Boundary Restraint Rule**: Automatically damps motion amplitudes by 70% when stickers are anchored within 30px of boundaries or subtitle boxes.
+- **Google Flow Visual QC & Bounded Auto-Rebuild (Rule 73):**
+  1. **Sticker Cutout QC (`verify_sticker_cutout`)**: Rejects unkeyed magenta chroma halos ($>1.8\%$ of opaque subject pixels) and canvas boundary clipping ($>15\%$ border coverage).
+  2. **Vertical 9:16 QC (`verify_vertical_layout`)**: Rejects horizontal aspect ratios and solid letterbox/pillarbox borders.
+  3. **Bounded Retries**: Prompt refinements (isolated magenta background / tight vertical portrait) retry up to 3 attempts maximum, avoiding infinite loops.
+- **The 5 Mandatory Pre-Render Quality Gates (`validate_pipeline.py` - Rule 74):**
+  1. **Gate 1**: Scene & Sticker Manifest Completeness + Cutout Quality QC (procedural stamps and programmatic archetypes bypass disk image lookup).
+  2. **Gate 2**: Native 9:16 Vertical Framing Purity (Shorts aspect $\le 0.65$, no letterboxing).
+  3. **Gate 3**: 3-Stem Master Audio Integrity (non-silent VO, SFX, music, -14 LUFS loudness calibrated).
+  4. **Gate 4**: Multi-Track Synchronization (`WORDS.tsv` $\leftrightarrow$ `SCENES_HYBRID.tsv` $\leftrightarrow$ `cues_pro.tsv`, $<100\text{ms}$ drift, timeline duration locked).
+  5. **Gate 5**: Autonomous RL Feedback & Policy Compliance (pacing, visual holds, sticker density, loudness).
+- **Unified Studio Orchestrator (Rule 75):**
+  1. **Single CLI Entry Point**: `python3 studio.py create "<Topic>" --format both --captions [--dry-run]` orchestrates the entire script-to-master dual pipeline.
+  2. **Safe Pre-Flight Verification**: Supports `--dry-run` to execute and validate all generation and sync stages through the 5 Quality Gates without triggering video rendering passes.
+- **The 6-Archetype Visual Variety Engine & Sticker Integration (Rule 76):**
+  1. **Archetype 1: Flow Hero Illustrations** (`shots/*.png`): Primary narrative anchors. Hand-drawn 2D cartoon style on warm paper with bold black ink outlines. 1-2 word-synced stickers per shot.
+  2. **Archetype 2: Virtual Multi-Cam Cuts** (`crop_focus`, `zoom_in_tight`, `pan_left`, `pan_right` in `extra`/`pos`/`space`): Re-uses the high-res Flow illustration (1536x2752 / 2752x1536) to cut instantly into close-up (1.32x), tight punch (1.38x), or pan framing on narrative beats without waiting on new image generation.
+  3. **Archetype 3: Minimalist Kinetic Impact Cards** (`img: card_stat` or `card_phrase`, `text: 53,000 MILES | Built by hand`): Rendered at 2x supersampling with LANCZOS downsampling and comic drop shadow. **Pairs natively with 1 real sticker** (`roman_soldier.png`) in balanced negative space with soft ground shadow.
+  4. **Archetype 4: 50/50 Split Contrast Frames** (`img: split_compare` or `split_contrast`, `text: BEFORE | AFTER`): Clean center dashed ink divider with dual tint halves and label pills. **Supports 1 sticker per side** (Left vs Right) centered inside each half with optional verdict stamps (`stamp_x` / `stamp_check`) stamped over each side.
+  5. **Archetype 5: Animated Myth-Buster Verdict Stamps** (Overlay `img: stamp_x`, `stamp_check`, `stamp_false`, `stamp_true`, `stamp_myth`): Big animated red cross (✕) or green checkmark (✓) stamp with physical impact spring hit and audio slam/chime.
+  6. **Archetype 6: Programmatic Data & Timeline Cards** (`img: bar_timeline`, `text: PART 1: Label | PART 2: Label...` or `img: stat_pie`, `text: 75% | Description`): Animated progressive timeline bar and donut metric cards. **Supports contextual accent sticker(s)** anchored cleanly outside the chart/bar bounding box without covering any labels or numbers.
+- **High-Density Visual Pacing & Beat Velocity (Rule 77):**
+  1. **Opening 15s Hook Density**: 1.2s–2.2s visual beat (scene cut or animated overlay).
+  2. **Shorts Body (9:16)**: Target cut 1.5s–2.5s; max hold 3.0s (flagged if > 3.0s).
+  3. **Long-Form Body (16:9)**: Target cut 2.2s–3.8s; max hold 4.5s (flagged if > 4.5s).
+  4. **Rapid List Micro-Beats**: 0.8s–1.4s per beat with synchronized micro-SFX on each reveal.
+- **Competitor Retention Narrative Blueprint (Rule 78):**
+  1. **0–15s Present-Day Mirror Hook**: Start with 2nd-person direct address ("Tum", "Aap", "Imagine you") connecting a mundane modern experience to the ancient mystery.
+  2. **Myth-Flip + Named Proof Loop**: State a common misconception, smash it with `stamp_x`, then provide historical/scientific proof.
+  3. **Escalation & Open-Loop Bridges**: "Lekin yeh sirf shuruat thi...", "Asal kahani yahan se shuru hoti hai..."
+  4. **Full-Circle Emotional Payoff Ending**: Callback to the opening hook question in the final seconds.
+  5. **Natural Conversational Spoken Urdu / Roman Urdu**: Clear, flowing narration without robotic filler phrases.
+- **Micro-SFX Synergy for Procedural Archetypes (Rule 79):**
+  1. `card_stat`: Tactile paper slap / slam (`-10 dB`).
+  2. `split_compare`: Smooth paper swish (`-11 dB`).
+  3. `bar_timeline` / `stat_pie`: Modern tactile data ping (`-11 dB`).
+  4. `stamp_x` / `stamp_check`: Physical impact thud (`-10 dB`) or resonant positive chime (`-11 dB`).
+  5. Sticker entrance / exit: Quick tactile pop (`-11 dB`) / soft zip-out (`-13 dB`). Master mix locked at `-14.0 LUFS`.
 - Text on pictures only for numbers and dates, names, map places and unseen terms. Never
   over a face (render.py places tags itself). 6-10 text cards per 2 minutes.
 - Pick pictures by what they show, not by file number. Flow swaps them in batches.
