@@ -28,16 +28,38 @@ NEGATIVE_STICKMAN = (
 
 NEGATIVE_CLEANLINESS = (
     "watermark, logo, text, letters, numbers, labels, typography, subtitles, credits, signature, "
+    "phone frame, smartphone mockup, iphone frame, device bezel, tablet border, UI window, mockup, device casing, "
     "blurry, out of focus, low resolution, multiple versions of the character in one frame, cluttered background"
 )
 
 NEGATIVE_ERA_ANCIENT = (
-    "modern technology, cars, airplanes, power lines, plastic bottles, electric lights, smartphones, "
-    "modern clothing, wristwatches, concrete highways, skyscrapers"
+    "no wristwatch, no plastic, no smartphone bezel, no electric light, no modern cars, no concrete"
 )
+
+LAZY_ADJECTIVE_SOUP_PAT = re.compile(
+    r"\b(?:cinematic|masterpiece|stunning|epic|breathtaking|ultra-detailed|hyperdetailed|hyper-realistic|8k|award-winning)\b,?\s*",
+    flags=re.IGNORECASE,
+)
+
+
+def load_cast_anchors(project_dir="."):
+    dp = os.path.join(project_dir, "DIRECTOR_PLAN.json")
+    if os.path.exists(dp):
+        try:
+            import json
+            return json.load(open(dp, encoding="utf-8")).get("cast_anchors", {}) or {}
+        except Exception:
+            pass
+    return {}
+
+
+def strip_lazy_adjectives(prompt):
+    cleaned = LAZY_ADJECTIVE_SOUP_PAT.sub("", str(prompt or ""))
+    return re.sub(r"\s{2,}", " ", cleaned).strip(" ,")
 
 NEGATIVE_CHROMA_STICKER = (
     "complex background, gradient background, floor shadows, ground contact shadows, ambient occlusion on floor, "
+    "text inside sticker, words, letters, labels, typography, numbers, "
     "multiple objects, cropped edges, partial cutoffs"
 )
 
@@ -63,29 +85,59 @@ def sanitize_policy_words(prompt):
         cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
     return cleaned
 
-def audit_and_enhance_prompt(prompt, is_sticker=False, is_ancient=False, space="auto", ref_char=None):
-    """Audits a raw prompt, injects missing positive anchors, sanitizes policy triggers,
-    and appends comprehensive multi-layered negative prompts.
+# Look Directives Map
+LOOK_DIRECTIVES = {
+    "night": "a moody night palette of deep blues and teals lit by warm firelight, torches, or lantern glow",
+    "warm": "a warm golden-ochre textured paper backdrop with soft vignette, terracotta and amber accents",
+    "ink": "high contrast minimalist ink style, clean black ink outlines, warm vintage off-white paper grain",
+    "oversimplified": "vibrant 2D cartoon stick figure historical explainer style, thick clean black outlines, bright royal colors",
+    "cgp_grey": "iconic minimalist vector graphic explainer illustration, bold flat silhouette stick figures, clean slate paper",
+    "casually_explained": "ultra-minimal 2D stick figure illustration, clean thin black vector strokes on white background",
+    "minute_physics": "hand-drawn whiteboard and textured paper sketch explainer, animated black felt marker strokes",
+    "painted": "2D illustrated graphic-novel style, detailed hand-painted backgrounds with realistic perspective",
+    "bright": "clean dark ink outlines, flat colours with soft shading, bright natural daylight palette"
+}
+
+def audit_and_enhance_prompt(prompt, is_sticker=False, is_ancient=False, space="auto", ref_char=None, look=None, cast_anchors=None, aspect="9:16"):
+    """Audits a raw prompt, strips lazy buzzwords, injects verbatim cast anchors & token-0 vertical framing (<1200 chars),
+    and appends concise multi-layered negative prompts.
     """
-    cleaned = sanitize_policy_words(prompt.strip())
-    
+    cleaned = strip_lazy_adjectives(sanitize_policy_words(prompt.strip()))
+
+    # 0. Inject immutable cast_anchor verbatim when recurring ref character matches
+    anchors = cast_anchors if isinstance(cast_anchors, dict) else load_cast_anchors(".")
+    if not is_sticker and ref_char and ref_char in anchors:
+        anch = anchors[ref_char].strip()
+        if anch[:24].lower() not in cleaned.lower():
+            cleaned = f"{anch} {cleaned}"
+
     # 1. Purity Check: Does it have stickman anatomy anchor?
     has_stickman = any(w in cleaned.lower() for w in ["stickman", "stick figure", "stick-figure", "white ball head"])
     if not is_sticker and not has_stickman and ref_char != "-":
         cleaned = f"{cleaned}, featuring {STICKMAN_ANATOMY_ANCHOR}"
 
+    # 1b. Look Art Direction Anchor
+    if look and look in LOOK_DIRECTIVES:
+        directive = LOOK_DIRECTIVES[look]
+        if directive[:20].lower() not in cleaned.lower():
+            cleaned = f"{cleaned}, {directive}"
+
     # 2. Spatial Composition Docking
     if space == "left" and "left" not in cleaned.lower():
-        cleaned = f"{cleaned}, subject positioned on the right side, wide clear empty space on the left 45% of frame"
+        cleaned = f"{cleaned}, subject positioned on right, clear open background on left 45%"
     elif space == "right" and "right" not in cleaned.lower():
-        cleaned = f"{cleaned}, subject positioned on the left side, wide clear empty space on the right 45% of frame"
+        cleaned = f"{cleaned}, subject positioned on left, clear open background on right 45%"
 
-    # 3. Sticker Chroma Constraints
+    # 3. Aspect Token-0 Prefix or Sticker Chroma Constraints
     if is_sticker:
         if "#FF00FF" not in cleaned and "magenta" not in cleaned.lower():
             cleaned = f"Isolated prop cutout on pure solid uniform magenta background #FF00FF: {cleaned}, centered, single object, crisp sharp edges"
+    elif aspect == "9:16":
+        prefix = "A true full-height vertical 9:16 portrait orientation illustration, no phone frame, no device bezel, no text: "
+        if not cleaned.lower().startswith("a true full-height vertical 9:16"):
+            cleaned = prefix + cleaned
 
-    # 4. Assemble Multi-Layered Negative Prompt
+    # 4. Assemble Concise Multi-Layered Negative Prompt
     negatives = [NEGATIVE_STICKMAN, NEGATIVE_CLEANLINESS]
     if is_ancient:
         negatives.append(NEGATIVE_ERA_ANCIENT)
@@ -93,10 +145,10 @@ def audit_and_enhance_prompt(prompt, is_sticker=False, is_ancient=False, space="
         negatives.append(NEGATIVE_CHROMA_STICKER)
 
     negative_block = " Negative: " + ", ".join(negatives)
-    
-    # Return enriched prompt
-    full_prompt = f"{cleaned} {negative_block}"
-    return full_prompt
+    budget_body = max(220, 1180 - len(negative_block))
+    if len(cleaned) > budget_body:
+        cleaned = cleaned[:budget_body].rsplit(",", 1)[0].strip()
+    return f"{cleaned}{negative_block}"[:1199]
 
 def audit_shots_file(shots_path="SHOTS.tsv"):
     """Audits an entire SHOTS.tsv file and reports spatial distribution, policy warnings, and style compliance."""
@@ -146,6 +198,7 @@ def main():
     parser.add_argument("--sticker", action="store_true", help="Audit as sticker prop on magenta")
     parser.add_argument("--ancient", action="store_true", help="Add anti-modern negative prompts")
     parser.add_argument("--space", choices=["left", "right", "center", "auto"], default="auto")
+    parser.add_argument("--look", choices=list(LOOK_DIRECTIVES.keys()), default=None, help="Art direction look preset")
     parser.add_argument("--audit-file", type=str, help="Audit a SHOTS.tsv file")
     args = parser.parse_args()
 
@@ -157,7 +210,7 @@ def main():
         for k, v in res.items():
             print(f"• {k}: {v}")
     elif args.prompt:
-        enhanced = audit_and_enhance_prompt(args.prompt, is_sticker=args.sticker, is_ancient=args.ancient, space=args.space)
+        enhanced = audit_and_enhance_prompt(args.prompt, is_sticker=args.sticker, is_ancient=args.ancient, space=args.space, look=args.look)
         print("==================================================")
         print("✨ ENHANCED & AUDITED FLOW PROMPT:")
         print("==================================================")

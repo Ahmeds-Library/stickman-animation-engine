@@ -22,12 +22,24 @@ it works from ANY chat:
     stickman hybrid start        a new video
     stickman hybrid continue     carry on where you stopped
 
-You choose the topic (or ask for 10 ideas), the language, the length, the format (Long 16:9, Shorts 9:16, or Both), and whether you want captions (trending kinetic subtitles or clean visuals). Claude
-picks the look that suits the topic (oversimplified, casually_explained, cgp_grey, minute_physics, warm, ink, painted, bright) and
-shows you three checkpoints: the script, the voice, and the final video.
+When starting a new video, Claude will ask you the 5 Mandatory Intake Questions before generating anything:
+  1. Topic: Your topic or 10 suggested viral topics
+  2. Language: English (Kokoro local CPU) or Urdu / Roman Urdu (Indic Parler Aman on Kaggle free GPU)
+  3. Length: Target duration (e.g. 60s, 2m, 5m)
+  4. Format: Long 16:9, Shorts 9:16, or Both (dual decoupled pipelines)
+  5. Captions: Yes (kinetic Hormozi captions) or No (clean visuals)
+
+All project media is generated cleanly in ~/StickmanHybrid/<slug>/ strictly outside this repo root.
+Claude picks the look that suits the topic (bright, warm, night, oversimplified, cgp_grey, etc.),
+resolves stickers from the permanent skills/stickman-stickers/ Flow & CC0 vault with collision-free
+multi-sticker layout, enforces all 6 Pre-Render Quality Gates (including Gate 6 anti-stagnation),
+renders full-bleed editorial archetypes with -14 LUFS sound, and shows you 3 checkpoints:
+the script, the voice, and the final video.
 
 Direct Terminal Control (Unified Studio Master CLI):
     python3 studio.py doctor               Check system readiness & hardware acceleration
+    python3 studio.py stickers --search X  Search Tier-1 Flow Vault & CC0 sticker library
+    python3 studio.py gate short/          Run 6-Gate Pre-Render Quality Shield
     python3 studio.py hook <topic>         Generate 3-second viral hook video (12 archetypes)
     python3 studio.py heading <title>      Generate animated chapter title card with Ken Burns
     python3 studio.py vfx <video>          Apply screen shake, flash frame, or vignette

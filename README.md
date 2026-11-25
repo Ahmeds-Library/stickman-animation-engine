@@ -36,26 +36,34 @@ flowchart LR
 Run the entire production studio with a single command from the project root:
 ```bash
 python3 studio.py doctor                                                  # System hardware & engine diagnostics
+python3 studio.py trends --niche ancient_engineering                      # High-RPM topic researcher & tag clusters
 python3 studio.py hook "Ancient Human Night" --archetype modern_inversion # 3-second viral video hook
 python3 studio.py heading "Chapter 1: The Void" --subtitle "50,000 Years" # Animated chapter title card
+python3 studio.py page "50,000 MILES OF STONE" --pose think               # Signature plain paper palate cleanser page
 python3 studio.py vfx input.mp4 --effect shake_impact                     # High-impact screen shake
-python3 studio.py qc example/boat_hi                                      # 60-Rule RL Quality Audit
+python3 studio.py gate short/ --format 9:16                               # 6-Gate Pre-Render Quality Shield
+python3 studio.py stickers --search "bronze sword"                        # Search Tier-1 Flow Vault & CC0 Sticker Library
+python3 studio.py qc example/boat_hi                                      # 61-Rule RL Quality Audit
 python3 studio.py create "The French Revolution" --look oversimplified    # Full automated pipeline
 ```
 
 ### 1. Dual-Pipeline Decoupling (Rule 22)
 * **Master Long Documentary (16:9 Widescreen - 1920x1080):** Deep historical narrative, dedicated 16:9 Flow art, chapter slugs, and YouTube End Screen interactive outro slates.
-* **Viral Short (9:16 Vertical - 1080x1920):** Fast-paced (40–60s), 0–3s viral hook, snappy cadence (2.6–3.2 words/s), dedicated 9:16 vertical Flow art, and channel subscribe handoff CTA.
+* **Viral Short (9:16 Vertical - 1080x1920):** Calm clause-locked pacing (`2.5–4.0s`), 0–3s viral hook, dedicated 9:16 vertical Flow art, and channel subscribe handoff CTA.
 * **Zero Cross-Crop:** No pillarboxing, black bars, or cropped visuals. Both pipelines are completely independent.
+* **4 Curated Fonts & 9 Editorial Looks:** Dynamic typographic hierarchy (`PermanentMarker`, `Bangers`, `Caveat`, `SedgwickAve`, `PatrickHand`) across 9 looks (`bright`, `warm`, `night`, `ink`, `oversimplified`, `cgp_grey`, `casually_explained`, `minute_physics`, `painted`).
+* **6 Full-Bleed Editorial Visual Archetypes:** `card_stat`, `split_compare` (Top-vs-Bottom on 9:16 / Left-vs-Right on 16:9), `bar_timeline`, `stat_pie`, calm Flow drift (`1.00 -> 1.045`), and hand-drawn verdict accents (`stamp_x`/`stamp_check`) with 2x Lanczos Supersampling.
+* **Multi-Slot Collision-Free Stickers & Permanent Vault (`skills/stickman-stickers/`):** Unlimited simultaneous multi-stickers (1–4+ props) with `>= 32px` padding and locked spawn-time anchors, resolving across Tier 1 `flow_vault/` and Tier 2 `cc0_library/`.
+* **Automated Packaging (`UPLOAD_PACK/`):** Generates 16:9 landscape & 9:16 vertical thumbnails, `METADATA.json` (auto-chapters, SEO tags), and `POSTING_GUIDE.md` on every render.
 
 ### 2. Google Flow Chrome Connector Integration
 * Generate **unlimited 2D stickman scenes and transparent prop cutouts** directly from Google Flow using the `flow-auto` CLI bridge.
-* Built-in chromatic `#FF00FF` magenta background keying (`key.py`) with genuine alpha transparency (`alpha.min() == 0`).
+* Built-in chromatic `#FF00FF` magenta background keying (`key.py` + `cutout.py`) with inward alpha rim erosion (`alpha.min() == 0`).
 * Automated clean watermark removal via Samsung LaMa (`delama.py`).
 
-### 3. Audio Storytelling Golden Ratio & Kurzgesagt Highlighters
+### 3. Audio Storytelling Balance & Kurzgesagt Highlighters
 * **Vocal Pocket Notch EQ:** Dips the music bed by $-3.2\text{ dB}$ at 1.8 kHz and $-2.2\text{ dB}$ at 3.2 kHz to carve a clear frequency pocket for spoken dialogue.
-* **Audible Emotional Bed:** Background music sits audibly at **-17 dB** (Long) and **-16 dB** (Shorts), ducking gently (2.8:1 ratio, 550ms release) to avoid the dry "audiobook reading" trap.
+* **Warm Audible Bed:** Background music starts cleanly at `0.0s` calibrated between **-11.0 dB and -13.0 dB** relative to Voice RMS (`mix.py`), ducking smoothly (1.9:1 ratio, 450ms release) to avoid silent or buried openings.
 * **Kurzgesagt Auditory Highlighter Pens:** Dates, years, statistics, and paradigm shifts automatically receive tactile micro-SFX (`-22 dB`) to anchor cognitive attention.
 * **Stereo Haas Widening:** Music bed expanded across the stereo field (`extrastereo=m=1.12`) while narrator speech remains locked dead-center mono.
 * **Broadcast Standard:** Mastered to **-14.0 LUFS** ($\pm 1.0$) with true peak $\le -1.0\text{ dBTP}$.

@@ -227,6 +227,11 @@ def save_registry(registry, project_root):
 
 def scan_and_rebuild_registry(project_root):
     """Deep scans project for all transparent cutouts and indexes them into registry."""
+    try:
+        from anti_pollution import validate_external_output_dir
+        project_root = validate_external_output_dir(project_root)
+    except ImportError:
+        pass
     registry = load_registry(project_root)
     
     # Check elements.tsv files in project_root, short, and long
@@ -297,10 +302,45 @@ def scan_and_rebuild_registry(project_root):
     save_registry(registry, project_root)
     return registry
 
+def _get_sticker_library_indexer():
+    """Dynamically locates stickman-stickers/scripts/index_stickers.py across repo or global skill dirs."""
+    try:
+        import importlib.util
+        skills_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        cands = [
+            os.path.join(skills_parent, "stickman-stickers", "scripts", "index_stickers.py"),
+            os.path.expanduser("~/.gemini/config/skills/stickman-stickers/scripts/index_stickers.py"),
+            os.path.expanduser("~/.claude/skills/stickman-stickers/scripts/index_stickers.py"),
+        ]
+        for idx_p in cands:
+            if os.path.exists(idx_p):
+                spec = importlib.util.spec_from_file_location("stickman_stickers_index", idx_p)
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    return mod
+    except Exception:
+        pass
+    return None
+
+
+def register_sticker_in_global_vault(src_png, slug_name, tags=""):
+    """Registers a clean Flow cutout into skills/stickman-stickers/assets/flow_vault/ + CATALOG.tsv."""
+    idx_mod = _get_sticker_library_indexer()
+    if idx_mod:
+        try:
+            return idx_mod.register_flow_sticker(src_png, slug_name, tags=tags)
+        except Exception:
+            pass
+    return None
+
+
 def find_reusable_sticker(query_text, project_root, threshold=0.70):
-    """Finds existing sticker in registry matching query_text using semantic NLP overlap:
+    """Finds existing sticker in 3-tier order:
+    Tier 0: Local project short/long elements/cut/
+    Tier 1: Global skills/stickman-stickers/assets/flow_vault/ (Owned-Flow priority)
+    Tier 2: Global skills/stickman-stickers/assets/cc0_library/ (CC0-1.0 fallback)
     Score = 0.40 * Concept_Ontology + 0.35 * Token_Jaccard + 0.25 * Trigram_Cosine (+ bonuses)
-    Requires non-zero content overlap to prevent false positive matches on boilerplate.
     """
     registry = load_registry(project_root)
     if not registry.get("stickers"):
@@ -368,6 +408,25 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70):
             
     if best_score >= threshold and best_match:
         return best_match
+
+    # Tier 1 (flow_vault) & Tier 2 (cc0_library) lookup in skills/stickman-stickers/CATALOG.tsv
+    idx_mod = _get_sticker_library_indexer()
+    if idx_mod:
+        try:
+            subj = extract_core_subject(query_text) or query_text
+            vault_hits = idx_mod.search_stickers(subj, min_score=max(0.45, threshold - 0.15), require_alpha_ok=True)
+            if vault_hits:
+                top = vault_hits[0]
+                return {
+                    "name": top["name"],
+                    "filename": os.path.basename(top["path"]),
+                    "path": top["path"],
+                    "scope": top["source"],
+                    "category": top.get("category", ""),
+                    "license": top.get("license", ""),
+                }
+        except Exception:
+            pass
     return None
 
 def link_or_copy_mutual_sticker(query_text, destination_path, project_root):
@@ -384,7 +443,12 @@ def link_or_copy_mutual_sticker(query_text, destination_path, project_root):
     return True
 
 if __name__ == "__main__":
+    try:
+        from anti_pollution import validate_external_output_dir
+    except ImportError:
+        validate_external_output_dir = lambda x: x
     root = resolve_project_root(sys.argv[1] if len(sys.argv) > 1 else ".")
+    root = validate_external_output_dir(root)
     reg = scan_and_rebuild_registry(root)
     print(f"✅ Indexed {len(reg.get('stickers', []))} shared stickers in {root}")
     if len(sys.argv) > 2:

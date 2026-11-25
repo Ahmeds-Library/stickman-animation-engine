@@ -101,12 +101,15 @@ def key(src, pad=10, crop=True):
 
     # Tighten the ramp. Unmixing gives a physically correct but wide transition;
     # a smoothstep pulls it toward a crisp edge while staying anti-aliased, so
-    # the border reads clean instead of smeared.
+    # the border reads clean instead of smeared. Erode ~1.5px inward to peel off
+    # any lingering white/magenta JPEG rim crust, then apply a light feather.
     al = np.clip((alpha - 0.30) / 0.40, 0, 1)
     al = al * al * (3 - 2 * al)
+    al = ndimage.grey_erosion(al, size=(3, 3))
 
     img = Image.fromarray(np.dstack([out.astype(np.uint8),
                                      (al * 255).astype(np.uint8)]), "RGBA")
+    img.putalpha(img.getchannel("A").filter(ImageFilter.GaussianBlur(0.5)))
 
     bb = img.getbbox() if crop else None
     if bb:

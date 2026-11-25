@@ -65,14 +65,22 @@ def make(prompt, seconds, cat, name, loop):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Generate sound effects via paid ElevenLabs API (Manual Opt-In Only)")
     ap.add_argument("prompt", nargs="?")
     ap.add_argument("--seconds", type=float, help="0.5-30")
     ap.add_argument("--cat", help="category folder, e.g. Map, Whoosh, Ambience")
     ap.add_argument("--name")
     ap.add_argument("--loop", action="store_true", help="seamless loop, for ambience")
     ap.add_argument("--batch", help="TSV with columns category, name, seconds, loop, prompt")
+    ap.add_argument("--opt-in-paid", action="store_true", help="Explicitly opt into paid ElevenLabs API credits consumption")
     a = ap.parse_args()
+
+    if not a.opt_in_paid:
+        sys.exit(
+            "⚠️ [PAID API SAFEGUARD]: eleven_sfx.py consumes paid ElevenLabs API credits.\n"
+            "   Our production pipeline runs 100% FREE using 1,600+ local CC0/Kenney/StableAudio/Wyzowl SFX.\n"
+            "   To manually use ElevenLabs, re-run with: --opt-in-paid"
+        )
     if a.batch:
         with open(a.batch, encoding="utf-8") as f:
             for r in csv.DictReader(f, delimiter="\t"):

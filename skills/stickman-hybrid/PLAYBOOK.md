@@ -1,5 +1,12 @@
 # Stickman explainer playbook
 
+> [!IMPORTANT]
+> **SINGLE SOURCE OF TRUTH & ARCHITECTURAL MANDATES**:
+> All agents must follow [AGENT_START_GUIDE.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/AGENT_START_GUIDE.md) and [SKILL.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/SKILL.md).
+> 1. **5 Mandatory Intake Questions**: Never assume defaults on new videos; collect all 5 answers before code execution.
+> 2. **External Project Directory**: All project media, scripts, and upload packs live strictly in `~/StickmanHybrid/<project_slug>/` outside this repo.
+> 3. **Production Renderer**: Rendering is executed via `render_pro.py` (multi-font hierarchy, anti-aliased archetypes, active sticker caps, and post-mux audio validation). `render.py` now routes directly to `render_pro.py`.
+
 These are the rules and the method behind stickman documentaries in the style of the big
 "ancient humans" and stick-figure explainer channels. The method was worked out by studying
 nine reference videos (14M, 1.2M, 855K, 385K views and others) and then making test films
@@ -640,15 +647,11 @@ Visual events, camera physics, and sound effects are automatically mapped from t
 | **Prehistoric Cold / Ice Age** | Slow icy pull-back with mist wisp | Full-bleed Ice Age vista | Low howling wind ambient |
 | **Fire / Warmth Ignition** | Subtle warm pulse / flicker | Flame cutout sticker | Stove click + flame whoosh |
 
-### Rule 17: Anti-Occlusion Placement Guard & Safe Screen Zones
-- **Dead-Center Protection:** Overlays are strictly prohibited in the center focal zone ($0.35 \le x \le 0.65$ and $0.35 \le y \le 0.65$) on scene illustrations, preventing obstruction of stickman faces, expressions, and primary actions.
-- **Smart Quadrant Allocation:** Overlays automatically route to peripheral safe zones based on the count of active stickers:
-  - 1 Overlay: Top-Right $(0.78, 0.28)$
-  - 2 Overlays: Top-Left $(0.22, 0.28)$ and Top-Right $(0.78, 0.28)$
-  - 3 Overlays: Top-Left $(0.20, 0.28)$, Top-Right $(0.80, 0.28)$, Bottom-Right $(0.80, 0.68)$
-  - 4 Overlays: Quad arrangement $(0.18, 0.28)$, $(0.82, 0.28)$, $(0.18, 0.68)$, $(0.82, 0.68)$ framing the center subject.
-- **Spatial Separation:** Multiple simultaneous stickers must maintain a minimum distance of $\Delta x \ge 0.35$ or $\Delta y \ge 0.30$.
-- **Subtitle Zone Clearance:** Bottom 18% of screen ($y \ge 0.82$) is strictly reserved for single-word kinetic subtitles; overlays are never placed here.
+### Rule 17: Collision-Free Multi-Sticker Placement & Safe Screen Zones
+- **Dead-Center Protection & Unlimited Simultaneous Multi-Stickers:** Overlays avoid the focal center zone ($0.35 \le x \le 0.65, 0.35 \le y \le 0.65$) whenever characters occupy center stage. Simultaneous multi-sticker storytelling (2, 3, or 4+ props) is fully supported via the Multi-Slot Collision-Free Spatial Solver (`calculate_intelligent_sticker_anchor`).
+- **Guaranteed Inter-Sticker Clearance & Spawn-Time Scaling:** Every simultaneous sticker is locked once in `overlay_anchor_cache` at spawn time with **`>= 32px` inter-sticker padding** (zero overlap/teleporting/jitter) and graceful spawn-time scaling (`1.0x` for 1–2 props, `0.83x` at 3 props, `0.78x` at 4+ props).
+- **3-Tier Permanent Sticker Reuse (`skills/stickman-stickers/`):** Resolve Tier 0 Local -> Tier 1 `assets/flow_vault/` -> Tier 2 `assets/cc0_library/` -> Tier 3 Live Flow (auto-harvested back to `flow_vault/`).
+- **Subtitle Zone Clearance:** Bottom safe zone ($y > 1120$ Shorts, $y > 880$ Long) is strictly reserved for kinetic single-word subtitles; stickers remain above safe buffers ($\ge 140\text{px}$ Shorts, $\ge 80\text{px}$ Long).
 
 ### Rule 18: Strict Visual Style Lock & Universal Negative Prompt Engine
 - Every generation call must append the Universal Negative Prompt:

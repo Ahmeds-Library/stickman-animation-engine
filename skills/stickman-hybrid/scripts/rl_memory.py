@@ -29,31 +29,36 @@ DEFAULT_POLICY = {
             "shorts_bottom_clearance_px": 660,
             "subtitles_center_y_shorts": 1180,
             "subtitles_center_y_long": 930,
-            "min_cutout_subtitle_buffer_px": 140
+            "min_cutout_subtitle_buffer_px": 140,
+            "multi_sticker_min_padding_px": 32,
+            "multi_sticker_scale_3plus": 0.82
         },
         "rule_25_heading_suppression": {
             "suppress_scene_headings": True,
             "allow_headings_on_cards_only": True
         },
         "rule_26_image_frequency": {
-            "opening_hook_target_pace_sec": 1.6,
-            "opening_hook_max_hold_sec": 2.2,
-            "shorts_target_cut_duration_sec": 2.0,
-            "shorts_max_hold_sec": 3.0,
-            "shorts_min_shots_per_minute": 28,
-            "long_target_cut_duration_sec": 3.0,
-            "long_max_hold_sec": 4.5,
-            "long_min_shots_per_minute": 18,
-            "rapid_list_micro_beat_sec": 1.1
+            "opening_hook_target_pace_sec": 2.4,
+            "opening_hook_max_hold_sec": 3.5,
+            "shorts_min_hold_sec": 1.8,
+            "shorts_target_cut_duration_sec": 3.2,
+            "shorts_max_hold_sec": 4.2,
+            "shorts_min_shots_per_minute": 18,
+            "long_min_hold_sec": 2.2,
+            "long_target_cut_duration_sec": 4.5,
+            "long_max_hold_sec": 6.5,
+            "long_min_shots_per_minute": 12,
+            "rapid_list_micro_beat_sec": 1.1,
+            "forbid_chaotic_flicker_under_sec": 1.5
         },
         "rule_27_audio_sound_design": {
             "broadcast_integrated_lufs": -14.0,
             "lufs_tolerance": 1.0,
             "true_peak_max_dbfs": -1.0,
-            "min_sfx_cues_per_minute": 16,
+            "min_sfx_cues_per_minute": 14,
             "enforce_four_audio_layers": True,
             "music_bed_gain_long_db": -12.0,
-            "music_bed_gain_shorts_db": -11.0,
+            "music_bed_gain_shorts_db": -11.5,
             "ambient_foley_gain_db": -16.0,
             "vocal_pocket_eq_enabled": True,
             "vocal_warmth_eq_enabled": True,
@@ -71,9 +76,9 @@ DEFAULT_POLICY = {
         },
         "rule_29_sticker_synchronization": {
             "strict_word_onset": True,
-            "shorts_sticker_ttl_sec": 1.8,
-            "long_sticker_ttl_sec": 2.2,
-            "smooth_exit_ease_sec": 0.28,
+            "shorts_sticker_ttl_sec": 2.5,
+            "long_sticker_ttl_sec": 3.0,
+            "smooth_exit_ease_sec": 0.25,
             "exit_fade_enabled": True
         },
         "rule_33_youtube_outro": {
@@ -118,6 +123,14 @@ DEFAULT_POLICY = {
             "mobile_check_140px": True,
             "contrast_luminance_threshold": 25.0,
             "max_words_hook": 3
+        },
+        "rule_46_director_choreography": {
+            "require_director_plan": True,
+            "word_sync_anticipation_sec": 0.06,
+            "forbid_redundant_stickers": True,
+            "enable_motion_archetypes": True,
+            "animated_draw_on_arrows": True,
+            "idle_breathing_enabled": True
         }
     },
     "user_feedback_log": [
@@ -199,19 +212,50 @@ def save_rl_memory(data):
         except Exception:
             pass
 
-def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warnings):
-    """Logs an automated RL-QC audit run and updates policy weights if needed."""
+def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warnings, f_codes=None):
+    """Logs an automated RL-QC audit run, structured F-codes, and updates bounded policy weights."""
     memory = load_rl_memory()
+    codes = sorted(list(set(f_codes or [])))
+    # Also extract any F_* tags embedded in deductions/warnings for backward compatibility
+    for txt in list(deductions or []) + list(warnings or []):
+        for fc in ("F_STUTTER", "F_METRONOME", "F_READ_TOO_FAST", "F_NO_SILENCE_DROP", "F_FLASH_FRAME", "F_WHOOSH_FATIGUE"):
+            if fc in str(txt) and fc not in codes:
+                codes.append(fc)
+
     run_entry = {
         "timestamp": datetime.now().isoformat(),
         "slug": slug,
         "format": format_type,
         "rl_score": rl_score,
+        "f_codes": codes,
         "metrics": metrics,
         "deductions": deductions,
         "warnings": warnings
     }
-    memory["evaluation_history"].append(run_entry)
+    memory.setdefault("evaluation_history", []).append(run_entry)
+    memory["evaluation_history"] = memory["evaluation_history"][-60:]
+
+    # Track 4-of-6 Novelty Variety across archetypes/camera patterns
+    combo = (metrics or {}).get("layout_signature")
+    if combo:
+        hist_sigs = [e.get("metrics", {}).get("layout_signature") for e in memory["evaluation_history"][-6:] if e.get("metrics", {}).get("layout_signature")]
+        if hist_sigs:
+            unique_ratio = len(set(hist_sigs)) / len(hist_sigs)
+            run_entry["novelty_4_of_6_pass"] = (len(set(hist_sigs)) >= min(4, len(hist_sigs)))
+            run_entry["novelty_unique_ratio"] = round(unique_ratio, 2)
+
+    # Structured F-code bounded self-correction
+    if "F_READ_TOO_FAST" in codes and "rule_26_image_frequency" in memory["rules"]:
+        cur_min = memory["rules"]["rule_26_image_frequency"].get("shorts_min_hold_sec", 1.8)
+        memory["rules"]["rule_26_image_frequency"]["shorts_min_hold_sec"] = min(2.4, round(cur_min + 0.1, 2))
+        print(f"🎯 [RL F_READ_TOO_FAST] Raised shorts_min_hold_sec -> {memory['rules']['rule_26_image_frequency']['shorts_min_hold_sec']}s")
+    if "F_NO_SILENCE_DROP" in codes and "rule_40_narrative_tension_curve" in memory["rules"]:
+        memory["rules"]["rule_40_narrative_tension_curve"]["vox_dropout_silence_enabled"] = True
+        memory["rules"]["rule_40_narrative_tension_curve"]["vox_dropout_min_sec"] = 0.45
+    if "F_WHOOSH_FATIGUE" in codes and "rule_27_audio_sound_design" in memory["rules"]:
+        memory["rules"]["rule_27_audio_sound_design"]["silent_cut_target_pct"] = 0.45
+    if "F_METRONOME" in codes and "rule_42_visual_metaphor_entropy" in memory["rules"]:
+        memory["rules"]["rule_42_visual_metaphor_entropy"]["enforce_pacing_variance"] = True
     
     # Adaptive Self-Correction:
     # If pacing received deductions, tighten cut duration in policy
@@ -232,13 +276,40 @@ def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warn
         memory["rules"]["rule_27_audio_sound_design"]["broadcast_integrated_lufs"] = -14.0
         print("🎯 [RL Self-Correction] Reset broadcast integrated loudness target to strict -14.0 LUFS")
 
-    # If crowding / clutter deduction: enforce strict active cap & scale damping (preserving subtitle buffer)
+    # If crowding / clutter deduction: enforce >= 32px multi-slot padding & spawn-time scale damping (no strict 1-sticker cap)
     if any("crowd" in d.lower() or "clutter" in d.lower() or "overlap" in d.lower() for d in deductions):
         if "rule_24_spatial_hierarchy" in memory["rules"]:
-            memory["rules"]["rule_24_spatial_hierarchy"]["max_active_stickers_shorts"] = 1
-            memory["rules"]["rule_24_spatial_hierarchy"]["max_active_stickers_long"] = 2
-            memory["rules"]["rule_24_spatial_hierarchy"]["crowded_auto_scale"] = 0.78
-            print("🎯 [RL Self-Correction] Enforced active sticker cap (1 Shorts, 2 Long) & 0.78 scale damping (subtitle buffer preserved)")
+            memory["rules"]["rule_24_spatial_hierarchy"]["multi_sticker_min_padding_px"] = 36
+            memory["rules"]["rule_24_spatial_hierarchy"]["multi_sticker_scale_3plus"] = 0.78
+            print("🎯 [RL Self-Correction] Tightened multi-slot sticker padding (>=36px) & 0.78x 3+ scale damping (multi-sticker allowed)")
+
+    # If sticker rendering failure: enforce runtime compositing verification gate
+    if any("sticker" in d.lower() for d in deductions):
+        if "rule_20_style_consistency" in memory["rules"]:
+            memory["rules"]["rule_20_style_consistency"]["enforce_render_verification"] = True
+            print("🎯 [RL Self-Correction] Enabled mandatory runtime sticker render verification gate")
+
+    # If music intro or bed deduction: calibrate 0.3s fast onset and -11.5 to -12.0 dB bed target
+    if any("music" in d.lower() or "intro" in d.lower() for d in deductions):
+        if "rule_27_audio_sound_design" in memory["rules"]:
+            memory["rules"]["rule_27_audio_sound_design"]["music_bed_fade_in_sec"] = 0.3
+            memory["rules"]["rule_27_audio_sound_design"]["music_bed_gain_shorts_db"] = -11.5
+            memory["rules"]["rule_27_audio_sound_design"]["music_bed_gain_long_db"] = -12.0
+            print("🎯 [RL Self-Correction] Calibrated music bed: 0.3s fade-in, -11.5dB/-12.0dB nominal gain")
+
+    # If SFX buried or inaudible: enforce dynamic boost targets
+    if any("sfx" in d.lower() for d in deductions):
+        if "rule_27_audio_sound_design" in memory["rules"]:
+            memory["rules"]["rule_27_audio_sound_design"]["sfx_impact_boost_db"] = 3.0
+            memory["rules"]["rule_27_audio_sound_design"]["sfx_pop_boost_db"] = 2.5
+            print("🎯 [RL Self-Correction] Boosted SFX targets (+3dB impacts, +2.5dB tactile pops)")
+
+    # If VFX / static hold deduction: boost kinetic amplitudes
+    if any("vfx" in d.lower() or "motion" in d.lower() or "shake" in d.lower() for d in deductions):
+        if "rule_28_dynamic_vfx" in memory["rules"]:
+            memory["rules"]["rule_28_dynamic_vfx"]["camera_shake_amplitude_px"] = 32.0
+            memory["rules"]["rule_28_dynamic_vfx"]["punch_zoom_scale"] = 1.12
+            print("🎯 [RL Self-Correction] Boosted VFX kinetics: 32px shake amplitude, 1.12x punch zoom snap")
 
     save_rl_memory(memory)
     return memory

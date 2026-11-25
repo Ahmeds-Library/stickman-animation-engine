@@ -13,31 +13,27 @@ the `extra` and `space` columns of SCENES_HYBRID.tsv with context-aware VFX:
 import os, sys, csv, re
 
 DANGER_KEYWORDS = {
-    "danger", "peril", "starvation", "predator", "sabertooth", "feline",
-    "deadly", "attack", "blood", "kill", "monster", "collapse", "crisis",
-    "fear", "panic", "fatal", "poison", "terror", "nightmare", "stalk",
-    "ambush", "war", "battle", "enemy", "threat", "vulnerable", "siege",
-    "rebellion", "strike", "hostile", "combat", "ruin", "assault"
+    "peril", "starvation", "predator", "deadly", "attack", "blood",
+    "collapse", "crisis", "panic", "fatal", "ambush", "war",
+    "battle", "invasion", "invaders", "siege", "earthquake", "burned",
+    "destruction", "slaughter", "catastrophe", "famine", "plague"
 }
 
 COLD_KEYWORDS = {
     "ice", "cold", "freezing", "frost", "snow", "winter", "subzero",
-    "glacier", "chill", "frozen", "arctic"
+    "glacier", "chill", "frozen", "arctic", "hypothermia"
 }
 
 TRAGEDY_HISTORICAL_KEYWORDS = {
-    "died", "extinct", "tragedy", "disaster", "ancestor", "fossil",
-    "millennia", "ancient times", "dark age", "century", "buried"
+    "extinct", "extinction", "dark age", "wiped out", "vanished forever", "lost forever"
 }
 
 HOOK_KEYWORDS = {
-    "secret", "mystery", "conquer", "revolution", "unbelievable", "shock",
-    "mastery", "invention", "hidden", "discovery", "empire", "truth"
+    "turns out", "actually", "shocking", "completely vanished", "wiped itself out"
 }
 
 IMPACT_KEYWORDS = {
-    "excavate", "build", "construction", "hammer", "crack", "smash",
-    "quarry", "stone", "impact", "blast", "pave", "layer"
+    "earthquake", "shattered", "smash", "explosion", "explosion", "slam", "crushed"
 }
 
 HEAVY_STICKER_KEYWORDS = {
@@ -98,6 +94,10 @@ def analyze_and_enrich_scenes(project_dir="."):
 
     enriched_rows = []
     cut_scene_idx = 0
+    prev_cam_move = None
+    cam_cycle = ("push_in", "pan_left", "pull_back", "pan_right")
+    CAM_MOVE_TOKENS = {"static", "push_in", "pull_back", "pan_left", "pan_right", "zoom_in_tight"}
+    TRANSITION_TOKENS = {"crossfade", "cut", "flash", "fade", "cause_effect", "rapid_list"}
     for r in rows:
         # Columns: cue, img, text, pos, extra, space
         while len(r) < 6:
@@ -126,43 +126,72 @@ def analyze_and_enrich_scenes(project_dir="."):
             # SCENE CUT VFX INTELLIGENCE
             vfx_tokens = [tok.strip() for tok in extra.split(",") if tok.strip()] if extra else []
             
-            # Opening hook punch (Scene 1 & 2) or Revelation Shocks
-            is_hook = (cut_scene_idx in (0, 1) or cue in ("@01", "@02", "0.0", "00.0", "01.0") or any(w in tokens for w in HOOK_KEYWORDS))
+            # VFX Restraint: Only high-emotion hooks/twists get zoom_punch; calm narration uses smooth crossfade
+            line_txt = line_texts.get(line_key, "")
+            is_hook = (cut_scene_idx == 0 or cue in ("@01", "0.0", "00.0", "01.0") or any(p in line_txt for p in HOOK_KEYWORDS))
             if is_hook and "zoom_punch" not in vfx_tokens and "flash" not in vfx_tokens:
                 vfx_tokens.append("zoom_punch")
 
-            # Title card shocks
-            if img == "card":
-                if "cut" not in vfx_tokens and "flash" not in vfx_tokens and "zoom_punch" not in vfx_tokens:
-                    vfx_tokens.append("zoom_punch")
+            # Card / archetype scenes default cleanly without harsh shakes
+            is_arch = img.startswith(("card", "split", "bar_", "timeline", "stat_"))
+            if is_arch:
+                vfx_tokens = [t for t in vfx_tokens if t not in ("shake", "bw", "danger")]
+                if not vfx_tokens:
+                    vfx_tokens.append("crossfade")
             else:
-                # Peril / Predator danger / Combat ambush
-                if any(w in tokens for w in DANGER_KEYWORDS):
+                # High-emotion catastrophe / combat peril (require strong crisis trigger in spoken line!)
+                spoken_tokens = set(re.findall(r"\b[a-z0-9_]+\b", line_txt))
+                if any(w in spoken_tokens for w in DANGER_KEYWORDS):
                     if "danger" not in vfx_tokens and "blood" not in vfx_tokens:
                         vfx_tokens.append("danger")
+                    if any(w in spoken_tokens for w in ("earthquake", "explosion", "crushed", "burned", "battle", "collapse", "attack")):
+                        if "shake" not in vfx_tokens:
+                            vfx_tokens.append("shake")
+                elif any(w in spoken_tokens for w in IMPACT_KEYWORDS):
                     if "shake" not in vfx_tokens:
                         vfx_tokens.append("shake")
-                # Heavy construction impact / physical rumble
-                elif any(w in tokens for w in IMPACT_KEYWORDS):
-                    if "shake" not in vfx_tokens:
-                        vfx_tokens.append("shake")
-                # Freezing cold
-                elif any(w in tokens for w in COLD_KEYWORDS):
+                elif any(w in spoken_tokens for w in COLD_KEYWORDS):
                     if "ice" not in vfx_tokens:
                         vfx_tokens.append("ice")
-                # Historical tragedy / flashbacks
-                elif any(w in tokens for w in TRAGEDY_HISTORICAL_KEYWORDS):
+                elif any(phrase in line_txt for phrase in TRAGEDY_HISTORICAL_KEYWORDS):
                     if "bw" not in vfx_tokens:
                         vfx_tokens.append("bw")
 
-            # If dynamic active VFX is present, remove passive "fade"
+            # Calm narrative scenes default to clean 0.22s smooth crossfade
             active_vfx = {"zoom_punch", "danger", "shake", "ice", "bw", "flash", "blood"}
             if any(tok in active_vfx for tok in vfx_tokens) and "fade" in vfx_tokens:
                 vfx_tokens = [tok for tok in vfx_tokens if tok != "fade"]
 
-            # Default smooth motion if empty
-            if not vfx_tokens:
-                vfx_tokens.append("fade")
+            # Enforce max-2 simultaneous intensity VFX cues (excluding transitions & camera_move)
+            kept_fx = []
+            other_toks = []
+            for tok in vfx_tokens:
+                if tok in active_vfx:
+                    if len(kept_fx) < 2 and tok not in kept_fx:
+                        kept_fx.append(tok)
+                elif tok not in CAM_MOVE_TOKENS and tok not in other_toks:
+                    other_toks.append(tok)
+
+            # Explicit non-repeating camera_move (static on cards/splits/diagrams, adjacent non-repeat on shots)
+            explicit_cam = next((tok for tok in vfx_tokens if tok in CAM_MOVE_TOKENS), None)
+            if is_arch or any(dk in context_corpus for dk in ("diagram", "chart", "map", "timeline", "equation")):
+                cam_move = "static"
+            elif explicit_cam and explicit_cam != prev_cam_move:
+                cam_move = explicit_cam
+            else:
+                # Cycle calmly with alternating static beats to avoid relentless motion fatigue
+                if cut_scene_idx % 3 == 1 and prev_cam_move != "static":
+                    cam_move = "static"
+                else:
+                    cand_moves = [m for m in cam_cycle if m != prev_cam_move]
+                    cam_move = cand_moves[cut_scene_idx % len(cand_moves)]
+            prev_cam_move = cam_move
+
+            vfx_tokens = other_toks + kept_fx
+            if not any(tok in active_vfx or tok in TRANSITION_TOKENS for tok in vfx_tokens):
+                vfx_tokens.append("crossfade")
+            if cam_move not in vfx_tokens:
+                vfx_tokens.append(cam_move)
 
             # Spatial allocation
             if not space or space == "auto":

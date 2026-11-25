@@ -90,10 +90,7 @@ had to be re-made. The reviewer approved this instead (2026-10-20, "aab aacha ha
 4. **Speaker and description.** Urdu / Roman Urdu starts with Aman and the `natural` style at seed 11, the
    defaults of make_parler_job.py. Check 3-4 lines (transcribe them with Whisper, and play them to
    the user). If one line is flat or garbled, re-make only that id; do not re-make the whole job.
-5. **Music carries the mood.** For explainers use `explainer` or `explainer_lofi` at -23,
-   `mystery` or `tension` for dark topics, and `reflective` for an ending. Keep `history_serious`
-   for truly grave subjects (war, death). Under a curious "how did people do X" film it drags
-   the voice down.
+5. **Music carries the mood.** For explainers start the bed at **0.0s** calibrated between **-11.0 dB and -13.0 dB** relative to Voice RMS (`mix.py` adaptive balancer normalizes to `-14.0 LUFS` with vocal pocket EQ and smooth `1.9:1` ducking). Use `explainer` / `explainer_lofi`, `mystery` / `tension` for dark topics, and `reflective` for endings. Keep `history_serious` for truly grave subjects (war, death). Under a curious "how did people do X" film it drags the voice down.
 6. **QC by ear and by numbers:** no `RE-MAKE` lines left in vo_join's output, English about
    3.0 words/s, mix at -14 LUFS, and the bed audible in the pauses but never over the words.
    You cannot hear the film: say so, and ask the user to listen before you call it done.

@@ -86,7 +86,7 @@ asks for them.
 | 5 | Collect pictures | When the queue is empty: re-submit refused ids once. `pictures.py review` → look → `PICK.tsv` for swaps → regenerate wrong ones → `pictures.py pick` → `delama.py` (copies the LaMa-cleaned pictures; instant) | One line: "N pictures in, fixed X" |
 | 6 | Sound | vox-doc-sound: `cues.tsv` on words (PLAYBOOK §7), then `mix.py ... --out mix.wav` | Loudness numbers |
 | 7 | Render + QC | `render_pro.py` (or `render.py`) with `--format 16:9 / 9:16` and `--captions / --no-captions`. Deduplicates on-screen labels automatically, ensures cutouts never block center focal points, and renders single-word kinetic pop subtitles. Automatically executes Broadcast VFX (camera shake, black-and-white flashbacks, crimson hazard vignettes, cyan frost vignettes) and attaches official YouTube End Screen slates (16:9) or Shorts subscribe callouts (9:16). Then test still frames via `--frame <T> --frame-out <path>` to QC without video encoding. Then `pictures.py qc` and read `qc.jpg` YOURSELF: wrong picture, tag over a face, sheet line-ups, leftover sparkle. Fix, re-render. Do not show the contact sheet to the user | Open the video for the user and give its full path. **They judge the final video** |
-| 8 | Thumbnails & SEO | `thumbnail_generator.py` produces high-CTR 16:9 (`1280x720`) and 9:16 (`1080x1920`) thumbnails following the 3-element rule (stickman, glowing prop, tilted curiosity text). `trending_researcher.py` provides optimized high-RPM titles, Barnum hooks, and SEO tag clusters | Deliver clickable thumbnail PNG paths and ready-to-paste YouTube title/description/tags metadata |
+| 8 | Thumbnails & SEO | **2-Stage Intelligent Thumbnail Pipeline**: Stage 1 (`flow_thumbnail_generator.py`) generates dedicated 16:9 and native 9:16 Flow hero artwork (`thumbnail_16x9_flow_raw.png`, `thumbnail_9x16_flow_raw.png`) with strict NO-TEXT enforcement, negative space preservation, look palette alignment, and graceful high-contrast fallback. Stage 2 (`thumbnail_generator.py`) executes spatial negative-space solving (strictly avoiding 16:9 bottom-right timestamp and 9:16 mobile UI zones), 2x supersampled (`LANCZOS`) vector text rendering with curated fonts (`PermanentMarker-Regular.ttf`, `Bangers-Regular.ttf`, `Caveat-Bold.ttf`), auto-contrast luminance guard (ink pill / deep comic shadow), and look vignettes (`thumbnail_16x9.png`, `thumbnail_9x16.png`). `social_packager.py` and `viral_seo_intelligence.py` generate complete metadata (`METADATA.json`), publishing guides (`POSTING_GUIDE.md`), and high-CTR titles | Deliver clickable thumbnail PNG paths, raw flow base paths, and ready-to-paste YouTube title/description/tags metadata |
 
 **Never run the voice first and the pictures later.** The pictures depend only on the
 script's words; start them in the same turn the script is approved (users noticed and
@@ -127,45 +127,28 @@ objected when this was done in sequence).
   3. **Shared Cast Continuity:** Both share `img/ref_<name>.jpg` so character visual identity is 100% consistent.
 - **Surgical Edit Mode & Asset Preservation (Rule 23):** When the user commands "edit" / "edit karo", NEVER delete project folders, wipe existing assets, or prompt the 5 intake questions. Inspect `PROGRESS.md`, ask the user what needs editing (Script, Voice pace/speaker, Scene visuals, Sound FX, Formatting/Captions), and apply surgical modifications only to the targeted files without destroying unaffected assets.
 - **Spatial Hierarchy & Clutter-Free Layout Standard (Rule 24):**
-  1. **Shorts (9:16):** Title banner shown ONLY during first 2.5s ($y \in [190, 250]$), auto-fading out. Scene concept pill at $y = 230$ (suppressed during first 2.5s to avoid double header). Right 220px margin preserved ($x \le 860$) for Instagram Reels / YouTube Shorts engagement rail (Like, Comment, Share). Bottom 660px ($y > 1250$) kept 100% clear of graphics/tags. Kinetic single-word subtitles centered at $y = 1180$. Sticker cutouts docked in upper side quadrants ($y \in [0.34H, 0.44H]$, height $\le 420\text{px}$) with bottom strictly above $y = 1040\text{px}$, leaving a $\ge 140\text{px}$ clear buffer above subtitles.
-  2. **Long Video (16:9):** Topic/chapter slug placed at Top-Left ($x \approx 140, y \approx 100$), leaving bottom subtitles ($y = 920-940$) and center character completely uncluttered. Sticker callouts docked in upper side quadrants ($y \le 820$). Single visual focal point at all times.
+  1. **Shorts (9:16) & Multi-Sticker Composition:** Title banner shown ONLY during first 2.5s ($y \in [190, 250]$), auto-fading out. Right 220px margin preserved ($x \le 860$) and bottom 660px ($y > 1250$) kept clear; kinetic single-word subtitles at $y = 1180$. Unlimited simultaneous multi-stickers (1–4+ props) are supported via `calculate_intelligent_sticker_anchor` across distinct negative-space slots with $\ge 32\text{px}$ inter-sticker padding, locked spawn-time anchors, automatic cohort scaling (`0.83x` at 3 props, `0.78x` at 4+), and $\ge 140\text{px}$ buffer above subtitles.
+  2. **Long Video (16:9) & 3-Tier Sticker Vault:** Topic/chapter slug at Top-Left ($x \approx 140, y \approx 100$), subtitles at $y = 920-940$, stickers cleanly docked with $\ge 80\text{px}$ subtitle buffer. Resolve stickers via `skills/stickman-stickers/` (Tier 1 `flow_vault/` -> Tier 2 `cc0_library/` -> Tier 3 Live Flow auto-harvest).
 - **Screen Heading Suppression & Zero-Clutter Standard (Rule 25):**
   1. **Zero Redundant Headings on Standard Scenes:** Floating scene heading pills (`draw_label` scene pills) and top title banners must NOT be rendered over normal background illustrations (`shots/*.png`) when animated stickers or kinetic subtitles are active (`render_pro.py --scene-labels=False --header=False`).
   2. **Elimination of "Slide Show" Clutter:** When an animated sticker pops up with its own clean label and single-word subtitles flash at the bottom, an extra heading banner ("THE MODERN HUM", "BEFORE FRIDGES", "DESERT ICE") creates visual confusion and makes the video feel like a slide presentation rather than a professional cinematic animation.
   3. **Title Card Exception:** Text headings are permitted ONLY on dedicated full-screen chapter splash cards (`img == "card"`), where the screen is intentionally cleared of character action to announce a major structural transition.
   4. **Pristine Triad Hierarchy:** Normal scenes must feature only three visual layers: (1) Full-bleed 2D stickman background illustration, (2) Clean transparent animated sticker props popping on cue, and (3) Alex Hormozi golden-amber single-word kinetic subtitles docked safely at the bottom.
-- **High-Density Visual Pacing & Dynamic Image Frequency ("Ziada Image Use Kiya Karo" - Rule 26):**
-  1. **Shorts (9:16 Viral Retention Standard):**
-     - Target cut duration: **$\le 3.0\text{s}$ per cut** (minimum 16–20 distinct background scenes for a 45–60s video, earning an A+ in RL-QC).
-     - Every narration line must be split into at least 2 visual beats: the opening beat (`@<line_id>`) and a mid-sentence action/concept cut (`@<line_id>:<keyword>`).
-     - Hard limit: No single background image may linger on screen for $> 3.8\text{s}$. Fast visual variety sustains high audience dopamine and prevents swipe-away dropoff.
-  2. **Long Documentary (16:9 Narrative Standard):**
-     - Target cut duration: **$\le 6.0\text{s}$ per cut** (minimum 50–65 distinct widescreen scenes for a 5-minute video, earning an A in RL-QC).
-     - Avoid static holds: each line, historical fact, diagrammatic explanation, and tone change must have its own dedicated shot (wide establishing landscapes, medium character interactions, blueprint technical drawings, and macro scientific cutaways).
-     - Hard limit: No single background image may linger on screen for $> 7.5\text{s}$.
-  3. **RL-QC Pacing Verification:** `evaluate_rl.py` automatically checks average cut duration and issues deductions if video pacing falls into sluggish grades (B or C).
-- **Multi-Layered Sound Design & SFX Density Standard ("Ziada Se Ziada Sounds Use Karo" - Rule 27):**
-  1. **Zero Silent Visual Events & Storytelling Golden Ratio:** Every visual cut, sticker entrance, and keyword punch must be paired with tactile sound. Videos with fewer than 15 sound cues are strictly flagged as under-designed. Music bed is calibrated to **-17.0 dB** (Long) / **-16.0 dB** (Shorts) with a **vocal pocket notch EQ** (-3.2 dB at 1.8 kHz) in `mix.py`. Sidechain ducking is set to a gentle **2.8:1 ratio** with a 550ms release so music remains clearly audible, rhythmic, and emotional throughout narration instead of collapsing into a dry "reading" vacuum.
-  2. **Four Mandatory Audio Layers (`sfx_smart_designer.py`):**
-     - **Layer 1 (Visual Cut Transitions):** Every scene cut (`@<line_id>`) triggers a subtle whoosh, paper swipe, zoom snap, or swish (`-20 dB` to `-23 dB`).
-     - **Layer 2 (Sticker Pop & Semantic SFX):** Every transparent sticker reveal (`+@...`) plays a semantically matched sound (bubble pop, notification ping, wood tap, water drop, coin drop, ice crack) (`-15 dB` to `-17 dB`).
-     - **Layer 3 (Keyword Spoken Impact Hits):** High-curiosity spoken words in `WORDS.tsv` ("freezing", "danger", "starvation", "conquered", "impossible", "secret", "space") trigger synchronized micro-hits or sub-thuds (`-17 dB` to `-19 dB`).
-     - **Layer 4 (Continuous Foley Bed & Music Score):** Continuous environmental loop (`-23 dB`) plus ambient documentary music bed at `-17 dB` with vocal pocket carving and warm vocal conditioning.
-  3. **Broadcast Loudness Verification:** The final mix must verify at **-14.0 LUFS** ($\pm 1.0$ LUFS) and true peak $\le -1.0\text{ dBFS}$ via `evaluate_rl.py`.
-- **Dynamic Visual FX (VFX) & Motion Transitions Standard (Rule 28):**
-  1. **Scene Transition VFX:** Hard cuts are replaced or enhanced by contextual visual effects specified in `SCENES_HYBRID.tsv`:
-     - `fade` / `crossfade`: Smooth 0.20s dissolve between consecutive scenes.
-     - `flash`: 0.12s warm exposure bloom for big historical leaps, scientific discoveries, and opening hook reveals.
-     - `zoom_punch`: Subtle 0.25s kinetic snap-in (1.04x $\rightarrow$ 1.0x).
-  2. **Sticker Entrance & Living Motion VFX:**
-     - `pop`: Harmonic damped spring bounce (0 $\rightarrow$ 1.08 $\rightarrow$ 1.00).
-     - `drop` / `slam`: Vertical drop from top with bounce impact.
-     - `slide_left` / `slide_right`: Horizontal inertia slide from off-frame.
-     - `hover` / `breathing`: Organic sinusoidal vertical hovering ($\pm 5\text{px}$) after settling, keeping stickers alive throughout the scene.
+- **Calm, Clause-Locked Documentary Pacing & Real Shot Diversity (Rule 26):**
+  1. **Shorts (9:16 Standard):** Target **2.5s–4.0s** per complete spoken clause (min **1.8s**; max **4.2s**; chaotic `< 1.5s` rapid flickering rejected). Requires **15–20 unique Flow shots** (`A -> B -> C` linear progression; never ping-pong back to old shots).
+  2. **Long Documentary (16:9 Standard):** Target **3.5s–5.5s** per clause (min **2.2s**; max **6.5s**; chaotic `< 1.5s` rapid flickering rejected). Requires **50–70 unique Flow shots**.
+  3. **Full-Bleed Editorial Archetypes & Logical Stickers:** `card_stat`, `split_compare` (progressive Left $\to$ Right reveal), `bar_timeline`, and `stat_pie` render full-bleed onto the canvas without corporate UI banners or nested boxes. Stickers hold $\ge 2.5\text{s}$ cleanly on exact spoken nouns and are banned when redundant with the underlying shot.
+  4. **RL-QC Verification:** `evaluate_rl.py` and `validate_pipeline.py` (Gate 6) strictly reject both dead stagnation and chaotic `< 1.5s` flickering, fake shot recycling, and sparse/broken card or split layouts.
+- **Multi-Layered Sound Design & Warm Cinematic Balance (Rule 27):**
+  1. **Closed-Loop Adaptive Mixing (`mix.py`):** Warm documentary music bed maintained at **-11.0 dB to -13.0 dB** relative to Voice RMS (`0.0s` smooth start, vocal pocket EQ `-3.2 dB @ 1.8 kHz`, gentle `1.9:1` sidechain ducking).
+  2. **Four Tactile Audio Layers (`sfx_smart_designer.py`):** Scene swishes, logical sticker pops (`-4.5 dB` to `-2.0 dB` rel to VO), restrained dramatic keyword impacts, and normalized `-14.0 LUFS` / `-1.0 dBTP` master.
+- **Restrained Emotion & Smooth VFX Standard (Rule 28):**
+  1. **Smooth Transitions:** Calm narrative cuts use clean **0.22s crossfades** (`_smooth_shot_motion` calm `1.00 -> 1.045` drift); `zoom_punch`, `shake`, `danger`, `ice`, and `bw` trigger strictly on authentic high-emotion twists or catastrophe beats—never randomly mid-sentence.
+  2. **Director-Supervised Motion & Animated Choreography (`director_supervisor.py` -> `DIRECTOR_PLAN.json`):** Rejects redundant stickers, binds every prop cleanly to its `WORDS.tsv` trigger at `-0.06s`, and drives 6 physics motion archetypes (`slide_arc_left`/`right`, `drop_weight`, `peel_reveal`, `bloom_focus`, `swing_strike`), group formations (`duo_converge`, `cause_effect` with animated trim-path Bezier arrows, `trio_cascade`, `quad_showcase`), alive idle breathing (`±3.2px`), clean `0.22s` ease-out exit, and physics-matched SFX (`sfx_smart_designer.py`).
 - **Dynamic Sticker Lifetime & Clean Exit Standard (Rule 29):**
-  1. **Word-Onset Synchronization:** Stickers must appear precisely when the keyword is spoken (`o["t"] = words_map["@<line>:<keyword>"]`). Never trigger stickers prematurely before the narrator speaks the object.
-  2. **Strict Time-to-Live (TTL):** Stickers must NOT linger indefinitely until the scene cuts. Default duration is **1.8s–2.2s in Shorts** and **2.4s–2.8s in Long videos** (or explicit `dur:X.X` in `extra`).
-  3. **Smooth Exit Animation:** During the final **0.22s** of its lifespan, the sticker smoothly shrinks (`1.0 -> 0.0`) and fades out cleanly (`render_pro.py`). The screen returns to pure background illustration, preventing visual stagnation and screen clutter.
+  1. **Word-Onset Synchronization:** Stickers must appear precisely when the spoken noun hits (`-0.05s` to `+0.05s` around `words_map["@<line>:<keyword>"]`). Never trigger stickers prematurely before the narrator speaks the object.
+  2. **Clean Thought-Bound Duration:** Hold stickers cleanly until the thought finishes (**minimum `2.5s`** in Shorts and **`3.0s`** in Long videos unless pre-empted by a new scene/beat).
+  3. **Smooth Exit Animation:** During the final **0.25s** of its lifespan, the sticker eases out smoothly with the scene (`render_pro.py`), zero jarring snap or flicker.
 - **Viral Engagement, Barnum Effect & Trending Edits Architecture (Rule 30):**
   1. **The Barnum Hook Standard:** Hook the viewer within the first 3 seconds using universal personal relatability ("You do this every morning...", "If you think you understand X, you're missing the terrifying truth...", "Every single human alive relies on this secret...").
   2. **Zeigarnik Open Loops:** Plant an unanswered mystery or contradiction in the hook that is only resolved in the second half of the video.
@@ -375,24 +358,25 @@ objected when this was done in sequence).
 - **The 5 Mandatory Pre-Render Quality Gates (`validate_pipeline.py` - Rule 74):**
   1. **Gate 1**: Scene & Sticker Manifest Completeness + Cutout Quality QC (procedural stamps and programmatic archetypes bypass disk image lookup).
   2. **Gate 2**: Native 9:16 Vertical Framing Purity (Shorts aspect $\le 0.65$, no letterboxing).
-  3. **Gate 3**: 3-Stem Master Audio Integrity (non-silent VO, SFX, music, -14 LUFS loudness calibrated).
+  3. **Gate 3**: 3-Stem Master Audio Integrity (non-silent VO, SFX, music, -14 LUFS loudness calibrated, `~45%` silent cuts on calm transitions, peak-aligned slams, pre-twist `--dip`).
   4. **Gate 4**: Multi-Track Synchronization (`WORDS.tsv` $\leftrightarrow$ `SCENES_HYBRID.tsv` $\leftrightarrow$ `cues_pro.tsv`, $<100\text{ms}$ drift, timeline duration locked).
-  5. **Gate 5**: Autonomous RL Feedback & Policy Compliance (pacing, visual holds, sticker density, loudness).
+  5. **Gate 5**: Autonomous RL Feedback & Policy Compliance (pacing, visual holds, sticker density, loudness, structured F-codes + 4-of-6 novelty tracking).
+  6. **Gate 0 / Gate 6 & Pre-Delivery Clean-Context Critic Pass**: `studio.py director <dir> --pre-spend` audits single `DIRECTOR_PLAN.json` (`thesis`, `terms`, `cast_anchors`, `facts`, `shot_size`, `angle`, `camera_move`, `reads_min_sec`) before TTS/Flow; after render, `studio.py sheets <mp4>` exports `qa/hook_sheet.jpg`, `qa/phone_sheet.jpg`, and `qa/beats_sheet.jpg` + `<10s` signal QA for a 1-round critic check before delivery.
 - **Unified Studio Orchestrator (Rule 75):**
   1. **Single CLI Entry Point**: `python3 studio.py create "<Topic>" --format both --captions [--dry-run]` orchestrates the entire script-to-master dual pipeline.
-  2. **Safe Pre-Flight Verification**: Supports `--dry-run` to execute and validate all generation and sync stages through the 5 Quality Gates without triggering video rendering passes.
-- **The 6-Archetype Visual Variety Engine & Sticker Integration (Rule 76):**
-  1. **Archetype 1: Flow Hero Illustrations** (`shots/*.png`): Primary narrative anchors. Hand-drawn 2D cartoon style on warm paper with bold black ink outlines. 1-2 word-synced stickers per shot.
-  2. **Archetype 2: Virtual Multi-Cam Cuts** (`crop_focus`, `zoom_in_tight`, `pan_left`, `pan_right` in `extra`/`pos`/`space`): Re-uses the high-res Flow illustration (1536x2752 / 2752x1536) to cut instantly into close-up (1.32x), tight punch (1.38x), or pan framing on narrative beats without waiting on new image generation.
-  3. **Archetype 3: Minimalist Kinetic Impact Cards** (`img: card_stat` or `card_phrase`, `text: 53,000 MILES | Built by hand`): Rendered at 2x supersampling with LANCZOS downsampling and comic drop shadow. **Pairs natively with 1 real sticker** (`roman_soldier.png`) in balanced negative space with soft ground shadow.
-  4. **Archetype 4: 50/50 Split Contrast Frames** (`img: split_compare` or `split_contrast`, `text: BEFORE | AFTER`): Clean center dashed ink divider with dual tint halves and label pills. **Supports 1 sticker per side** (Left vs Right) centered inside each half with optional verdict stamps (`stamp_x` / `stamp_check`) stamped over each side.
-  5. **Archetype 5: Animated Myth-Buster Verdict Stamps** (Overlay `img: stamp_x`, `stamp_check`, `stamp_false`, `stamp_true`, `stamp_myth`): Big animated red cross (✕) or green checkmark (✓) stamp with physical impact spring hit and audio slam/chime.
-  6. **Archetype 6: Programmatic Data & Timeline Cards** (`img: bar_timeline`, `text: PART 1: Label | PART 2: Label...` or `img: stat_pie`, `text: 75% | Description`): Animated progressive timeline bar and donut metric cards. **Supports contextual accent sticker(s)** anchored cleanly outside the chart/bar bounding box without covering any labels or numbers.
-- **High-Density Visual Pacing & Beat Velocity (Rule 77):**
-  1. **Opening 15s Hook Density**: 1.2s–2.2s visual beat (scene cut or animated overlay).
-  2. **Shorts Body (9:16)**: Target cut 1.5s–2.5s; max hold 3.0s (flagged if > 3.0s).
-  3. **Long-Form Body (16:9)**: Target cut 2.2s–3.8s; max hold 4.5s (flagged if > 4.5s).
-  4. **Rapid List Micro-Beats**: 0.8s–1.4s per beat with synchronized micro-SFX on each reveal.
+  2. **Safe Pre-Flight Verification**: Supports `--dry-run` to execute and validate all generation and sync stages through the **6 Quality Gates** without triggering video rendering passes.
+- **The 6-Archetype Visual Variety Engine & Multi-Sticker Composition (Rule 76):**
+  1. **Archetype 1: Flow Hero Illustrations** (`shots/*.png`): Primary narrative anchors. Hand-drawn 2D cartoon style on warm paper with bold black ink outlines, continuous smooth cosine ease drift ($1.00 \to 1.045$), $0.22\text{s}$ crossfades, and unlimited 1–4+ collision-free word-synced stickers (`>= 32px` padding, locked anchors).
+  2. **Archetype 2: Authoritative Camera Motion** (`pan_left`, `pan_right` across unique shots): Smooth directional drifts across native Flow illustrations (strictly NO abrupt mid-shot snap-cuts or recycled-image jitter).
+  3. **Archetype 3: Full-Bleed Minimalist Impact Frame** (`img: card_stat` or `card_phrase`, `text: 1177 BC | Eight Empires Connected`): Rendered at 2x supersampling onto organic paper grain & faint dot-grid canvas with giant `PermanentMarker` hero metric, tapered highlighter stroke, radial corner ticks, curved ink arrow, and grounded sticker shadow.
+  4. **Archetype 4: Aspect-Aware Split Contrast Frames** (`img: split_compare` or `split_contrast`, `text: MYTH: ... | REALITY: ...`): **Top-vs-Bottom horizontal split (`Y: 6%–72%`) on `9:16` Shorts** and **full-height Left-vs-Right vertical split on `16:9` Long** with balanced contrasting stickers on both sides and compact corner verdict badges (`stamp_x` / `stamp_check`).
+  5. **Archetype 5: Hand-Drawn Verdict Accents** (`stamp_x`, `stamp_check`, `stamp_false`, `stamp_true`, `stamp_myth`): Crisp crimson brush `X` or emerald `✓` marks with physical impact spring hit (`compact=True` circular seal in split corners).
+  6. **Archetype 6: Progressive Data & Timeline Cards** (`img: bar_timeline`, `text: PART 1: Label | PART 2: Label...` or `img: stat_pie`, `text: 75% | Description`): Vertical stepped spine (`Y: 8%–70%`) on `9:16` Shorts or horizontal timeline on `16:9` Long with bold nodes, chevrons, tinted strips, and highlighted climax sticker.
+- **Calm Clause-Locked Pacing & Linear Flow (Rule 77):**
+  1. **Opening 15s Hook Density**: Smooth natural visual transitions every 2.0s–3.5s (NEVER sub-1.5s chaotic flicker).
+  2. **Shorts Body (9:16)**: Target cut **2.5s–4.0s** (min **1.8s**, max **4.2s**, zero `< 1.5s` flicker). Min **15–20 unique Flow shots**.
+  3. **Long-Form Body (16:9)**: Target cut **3.5s–5.5s** (min **2.2s**, max **6.5s**, zero `< 1.5s` flicker). Min **50–70 unique Flow shots**.
+  4. **Strict Linear Progression**: Always advance linearly ($A \to B \to C \to D$); never ping-pong back to a previous shot across an archetype card.
 - **Competitor Retention Narrative Blueprint (Rule 78):**
   1. **0–15s Present-Day Mirror Hook**: Start with 2nd-person direct address ("Tum", "Aap", "Imagine you") connecting a mundane modern experience to the ancient mystery.
   2. **Myth-Flip + Named Proof Loop**: State a common misconception, smash it with `stamp_x`, then provide historical/scientific proof.
@@ -405,6 +389,13 @@ objected when this was done in sequence).
   3. `bar_timeline` / `stat_pie`: Modern tactile data ping (`-11 dB`).
   4. `stamp_x` / `stamp_check`: Physical impact thud (`-10 dB`) or resonant positive chime (`-11 dB`).
   5. Sticker entrance / exit: Quick tactile pop (`-11 dB`) / soft zip-out (`-13 dB`). Master mix locked at `-14.0 LUFS`.
+- **Curated Typographic Hierarchy & 9 Editorial Looks (Rule 80):**
+  1. **4 Curated Fonts**: `PermanentMarker-Regular.ttf` for hero stats and split headers, `Bangers-Regular.ttf` for stamps and hook words, `Caveat-Bold.ttf` for annotations and timeline sub-labels, `SedgwickAve-Regular.ttf` for title cards, and `PatrickHand-Regular.ttf` for kinetic captions.
+  2. **9 Editorial Looks**: `bright` (canonical), `warm`, `night`, `ink`, `oversimplified`, `cgp_grey`, `casually_explained`, `minute_physics`, `painted` natively driving paper, ink, card fills, accent highlights, and Flow prompts.
+- **Production Upload Packaging & Self-Healing Fallback (Rule 81):**
+  1. **Automated Upload Pack (`UPLOAD_PACK/`)**: Every completed render auto-generates 16:9 YouTube thumbnail, 9:16 Shorts cover, `METADATA.json` (chapters, SEO tags, titles), and `POSTING_GUIDE.md` (publishing workflow & pinned comments).
+  2. **Self-Healing Sticker Cutouts**: When chroma-keying fails alpha or halo checks, engine auto-runs `cutout.py` (luminance/border flood-fill) and `delama.py` corner cleaning locally before Flow re-generation.
+  3. **Hardware-Safe Auto-Routing**: Detects CPU/GPU profile via `low_resource_engine.py` and routes to `low_resource_whisper.py` int8 alignment and VA-API/ultrafast FFmpeg encoding.
 - Text on pictures only for numbers and dates, names, map places and unseen terms. Never
   over a face (render.py places tags itself). 6-10 text cards per 2 minutes.
 - Pick pictures by what they show, not by file number. Flow swaps them in batches.

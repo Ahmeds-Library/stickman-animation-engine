@@ -12,8 +12,10 @@ Provides a single-command interface for the entire production pipeline:
 
 import os
 import sys
+import re
 import argparse
 import subprocess
+import importlib.util
 
 # Self-healing environment bootstrap
 try:
@@ -26,6 +28,21 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "skills", "stickman-hybrid", "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
+
+
+def _get_script_module(name):
+    """Dynamically loads a skill script from SCRIPTS_DIR, bypassing static missing-import warnings."""
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        p = os.path.join(SCRIPTS_DIR, f"{name}.py")
+        if os.path.exists(p):
+            spec = importlib.util.spec_from_file_location(name, p)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                return mod
+    return None
 
 
 def run_doctor():
@@ -88,6 +105,15 @@ def run_doctor():
     # 7. CC0 Sound Effects & Music
     sfx_path = os.path.join(ROOT_DIR, "skills", "vox-doc-sound", "sfx")
     print(f"🎵 CC0 Sound Library: {'✅ VERIFIED (Wyzowl & Kenney CC0)' if os.path.exists(sfx_path) else '⚠️ Procedural fallback active'}")
+
+    # 7b. Permanent Sticker Vault & CC0 Library (skills/stickman-stickers)
+    stk_cat = os.path.join(ROOT_DIR, "skills", "stickman-stickers", "CATALOG.tsv")
+    if os.path.exists(stk_cat):
+        with open(stk_cat, encoding="utf-8", errors="ignore") as cf:
+            cnt = max(0, sum(1 for _ in cf) - 1)
+        print(f"🧩 Permanent Sticker Vault: ✅ VERIFIED ({cnt} indexed transparent stickers in CATALOG.tsv)")
+    else:
+        print("🧩 Permanent Sticker Vault: ⚠️ CATALOG.tsv not yet indexed (run: studio.py stickers --index)")
 
     # 8. Reinforcement Learning Policies (60 Rules)
     eval_path = os.path.join(SCRIPTS_DIR, "evaluate_rl.py")
@@ -153,7 +179,7 @@ def run_gate(args):
 
 
 def run_qc(args):
-    """Executes the 60-Rule Reinforcement Learning Quality Audit."""
+    """Executes the 61-Rule Reinforcement Learning Quality Audit."""
     script = os.path.join(SCRIPTS_DIR, "evaluate_rl.py")
     cmd = [sys.executable, script]
     if args.target:
@@ -161,8 +187,138 @@ def run_qc(args):
     subprocess.run(cmd)
 
 
+def run_director(args):
+    """Runs Unified Director Supervision (Gate 0 + Choreography) on a project directory."""
+    script = os.path.join(SCRIPTS_DIR, "director_supervisor.py")
+    cmd = [sys.executable, script, args.target]
+    if getattr(args, "pre_spend", False):
+        cmd.append("--pre-spend")
+    if getattr(args, "strict", False):
+        cmd.append("--strict")
+    if getattr(args, "warn_only", False):
+        cmd.append("--warn-only")
+    res = subprocess.run(cmd)
+    if res.returncode != 0:
+        sys.exit(res.returncode)
+
+
+def run_sheets(args):
+    """Exports qa/hook_sheet.jpg, qa/phone_sheet.jpg, qa/beats_sheet.jpg and prints signal QA summary."""
+    eval_mod = _get_script_module("evaluate_rl")
+    if not eval_mod:
+        print("❌ evaluate_rl module unavailable")
+        sys.exit(1)
+    import time
+    t_s = time.time()
+    sheets = eval_mod.export_contact_sheets(args.mp4, out_dir=getattr(args, "out", None))
+    sig = eval_mod.scan_video_signals(args.mp4)
+    dt_s = time.time() - t_s
+    print(f"🖼️ Contact Sheets & Forensic Signal Scan ({dt_s:.2f}s):")
+    for k, p in sheets.items():
+        print(f"   • {k}: {p} ({'OK' if os.path.exists(p) else 'MISSING'})")
+    print(f"   • Signal QA: blank_frame0={sig.get('blank_frame0')}, flash={sig.get('flash_frames')}, "
+          f"freeze_2.5s={sig.get('freeze_runs_2_5s')}, min_otsu_contrast={sig.get('min_advisory_contrast')}:1, "
+          f"f_codes={sig.get('f_codes')}")
+
+
+def run_stickers(args):
+    """Manages and searches the permanent skills/stickman-stickers vault & CC0 library."""
+    stk_scripts = os.path.join(ROOT_DIR, "skills", "stickman-stickers", "scripts")
+    if getattr(args, "harvest", False):
+        subprocess.run([sys.executable, os.path.join(stk_scripts, "harvest_project_stickers.py")])
+    elif getattr(args, "fetch_cc0", False):
+        cmd = [sys.executable, os.path.join(stk_scripts, "fetch_cc0_stickers.py")]
+        if getattr(args, "online", False):
+            cmd.append("--online")
+        subprocess.run(cmd)
+    elif getattr(args, "search", None):
+        cmd = [sys.executable, os.path.join(stk_scripts, "index_stickers.py"), "--search", args.search]
+        if getattr(args, "json", False):
+            cmd.append("--json")
+        subprocess.run(cmd)
+    else:
+        subprocess.run([sys.executable, os.path.join(stk_scripts, "index_stickers.py")])
+
+
+def run_trends(args):
+    """Searches high-RPM trending explainer topics and SEO tag clusters."""
+    trending_researcher = _get_script_module("trending_researcher")
+    if not trending_researcher:
+        print("❌ trending_researcher.py could not be imported.")
+        return
+
+    if args.query:
+        res = trending_researcher.search_trending(args.query)
+    elif args.niche and args.niche in trending_researcher.TRENDING_NICHES:
+        res = trending_researcher.TRENDING_NICHES[args.niche]
+    elif args.niche:
+        res = trending_researcher.search_trending(args.niche)
+    else:
+        res = trending_researcher.get_trending_summary()
+
+    if args.json:
+        import json
+        print(json.dumps(res, indent=2))
+    else:
+        print("==================================================")
+        print("📈 HIGH-RPM TRENDING EXPLAINER RESEARCHER")
+        print("==================================================")
+        if isinstance(res, dict) and "niche_name" in res:
+            print(f"🎯 Niche: {res['niche_name']} (Est. RPM: {res.get('estimated_rpm', 'N/A')})")
+            for t in res.get("topics", []):
+                print(f"  • Title Idea: {t.get('title_options', [''])[0]}")
+                print(f"    Hook: {t.get('barnum_hook', '')}")
+                print(f"    Badge: [{t.get('badge', '')}] | Text: \"{t.get('thumbnail_text', '')}\"")
+        elif isinstance(res, list):
+            for t in res:
+                if "category" in t:
+                    print(f"🎯 Category: {t.get('category')} (RPM: {t.get('rpm', 'N/A')})")
+                    for top in t.get("top_topics", [])[:3]:
+                        print(f"   • {top}")
+                else:
+                    print(f"  • {t.get('title_options', [''])[0]} (Badge: [{t.get('badge', '')}])")
+                    print(f"    Hook: {t.get('barnum_hook', '')}")
+        elif isinstance(res, dict):
+            for niche_id, n_data in res.items():
+                print(f"\n📂 [{niche_id.upper()}]: {n_data.get('niche_name', '')} (RPM: {n_data.get('estimated_rpm', '')})")
+                for t in n_data.get("topics", [])[:2]:
+                    print(f"   - {t.get('title_options', [''])[0]}")
+        print("==================================================")
+
+
 def run_create(args):
     """Runs the full automated production pipeline with unified parameter routing."""
+    raw_slug = re.sub(r"[^\w\s-]", "", args.topic.lower()).strip()
+    slug = re.sub(r"[-\s]+", "_", raw_slug) or "project"
+
+    # Resolve target output project path: user specified --out-dir or default ~/StickmanHybrid/<slug>
+    out_dir = getattr(args, "out_dir", None)
+    if not out_dir:
+        out_dir = os.path.expanduser(f"~/StickmanHybrid/{slug}")
+
+    # Validate resolved project path against anti-pollution guard (rejects inside repo root)
+    ap_mod = _get_script_module("anti_pollution")
+    if ap_mod and hasattr(ap_mod, "validate_external_output_dir"):
+        project_dir = ap_mod.validate_external_output_dir(out_dir)
+    else:
+        project_dir = os.path.realpath(os.path.abspath(os.path.expanduser(out_dir)))
+
+    os.makedirs(project_dir, exist_ok=True)
+
+    if getattr(args, "suggest", False):
+        try:
+            tr_mod = _get_script_module("trending_researcher")
+            if tr_mod:
+                sug = tr_mod.search_trending(args.topic)
+                if sug:
+                    print("\n💡 [TOPIC RETENTION SUGGESTIONS]:")
+                    for s in sug[:2]:
+                        print(f"  • Viral Angle: {s.get('title_options', [''])[0]}")
+                        print(f"  • Recommended Hook: \"{s.get('barnum_hook', '')}\"")
+                        print(f"  • Thumbnail Concept: \"{s.get('thumbnail_text', '')}\" (Badge: [{s.get('badge', '')}])\n")
+        except Exception:
+            pass
+
     script = os.path.join(SCRIPTS_DIR, "pipeline_dual.py")
     cmd = [
         sys.executable, script,
@@ -172,13 +328,14 @@ def run_create(args):
         "--look", args.look,
         "--length", args.length,
         "--captions", args.captions,
-        "--resume", args.resume
+        "--resume", args.resume,
+        "--out-dir", project_dir
     ]
     if args.blueprint:
         cmd.extend(["--blueprint", args.blueprint])
     if args.dry_run:
         cmd.append("--dry-run")
-    subprocess.run(cmd)
+    subprocess.run(cmd, cwd=project_dir)
 
 
 def main():
@@ -241,17 +398,46 @@ Examples:
     p_qc = subparsers.add_parser("qc", help="Execute 61-Rule Reinforcement Learning Quality Audit")
     p_qc.add_argument("target", nargs="?", default=".", help="Target project directory")
 
-    # 8. Create Pipeline (Unified Master Intake)
+    # 7b. Director Supervisor
+    p_dir = subparsers.add_parser("director", help="Run Unified Director Supervisor (Gate 0 + Choreography)")
+    p_dir.add_argument("target", nargs="?", default=".", help="Target project directory")
+    p_dir.add_argument("--pre-spend", action="store_true", help="Pre-Spend Gate 0 estimate mode before TTS/Flow")
+    p_dir.add_argument("--strict", action="store_true", help="Exit non-zero on audit_score < 70 or redundant stickers")
+    p_dir.add_argument("--warn-only", action="store_true", help="Report findings with exit code 0")
+
+    # 7c. Contact Sheets & Forensic Signal Scan
+    p_sh = subparsers.add_parser("sheets", help="Export hook_sheet.jpg / phone_sheet.jpg / beats_sheet.jpg & signal QA")
+    p_sh.add_argument("mp4", help="Rendered MP4 video path")
+    p_sh.add_argument("--out", default=None, help="Output folder (default: <mp4_dir>/qa)")
+
+    # 8. Trends Researcher
+    p_trends = subparsers.add_parser("trends", help="Search high-RPM trending YouTube explainer topics and SEO tag clusters")
+    p_trends.add_argument("--query", "-q", default=None, help="Search query or keyword")
+    p_trends.add_argument("--niche", "-n", default=None, help="Filter by niche (ancient_engineering, crisis_whatif, etc.)")
+    p_trends.add_argument("--json", action="store_true", help="Output pure JSON")
+
+    # 8b. Sticker Library Manager
+    p_stk = subparsers.add_parser("stickers", help="Search, index, harvest, or fetch CC0 stickers in skills/stickman-stickers")
+    p_stk.add_argument("--search", "-s", default=None, help="Search indexed Flow & CC0 stickers")
+    p_stk.add_argument("--index", action="store_true", help="Rebuild CATALOG.tsv")
+    p_stk.add_argument("--harvest", action="store_true", help="Harvest & deduplicate Flow stickers from ~/StickmanHybrid/*")
+    p_stk.add_argument("--fetch-cc0", action="store_true", help="Build/fetch 100% CC0 2D sticker library")
+    p_stk.add_argument("--online", action="store_true", help="Query Wikimedia Commons CC0 API during --fetch-cc0")
+    p_stk.add_argument("--json", action="store_true", help="Output JSON search results")
+
+    # 9. Create Pipeline (Unified Master Intake)
     p_create = subparsers.add_parser("create", help="Generate full stickman documentary pipeline from 5 intake questions")
     p_create.add_argument("topic", help="Documentary topic")
     p_create.add_argument("--format", choices=["short", "long", "both"], default="both", help="Production format (Short 9:16, Long 16:9, or Both)")
     p_create.add_argument("--lang", choices=["en", "ur", "roman_urdu"], default="en", help="Narration language")
     p_create.add_argument("--length", default="auto", help="Target duration target (e.g. '60s', '5m')")
     p_create.add_argument("--captions", choices=["yes", "no"], default="yes", help="Include Alex Hormozi single-word kinetic subtitles")
-    p_create.add_argument("--look", choices=["bright", "warm", "ink", "oversimplified", "casually_explained", "cgp_grey", "minute_physics"], default="bright", help="Canonical visual art style")
+    p_create.add_argument("--look", choices=["bright", "warm", "night", "ink", "oversimplified", "casually_explained", "cgp_grey", "minute_physics", "painted"], default="bright", help="Canonical visual art style (all 9 editorial looks supported)")
     p_create.add_argument("--resume", choices=["all", "script", "voice", "assets", "render", "audit"], default="all", help="Resume from a specific pipeline stage")
     p_create.add_argument("--blueprint", default=None, help="Path to rich agent-authored narrative blueprint JSON")
     p_create.add_argument("--dry-run", action="store_true", help="Run end-to-end wiring check without rendering full video")
+    p_create.add_argument("--suggest", action="store_true", help="Suggest viral hooks, RPM data, and thumbnail concepts before running")
+    p_create.add_argument("--out-dir", default=None, help="Target project root directory (default: ~/StickmanHybrid/<slug>)")
 
     args = parser.parse_args()
 
@@ -269,6 +455,14 @@ Examples:
         run_vfx(args)
     elif args.command == "qc":
         run_qc(args)
+    elif args.command == "director":
+        run_director(args)
+    elif args.command == "sheets":
+        run_sheets(args)
+    elif args.command == "trends":
+        run_trends(args)
+    elif args.command == "stickers":
+        run_stickers(args)
     elif args.command == "create":
         run_create(args)
     else:

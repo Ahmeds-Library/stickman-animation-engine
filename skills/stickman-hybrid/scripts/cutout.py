@@ -97,6 +97,10 @@ def cutout(src, pad=12):
         idx = ndimage.distance_transform_edt(~conf, return_indices=True)[1]
         rgb = np.where(conf[..., None], rgb, rgb[idx[0], idx[1]])
 
+    # Erode 1px inward before feathering so light JPEG boundary fringes never survive
+    alpha_mask = ndimage.binary_erosion(alpha > 0.5, iterations=1)
+    alpha = np.where(alpha_mask, alpha, 0.0)
+
     out = np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)])
     img = Image.fromarray(out, "RGBA")
     from PIL import ImageFilter

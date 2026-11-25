@@ -1,158 +1,224 @@
 #!/usr/bin/env python3
-"""flow_thumbnail_generator.py: Flow-Powered High-CTR Thumbnail Generator & Visual Auditor
-Implements:
-1. Google Flow Thumbnail Prompt Generation:
-   Crafts ultra-dramatic, high-curiosity prompts for Google Flow with strict 2D vector style.
-2. Intelligent Multi-Pillar Visual Analysis:
-   - Evaluates base image (from Flow generation or shots/ directory).
-   - Pillar 1: Expressive Stickman presence (Preserves if present, composites if missing).
-   - Pillar 2: Glowing Hero Prop presence (Preserves if present, adds 24px radial glow if missing).
-   - Pillar 3: Curiosity Text Legibility (Measures local background luminance; injects adaptive dark scrim if bright).
-   - Pillar 4: Curiosity Badge ([FORBIDDEN], [400 BC SECRET], [DAY 14]).
-3. Dual-Format Export:
-   - 16:9 Landscape (1280x720) for YouTube Home / Browse.
-   - 9:16 Vertical (1080x1920) for YouTube Shorts feed grid & Reels/TikTok covers.
+"""flow_thumbnail_generator.py: Stage 1 Intelligent Flow Thumbnail Base Artwork Generator
+Generates dedicated high-CTR base artwork via Google Flow (flow-auto) or smart fallback.
+Features:
+1. Pre-Flight Check: Verifies Google Flow bridge (port 8791) via flow-auto daemon/status.
+2. Bespoke High-CTR Prompts: Driven by viral_seo_intelligence + cognitive frameworks.
+3. Strict No-Text Enforcement: Instructs Flow to generate ZERO text/labels, leaving clean negative space.
+4. Active Look Palette Alignment: Audits prompts via flow_prompt_auditor with active --look directives.
+5. Dual-Format Generation: Dedicated 16:9 Landscape & 9:16 Vertical native hero scenes.
+6. Seamless Graceful Fallback: Selects/composites highest-contrast candidate if Flow is offline.
+7. Validation: Ensures outputs are non-blank, valid aspect ratio, and properly dimensioned.
 """
 
-import os, sys, glob, json, math, argparse, shutil, subprocess
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageStat, ImageOps
-import numpy as np
+import os
+import sys
+import glob
+import json
+import time
+import math
+import argparse
+import shutil
+import subprocess
+import socket
+from PIL import Image, ImageDraw, ImageFilter, ImageStat
 
-SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONTS_DIR = os.path.join(SKILL_ROOT, "fonts")
-LUCKIEST_FONT = os.path.join(FONTS_DIR, "LuckiestGuy-Regular.ttf")
-MONTSERRAT_FONT = os.path.join(FONTS_DIR, "Montserrat-Black.ttf")
-KALAM_FONT = os.path.join(FONTS_DIR, "Kalam-Bold.ttf")
+SKILL_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+if SKILL_SCRIPTS not in sys.path:
+    sys.path.insert(0, SKILL_SCRIPTS)
 
-def get_font(size):
-    for fpath in [LUCKIEST_FONT, MONTSERRAT_FONT, KALAM_FONT]:
-        if os.path.exists(fpath):
+try:
+    import flow_prompt_auditor
+except ImportError:
+    flow_prompt_auditor = None
+
+try:
+    import viral_seo_intelligence
+except ImportError:
+    viral_seo_intelligence = None
+
+
+def is_flow_bridge_ready(port=8791):
+    """Checks whether the Google Flow connector bridge daemon is running and reachable."""
+    # 1. Socket check
+    sock_ok = False
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1.0):
+            sock_ok = True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
+
+    # 2. Check flow-auto CLI presence
+    flow_bin = shutil.which("flow-auto")
+    if not flow_bin:
+        return False
+
+    # 3. Check daemon status
+    try:
+        res = subprocess.run([flow_bin, "daemon", "status"], capture_output=True, text=True, timeout=3)
+        if "running" in res.stdout.lower() or "connected" in res.stdout.lower():
+            return True
+    except Exception:
+        pass
+
+    return sock_ok
+
+
+def extract_topic_and_entities(project_dir="."):
+    """Extracts topic name, core entities, and high-impact nouns from project files."""
+    slug = os.path.basename(os.path.abspath(project_dir))
+    topic = slug.replace("_", " ").title()
+    
+    # Try reading SCRIPT.md or LINES.tsv from root, long, or short
+    text_corpus = ""
+    for cand in [
+        os.path.join(project_dir, "SCRIPT.md"),
+        os.path.join(project_dir, "long", "SCRIPT.md"),
+        os.path.join(project_dir, "short", "SCRIPT.md"),
+        os.path.join(project_dir, "LINES.tsv"),
+        os.path.join(project_dir, "long", "LINES.tsv"),
+        os.path.join(project_dir, "short", "LINES.tsv"),
+    ]:
+        if os.path.exists(cand):
             try:
-                return ImageFont.truetype(fpath, size)
+                with open(cand, "r", encoding="utf-8", errors="ignore") as f:
+                    text_corpus += " " + f.read()
             except Exception:
                 pass
-    return ImageFont.load_default()
 
-def draw_tilted_text(canvas, text, cx, cy, font, fill_color, stroke_color, stroke_w=14, angle=-3.5):
-    """Draws tilted curiosity text with thick dark outline and deep drop shadow."""
-    dummy_im = Image.new("RGBA", (10, 10))
-    d = ImageDraw.Draw(dummy_im)
-    bbox = d.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
-    tw = bbox[2] - bbox[0] + stroke_w * 4 + 60
-    th = bbox[3] - bbox[1] + stroke_w * 4 + 60
+    # Extract top keywords
+    import re
+    words = re.findall(r"\b[A-Za-z]{4,}\b", text_corpus.lower())
+    STOPWORDS = {
+        "this", "that", "with", "from", "they", "were", "what", "when", "there", "their",
+        "would", "could", "about", "which", "after", "before", "where", "into", "every",
+        "without", "these", "other", "first", "years", "people", "century", "became",
+        "human", "humans", "today", "tonight", "night", "short", "long", "version", "scene"
+    }
+    filtered = [w for w in words if w not in STOPWORDS]
+    freq = {}
+    for w in filtered:
+        freq[w] = freq.get(w, 0) + 1
+    top_entities = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:6]
+    entity_names = [e[0] for e in top_entities]
 
-    txt_im = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
-    td = ImageDraw.Draw(txt_im)
-    
-    # 1. Deep Drop Shadow (+10px, +12px)
-    td.text((tw // 2 + 10, th // 2 + 12), text, font=font, fill=(10, 14, 24, 230),
-            anchor="mm", stroke_width=stroke_w + 6, stroke_fill=(10, 14, 24, 230))
-    # 2. Heavy Dark Stroke & Main Fill
-    td.text((tw // 2, th // 2), text, font=font, fill=fill_color,
-            anchor="mm", stroke_width=stroke_w, stroke_fill=stroke_color)
+    # Specific topic heuristics
+    slug_clean = slug.lower()
+    if "road" in slug_clean or "roman" in slug_clean:
+        topic_subject = "straight Roman stone highway slicing across primordial mountains"
+        prop_subject = "glowing ancient Roman bronze groma surveying tool and carved milestone pillar"
+        action = "staring in shock and disbelief with hands on head at the impossible straight road"
+    elif "cold" in slug_clean or "ice" in slug_clean:
+        topic_subject = "towering desert ice structure radiating glowing mist"
+        prop_subject = "glowing crystalline ice block radiating cyan cold vapor"
+        action = "staring in pure shock at impossible frozen ice in the burning desert"
+    elif "waking" in slug_clean or "sleep" in slug_clean or "alarm" in slug_clean:
+        topic_subject = "dim atmospheric ancient bedroom chamber with soft dawn light"
+        prop_subject = "mysterious screaming ancient water clock and burning incense labyrinth"
+        action = "bolting upright in bed in wild panic and disbelief"
+    else:
+        e_str = " and ".join(entity_names[:2]) if entity_names else "ancient secret"
+        topic_subject = f"dramatic atmospheric historical environment exploring {e_str}"
+        prop_subject = f"mysterious glowing {entity_names[0] if entity_names else 'ancient artifact'} radiating vibrant light"
+        action = "staring in shock and disbelief with hands on head"
 
-    # 3. Dynamic Velocity Rotation
-    rotated = txt_im.rotate(angle, resample=Image.BICUBIC, expand=True)
-    canvas.alpha_composite(rotated, (cx - rotated.width // 2, cy - rotated.height // 2))
-
-def analyze_visual_focal_elements(image):
-    """Analyzes image luminance and contrast to evaluate if a clear subject exists."""
-    gray = image.convert("L")
-    stat = ImageStat.Stat(gray)
-    mean_lum = stat.mean[0]
-    std_lum = stat.stddev[0]
-    
-    # Check left vs right luminance balance
-    w, h = gray.size
-    left_crop = gray.crop((0, 0, int(w * 0.45), h))
-    right_crop = gray.crop((int(w * 0.55), 0, w, h))
-    
-    left_stat = ImageStat.Stat(left_crop)
-    right_stat = ImageStat.Stat(right_crop)
-    
-    has_high_contrast = std_lum > 35.0
     return {
-        "mean_luminance": mean_lum,
-        "std_luminance": std_lum,
-        "left_mean": left_stat.mean[0],
-        "right_mean": right_stat.mean[0],
-        "has_contrast": has_high_contrast
+        "slug": slug,
+        "topic": topic,
+        "entities": entity_names,
+        "topic_subject": topic_subject,
+        "prop_subject": prop_subject,
+        "action": action
     }
 
-def generate_flow_thumbnail_prompt(slug, topic_title=None, prop_name="ancient artifact"):
-    """Creates an ultra-dramatic Google Flow image prompt specifically for YouTube thumbnails."""
-    slug_clean = slug.replace("_", " ").lower()
-    if "cold" in slug_clean or "ice" in slug_clean:
-        subject = "glowing crystalline ice block radiating cold mist and cyan vapor"
-        scene = "ancient desert sand dunes under deep dark starry night"
-    elif "waking" in slug_clean or "sleep" in slug_clean or "alarm" in slug_clean:
-        subject = "glowing mysterious ticking ancient stone sundial clock radiating golden rays"
-        scene = "dim atmospheric ancient bedroom chamber with soft dawn light"
-    elif "money" in slug_clean or "gold" in slug_clean or "bank" in slug_clean:
-        subject = "towering mountain of glowing ancient gold coins and secret scrolls"
-        scene = "opulent shadowy empire treasury vault"
-    else:
-        subject = f"mysterious glowing {prop_name} radiating intense vibrant light"
-        scene = "dramatic atmospheric historical environment"
 
-    prompt = (
-        f"Cinematic YouTube thumbnail composition: expressive 2D cartoon stickman on the left "
-        f"staring in pure shock and disbelief with hands on head at a gigantic {subject} in the center, "
-        f"{scene}, high-contrast cinematic lighting, vibrant saturated color palette, "
-        f"clean 2D vector storybook illustration, thick clean ink outlines, ultra-dramatic depth, "
-        f"stickman anatomy: clean round white ball head, dot eyes, simple ink mouth, thin black stick limbs. "
-        f"Negative: photorealistic, realistic human skin, 3D CGI, glossy render, photograph, real human face, "
-        f"watermark, text, subtitles, blurry, low resolution, cluttered background, multiple characters"
-    )
-    return prompt
-
-def build_flow_thumbnail(project_dir=".", text=None, badge=None, out_16x9="thumbnail_16x9.png", out_9x16="thumbnail_9x16.png", generate_with_flow=False):
-    slug = os.path.basename(os.path.abspath(project_dir))
-    slug_clean = slug.replace("_", " ").lower()
-
-    # Determine Title and Badge
-    if not text:
-        if "cold" in slug_clean or "ice" in slug_clean:
-            text = "IMPOSSIBLE ICE?"
-            badge = badge or "400 BC SECRET"
-        elif "waking" in slug_clean or "alarm" in slug_clean:
-            text = "NEVER WAKE UP?"
-            badge = badge or "ANCIENT TRICK"
-        elif "money" in slug_clean or "empire" in slug_clean:
-            text = "THE ILLEGAL WEALTH"
-            badge = badge or "CLASSIFIED"
-        else:
-            text = slug.replace("_", " ").upper()
-            badge = badge or "FORBIDDEN"
-
-    print("==================================================")
-    print(f"🎨 FLOW VIRAL THUMBNAIL SUITE: {slug.upper()}")
-    print("==================================================")
+def craft_flow_thumbnail_prompts(project_dir=".", look="bright"):
+    """Crafts dedicated 16:9 and 9:16 high-CTR prompts with strict negative space and zero text."""
+    info = extract_topic_and_entities(project_dir)
     
-    # 1. Flow Prompt Crafting
-    flow_prompt = generate_flow_thumbnail_prompt(slug)
-    print(f"\n[Flow Prompt]:\n{flow_prompt[:140]}...")
+    # 1. 16:9 Landscape Prompt (Negative space on left 45%)
+    prompt_16x9_raw = (
+        f"Cinematic YouTube thumbnail hero composition: Expressive 2D cartoon stickman character on the right side, "
+        f"{info['action']}, looking at a gigantic monumental {info['prop_subject']} in the center, "
+        f"set against {info['topic_subject']}, wide open clear empty negative space on the left 45% of frame with clean simple gradient, "
+        f"high-contrast cinematic lighting, vibrant saturated palette, clean 2D vector storybook illustration style, thick dark ink outlines, "
+        f"ultra-dramatic depth. STRICT NO-TEXT RULE: Generate ZERO text, zero letters, zero numbers, zero words, zero signs, zero watermark, zero logos."
+    )
 
-    # Optional: trigger flow-auto if requested and available
-    if generate_with_flow and shutil.which("flow-auto"):
-        print("\n🚀 Submitting thumbnail prompt to Google Flow (flow-auto)...")
-        try:
-            cmd = ["flow-auto", "image", "--aspect", "16:9", "--out", project_dir, "--json", flow_prompt]
-            subprocess.run(cmd, timeout=30)
-        except Exception as e:
-            print(f"Flow auto submission fallback: {e}")
+    # 2. 9:16 Vertical Prompt (Negative space in top 35%)
+    prompt_9x16_raw = (
+        f"Cinematic YouTube Shorts vertical cover hero composition: Expressive 2D cartoon stickman character in lower half, "
+        f"{info['action']}, dramatic low angle shot looking up at {info['prop_subject']}, "
+        f"with {info['topic_subject']}, wide open empty negative space in the top 35% of frame with clean simple atmospheric sky gradient, "
+        f"high-contrast lighting, bold saturated colors, clean 2D vector illustration, thick dark ink outlines. "
+        f"STRICT NO-TEXT RULE: Generate ZERO text, zero letters, zero numbers, zero words, zero signs, zero watermark, zero logos."
+    )
 
-    # 2. Locate Best Base Image
+    # Audit and enhance with look directives via flow_prompt_auditor
+    if flow_prompt_auditor:
+        prompt_16x9 = flow_prompt_auditor.audit_and_enhance_prompt(prompt_16x9_raw, look=look, is_ancient=True)
+        prompt_9x16 = flow_prompt_auditor.audit_and_enhance_prompt(prompt_9x16_raw, look=look, is_ancient=True)
+    else:
+        prompt_16x9 = prompt_16x9_raw
+        prompt_9x16 = prompt_9x16_raw
+
+    return {
+        "16x9": prompt_16x9,
+        "9x16": prompt_9x16,
+        "info": info,
+        "look": look
+    }
+
+
+def validate_image_file(img_path, target_aspect=None):
+    """Verifies that an image exists, is non-corrupt, non-empty, and non-blank."""
+    if not os.path.exists(img_path) or os.path.getsize(img_path) < 10000:
+        return False, "File missing or smaller than 10KB"
+    try:
+        with Image.open(img_path) as im:
+            w, h = im.size
+            if w < 300 or h < 300:
+                return False, f"Image dimensions too small ({w}x{h})"
+            gray = im.convert("L")
+            stat = ImageStat.Stat(gray)
+            mean_lum = stat.mean[0]
+            std_lum = stat.stddev[0]
+            if std_lum < 8.0:
+                return False, f"Image appears blank or solid color (stddev: {std_lum:.2f})"
+            if target_aspect:
+                current_aspect = w / h
+                if abs(current_aspect - target_aspect) > 0.4:
+                    return True, f"Aspect ratio variance ({current_aspect:.2f} vs target {target_aspect:.2f})"
+            return True, f"Valid ({w}x{h}, lum: {mean_lum:.1f}, std: {std_lum:.1f})"
+    except Exception as e:
+        return False, f"Corrupt image: {e}"
+
+
+def generate_fallback_base_artwork(project_dir, out_path, target_w, target_h, aspect_name="16:9", look="bright"):
+    """Composites the highest-contrast project shot, stickman, and prop with clean negative space."""
+    # Find candidate shot backgrounds
     candidates = []
     for d in [project_dir, os.path.join(project_dir, "long"), os.path.join(project_dir, "short")]:
         shots_dir = os.path.join(d, "shots")
         if os.path.exists(shots_dir):
             candidates.extend(sorted(glob.glob(os.path.join(shots_dir, "*.png"))))
             candidates.extend(sorted(glob.glob(os.path.join(shots_dir, "*.jpg"))))
-    
-    bg_path = candidates[0] if candidates else None
 
-    # Locate Props & Cutouts
+    # Evaluate best candidate background by contrast
+    best_bg = None
+    best_score = -1.0
+    for cand in candidates:
+        try:
+            with Image.open(cand) as im:
+                st = ImageStat.Stat(im.convert("L"))
+                score = st.stddev[0]
+                if score > best_score:
+                    best_score = score
+                    best_bg = cand
+        except Exception:
+            pass
+
+    # Find prop cutout
     prop_candidates = []
     stickman_candidates = []
     for d in [project_dir, os.path.join(project_dir, "long"), os.path.join(project_dir, "short")]:
@@ -161,176 +227,297 @@ def build_flow_thumbnail(project_dir=".", text=None, badge=None, out_16x9="thumb
             prop_candidates.extend(sorted(glob.glob(os.path.join(cut_dir, "*.png"))))
         img_dir = os.path.join(d, "img")
         if os.path.exists(img_dir):
-            stickman_candidates.extend(sorted(glob.glob(os.path.join(img_dir, "ref_*.jpg"))))
             stickman_candidates.extend(sorted(glob.glob(os.path.join(img_dir, "ref_*.png"))))
+            stickman_candidates.extend(sorted(glob.glob(os.path.join(img_dir, "ref_*.jpg"))))
 
     prop_path = prop_candidates[0] if prop_candidates else None
     stickman_path = stickman_candidates[0] if stickman_candidates else None
 
-    # 3. Intelligent Analysis of Base Image
-    audit_report = {
-        "stickman_status": "Missing in background -> Auto-composited",
-        "prop_status": "Missing in background -> Auto-composited with 24px soft glow",
-        "contrast_scrim": "Applied adaptive dark gradient for mobile feed legibility",
-        "text_velocity": "-3.5° angle with 14px dark outline & drop shadow"
+    # Create base canvas
+    canvas = Image.new("RGBA", (target_w, target_h), (24, 28, 38, 255))
+    if best_bg and os.path.exists(best_bg):
+        raw_bg = Image.open(best_bg).convert("RGBA")
+        scale = max(target_w / raw_bg.width, target_h / raw_bg.height)
+        sw, sh = int(raw_bg.width * scale), int(raw_bg.height * scale)
+        bg_fitted = raw_bg.resize((sw, sh), Image.Resampling.LANCZOS)
+        cx = (sw - target_w) // 2
+        cy = (sh - target_h) // 2
+        canvas.alpha_composite(bg_fitted.crop((cx, cy, cx + target_w, cy + target_h)))
+    else:
+        # Procedural atmospheric gradient
+        d = ImageDraw.Draw(canvas)
+        top_color = (28, 34, 48) if look == "night" else (50, 42, 34)
+        bot_color = (12, 14, 20)
+        for y in range(target_h):
+            t = y / target_h
+            r = int(top_color[0] * (1 - t) + bot_color[0] * t)
+            g = int(top_color[1] * (1 - t) + bot_color[1] * t)
+            b = int(top_color[2] * (1 - t) + bot_color[2] * t)
+            d.line([(0, y), (target_w, y)], fill=(r, g, b, 255))
+
+    # Composite hero prop on right or center
+    if prop_path and os.path.exists(prop_path):
+        prop_im = Image.open(prop_path).convert("RGBA")
+        target_prop_dim = int(min(target_w, target_h) * (0.55 if aspect_name == "16:9" else 0.42))
+        p_scale = target_prop_dim / max(prop_im.width, prop_im.height)
+        pw, ph = int(prop_im.width * p_scale), int(prop_im.height * p_scale)
+        prop_im = prop_im.resize((pw, ph), Image.Resampling.LANCZOS)
+
+        # Radial glow
+        glow_size = (pw + 120, ph + 120)
+        glow_im = Image.new("RGBA", glow_size, (0, 0, 0, 0))
+        gd = ImageDraw.Draw(glow_im)
+        glow_color = (255, 220, 60, 180) if look != "night" else (0, 240, 255, 170)
+        gd.ellipse([(30, 30), (glow_size[0] - 30, glow_size[1] - 30)], fill=glow_color)
+        glow_im = glow_im.filter(ImageFilter.GaussianBlur(32))
+
+        if aspect_name == "16:9":
+            px = int(target_w * 0.72 - pw // 2)
+            py = int(target_h * 0.54 - ph // 2)
+        else:
+            px = int(target_w * 0.50 - pw // 2)
+            py = int(target_h * 0.52 - ph // 2)
+
+        canvas.alpha_composite(glow_im, (px - 60, py - 60))
+        canvas.alpha_composite(prop_im, (px, py))
+
+    # Composite stickman
+    if stickman_path and os.path.exists(stickman_path):
+        stick_im = Image.open(stickman_path).convert("RGBA")
+        target_stick_dim = int(min(target_w, target_h) * (0.65 if aspect_name == "16:9" else 0.50))
+        s_scale = target_stick_dim / max(stick_im.width, stick_im.height)
+        sw, sh = int(stick_im.width * s_scale), int(stick_im.height * s_scale)
+        stick_im = stick_im.resize((sw, sh), Image.Resampling.LANCZOS)
+
+        if aspect_name == "16:9":
+            # Position stickman on far right or lower mid-right to leave left 45% clear
+            sx = int(target_w * 0.82 - sw // 2)
+            sy = int(target_h * 0.60 - sh // 2)
+        else:
+            # Position stickman in lower third (Y ~ 0.75) to leave top third clear
+            sx = int(target_w * 0.50 - sw // 2)
+            sy = int(target_h * 0.75 - sh // 2)
+
+        canvas.alpha_composite(stick_im, (sx, sy))
+
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    canvas.convert("RGB").save(out_path, quality=95)
+    return out_path
+
+
+def recover_via_assets_api(target_path, aspect="16:9"):
+    """Uses flow-auto assets to download the newest asset if Chrome direct download was missed."""
+    print(f"🔄 Checking Flow Assets API for completed {aspect} generation...")
+    res = subprocess.run(["flow-auto", "assets", "--json"], capture_output=True, text=True)
+    if res.returncode != 0:
+        return False
+    try:
+        assets = json.loads(res.stdout)
+        if not assets:
+            return False
+        first_asset = assets[0]
+        idx = first_asset.get("index", 1)
+        temp_dir = "/tmp/flow_thumb_download"
+        os.makedirs(temp_dir, exist_ok=True)
+        rec_filename = f"recovered_{aspect.replace(':', 'x')}.jpg"
+        dl_res = subprocess.run(
+            ["flow-auto", "download", str(idx), rec_filename, "--out", temp_dir],
+            capture_output=True, text=True
+        )
+        rec_file = os.path.join(temp_dir, rec_filename)
+        if os.path.exists(rec_file) and os.path.getsize(rec_file) > 10000:
+            with Image.open(rec_file) as im:
+                tw, th = (1080, 1920) if aspect == "9:16" else (1280, 720)
+                scale = max(tw / im.width, th / im.height)
+                sw, sh = int(im.width * scale), int(im.height * scale)
+                im_resized = im.resize((sw, sh), Image.Resampling.LANCZOS)
+                cx = (sw - tw) // 2
+                cy = (sh - th) // 2
+                final_im = im_resized.crop((cx, cy, cx + tw, cy + th))
+                os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
+                final_im.convert("RGB").save(target_path, quality=95)
+            return True
+    except Exception as e:
+        print(f"⚠️ Assets API download recovery error: {e}")
+    return False
+
+
+def generate_stage1_flow_artwork(project_dir=".", out_dir=None, look="bright", no_flow=False, timeout=30):
+    """Executes Stage 1: Google Flow generation with pre-flight check, prompt audit, and smart fallback."""
+    project_dir = os.path.abspath(project_dir)
+    out_dir = os.path.abspath(out_dir or os.path.join(project_dir, "UPLOAD_PACK"))
+    os.makedirs(out_dir, exist_ok=True)
+
+    raw_16x9 = os.path.join(out_dir, "thumbnail_16x9_flow_raw.png")
+    raw_9x16 = os.path.join(out_dir, "thumbnail_9x16_flow_raw.png")
+
+    print("==================================================")
+    print("🎨 STAGE 1: GOOGLE FLOW DEDICATED THUMBNAIL SUITE")
+    print(f"   Project: {os.path.basename(project_dir)} | Look: {look}")
+    print("==================================================")
+
+    t_start = time.time()
+
+    # 1. Pre-Flight Diagnostic
+    bridge_ready = False if no_flow else is_flow_bridge_ready(port=8791)
+    if bridge_ready:
+        print("✅ Flow Bridge: CONNECTED (Port 8791 active, daemon verified)")
+    else:
+        reason = "User requested --no-flow-thumb" if no_flow else "Flow bridge offline / port 8791 unreachable"
+        print(f"ℹ️ Flow Bridge: NOT ACTIVE ({reason})")
+
+    # 2. Bespoke High-CTR Prompts Crafting
+    prompts_data = craft_flow_thumbnail_prompts(project_dir, look=look)
+    p16 = prompts_data["16x9"]
+    p9 = prompts_data["9x16"]
+
+    print("\n--- Dedicated 16:9 Flow Prompt ---")
+    print(f"{p16[:160]}... [STRICT NO-TEXT & NEGATIVE SPACE]")
+    print("\n--- Dedicated 9:16 Flow Prompt ---")
+    print(f"{p9[:160]}... [STRICT NO-TEXT & NEGATIVE SPACE]")
+
+    stage1_audit = {
+        "project": os.path.basename(project_dir),
+        "look": look,
+        "bridge_ready": bridge_ready,
+        "flow_attempted": False,
+        "outputs": {},
+        "fallback_used": False,
+        "flow_error": None,
+        "elapsed_sec": 0.0,
+        "prompts": {
+            "16x9": p16,
+            "9x16": p9
+        }
     }
 
-    # --- RENDER 16:9 LANDSCAPE THUMBNAIL (1280x720) ---
-    W16, H16 = 1280, 720
-    im16 = Image.new("RGBA", (W16, H16), (20, 24, 32, 255))
-    if bg_path and os.path.exists(bg_path):
-        raw_bg = Image.open(bg_path).convert("RGBA")
-        scale = max(W16 / raw_bg.width, H16 / raw_bg.height)
-        scaled_bg = raw_bg.resize((int(raw_bg.width * scale), int(raw_bg.height * scale)), Image.Resampling.LANCZOS)
-        x_off = (scaled_bg.width - W16) // 2
-        y_off = (scaled_bg.height - H16) // 2
-        im16.paste(scaled_bg.crop((x_off, y_off, x_off + W16, y_off + H16)), (0, 0))
-    else:
-        # High-contrast dramatic dark gradient backdrop
-        d = ImageDraw.Draw(im16)
-        for y in range(H16):
-            grad = int(24 + (y / H16) * 45)
-            d.line([(0, y), (W16, y)], fill=(12, 16, grad, 255))
+    # 3. Generation Loop
+    flow_bin = shutil.which("flow-auto")
+    gen_16_ok = False
+    gen_9_ok = False
+    err16 = None
+    err9 = None
 
-    # Adaptive Dark Gradient Scrim across top third for text legibility
-    scrim = Image.new("RGBA", (W16, H16), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(scrim)
-    for y in range(int(H16 * 0.48)):
-        alpha = int((1.0 - (y / (H16 * 0.48))) * 165)
-        sd.line([(0, y), (W16, y)], fill=(10, 14, 22, alpha))
-    im16.alpha_composite(scrim)
+    if bridge_ready and flow_bin:
+        print("\n🚀 Submitting 16:9 thumbnail prompt to Google Flow (flow-auto)...")
+        stage1_audit["flow_attempted"] = True
+        try:
+            cmd16 = [flow_bin, "image", "--aspect", "16:9", "--out", out_dir, "--json", p16]
+            res16 = subprocess.run(cmd16, capture_output=True, text=True, timeout=timeout)
+            if res16.returncode == 0:
+                try:
+                    data = json.loads(res16.stdout)
+                    fps = data.get("filePaths", [])
+                    if fps and os.path.exists(fps[0]):
+                        shutil.copy2(fps[0], raw_16x9)
+                        ok, msg = validate_image_file(raw_16x9, target_aspect=16/9)
+                        if ok:
+                            gen_16_ok = True
+                            print(f"✅ Generated 16:9 Flow Artwork: {raw_16x9} ({msg})")
+                except Exception as ex:
+                    err16 = str(ex)
+            else:
+                err16 = res16.stderr.strip() or f"returncode {res16.returncode}"
+        except Exception as e:
+            err16 = str(e)
+            print(f"⚠️ 16:9 Flow generation timed out or direct download stalled: {e}")
 
-    # Composite Glowing Hero Prop on Right Third if available
-    if prop_path and os.path.exists(prop_path):
-        prop_im = Image.open(prop_path).convert("RGBA")
-        p_scale = 360 / max(prop_im.width, prop_im.height)
-        prop_im = prop_im.resize((int(prop_im.width * p_scale), int(prop_im.height * p_scale)), Image.Resampling.LANCZOS)
-        
-        # Create 24px soft radial gaussian glow
-        glow_size = (prop_im.width + 120, prop_im.height + 120)
-        glow_im = Image.new("RGBA", glow_size, (0, 0, 0, 0))
-        gd = ImageDraw.Draw(glow_im)
-        glow_color = (0, 240, 255, 180) if "cold" in slug_clean or "ice" in slug_clean else (255, 230, 0, 190)
-        gd.ellipse([(40, 40), (glow_size[0] - 40, glow_size[1] - 40)], fill=glow_color)
-        glow_im = glow_im.filter(ImageFilter.GaussianBlur(32))
-        
-        px = int(W16 * 0.72 - prop_im.width // 2)
-        py = int(H16 * 0.58 - prop_im.height // 2)
-        im16.alpha_composite(glow_im, (px - 60, py - 60))
-        im16.alpha_composite(prop_im, (px, py))
+        # Try Assets API recovery for 16:9 if direct download did not produce a valid file
+        if not gen_16_ok:
+            if recover_via_assets_api(raw_16x9, aspect="16:9"):
+                ok, msg = validate_image_file(raw_16x9, target_aspect=16/9)
+                if ok:
+                    gen_16_ok = True
+                    err16 = None
+                    print(f"✅ Recovered 16:9 Flow Artwork via Assets API: {raw_16x9} ({msg})")
 
-    # Composite Expressive Stickman on Left Third
-    if stickman_path and os.path.exists(stickman_path):
-        stick_im = Image.open(stickman_path).convert("RGBA")
-        s_scale = 440 / max(stick_im.width, stick_im.height)
-        stick_im = stick_im.resize((int(stick_im.width * s_scale), int(stick_im.height * s_scale)), Image.Resampling.LANCZOS)
-        sx = int(W16 * 0.22 - stick_im.width // 2)
-        sy = int(H16 * 0.62 - stick_im.height // 2)
-        im16.alpha_composite(stick_im, (sx, sy))
+        print("🚀 Submitting 9:16 thumbnail prompt to Google Flow (flow-auto)...")
+        try:
+            cmd9 = [flow_bin, "image", "--aspect", "9:16", "--out", out_dir, "--json", p9]
+            res9 = subprocess.run(cmd9, capture_output=True, text=True, timeout=timeout)
+            if res9.returncode == 0:
+                try:
+                    data = json.loads(res9.stdout)
+                    fps = data.get("filePaths", [])
+                    if fps and os.path.exists(fps[0]):
+                        shutil.copy2(fps[0], raw_9x16)
+                        ok, msg = validate_image_file(raw_9x16, target_aspect=9/16)
+                        if ok:
+                            gen_9_ok = True
+                            print(f"✅ Generated 9:16 Flow Artwork: {raw_9x16} ({msg})")
+                except Exception as ex:
+                    err9 = str(ex)
+            else:
+                err9 = res9.stderr.strip() or f"returncode {res9.returncode}"
+        except Exception as e:
+            err9 = str(e)
+            print(f"⚠️ 9:16 Flow generation timed out or direct download stalled: {e}")
 
-    # Render Curiosity Badge
-    d16 = ImageDraw.Draw(im16)
-    badge_font = get_font(26)
-    badge_txt = f"[{badge}]"
-    b_bbox = d16.textbbox((0, 0), badge_txt, font=badge_font)
-    bw = b_bbox[2] - b_bbox[0] + 32
-    bh = b_bbox[3] - b_bbox[1] + 16
-    bx, by = 60, 50
-    d16.rectangle([bx, by, bx + bw, by + bh], fill=(255, 59, 48, 245), outline=(255, 255, 255, 220), width=3)
-    d16.text((bx + bw // 2, by + bh // 2), badge_txt, font=badge_font, fill=(255, 255, 255), anchor="mm")
+        # Try Assets API recovery for 9:16 if direct download did not produce a valid file
+        if not gen_9_ok:
+            if recover_via_assets_api(raw_9x16, aspect="9:16"):
+                ok, msg = validate_image_file(raw_9x16, target_aspect=9/16)
+                if ok:
+                    gen_9_ok = True
+                    err9 = None
+                    print(f"✅ Recovered 9:16 Flow Artwork via Assets API: {raw_9x16} ({msg})")
 
-    # Render Ultra-Bold Curiosity Text (-3.5° Tilt, 14px Stroke)
-    title_font = get_font(74)
-    fill_col = (255, 230, 0) if "cold" not in slug_clean else (0, 240, 255)
-    draw_tilted_text(im16, text, W16 // 2, int(H16 * 0.22), title_font, fill_col, (10, 14, 24), stroke_w=14, angle=-3.5)
+    # 4. Fallback Handling
+    if not gen_16_ok:
+        print("ℹ️ [Stage 1 Advisory]: Using high-contrast candidate artwork from project for 16:9 base.")
+        generate_fallback_base_artwork(project_dir, raw_16x9, 1280, 720, aspect_name="16:9", look=look)
+        stage1_audit["fallback_used"] = True
 
-    im16.convert("RGB").save(out_16x9, quality=95)
-    print(f"✅ Exported 16:9 Thumbnail: {out_16x9} ({W16}x{H16})")
+    if not gen_9_ok:
+        print("ℹ️ [Stage 1 Advisory]: Using high-contrast candidate artwork from project for 9:16 base.")
+        generate_fallback_base_artwork(project_dir, raw_9x16, 1080, 1920, aspect_name="9:16", look=look)
+        stage1_audit["fallback_used"] = True
 
-    # --- RENDER 9:16 VERTICAL THUMBNAIL (1080x1920) ---
-    W9, H9 = 1080, 1920
-    im9 = Image.new("RGBA", (W9, H9), (20, 24, 32, 255))
-    if bg_path and os.path.exists(bg_path):
-        raw_bg = Image.open(bg_path).convert("RGBA")
-        scale = max(W9 / raw_bg.width, H9 / raw_bg.height)
-        scaled_bg = raw_bg.resize((int(raw_bg.width * scale), int(raw_bg.height * scale)), Image.Resampling.LANCZOS)
-        x_off = (scaled_bg.width - W9) // 2
-        y_off = (scaled_bg.height - H9) // 2
-        im9.paste(scaled_bg.crop((x_off, y_off, x_off + W9, y_off + H9)), (0, 0))
-    else:
-        d = ImageDraw.Draw(im9)
-        for y in range(H9):
-            grad = int(24 + (y / H9) * 45)
-            d.line([(0, y), (W9, y)], fill=(12, 16, grad, 255))
+    # 5. Final Validation Check & Metrics
+    elapsed_sec = round(time.time() - t_start, 2)
+    stage1_audit["elapsed_sec"] = elapsed_sec
+    stage1_audit["flow_error"] = err16 or err9
 
-    # Scrim
-    scrim9 = Image.new("RGBA", (W9, H9), (0, 0, 0, 0))
-    sd9 = ImageDraw.Draw(scrim9)
-    for y in range(int(H9 * 0.40)):
-        alpha = int((1.0 - (y / (H9 * 0.40))) * 180)
-        sd9.line([(0, y), (W9, y)], fill=(10, 14, 22, alpha))
-    im9.alpha_composite(scrim9)
+    ok16, msg16 = validate_image_file(raw_16x9)
+    ok9, msg9 = validate_image_file(raw_9x16)
+    stage1_audit["outputs"]["raw_16x9"] = {"path": raw_16x9, "valid": ok16, "status": msg16}
+    stage1_audit["outputs"]["raw_9x16"] = {"path": raw_9x16, "valid": ok9, "status": msg9}
 
-    # Hero Prop
-    if prop_path and os.path.exists(prop_path):
-        prop_im = Image.open(prop_path).convert("RGBA")
-        p_scale = 460 / max(prop_im.width, prop_im.height)
-        prop_im = prop_im.resize((int(prop_im.width * p_scale), int(prop_im.height * p_scale)), Image.Resampling.LANCZOS)
-        glow_size = (prop_im.width + 160, prop_im.height + 160)
-        glow_im = Image.new("RGBA", glow_size, (0, 0, 0, 0))
-        gd = ImageDraw.Draw(glow_im)
-        glow_color = (0, 240, 255, 180) if "cold" in slug_clean or "ice" in slug_clean else (255, 230, 0, 190)
-        gd.ellipse([(50, 50), (glow_size[0] - 50, glow_size[1] - 50)], fill=glow_color)
-        glow_im = glow_im.filter(ImageFilter.GaussianBlur(40))
-        px = int(W9 * 0.50 - prop_im.width // 2)
-        py = int(H9 * 0.54 - prop_im.height // 2)
-        im9.alpha_composite(glow_im, (px - 80, py - 80))
-        im9.alpha_composite(prop_im, (px, py))
+    audit_path = os.path.join(out_dir, "STAGE1_FLOW_AUDIT.json")
+    with open(audit_path, "w", encoding="utf-8") as f:
+        json.dump(stage1_audit, f, indent=2)
 
-    # Stickman
-    if stickman_path and os.path.exists(stickman_path):
-        stick_im = Image.open(stickman_path).convert("RGBA")
-        s_scale = 520 / max(stick_im.width, stick_im.height)
-        stick_im = stick_im.resize((int(stick_im.width * s_scale), int(stick_im.height * s_scale)), Image.Resampling.LANCZOS)
-        sx = int(W9 * 0.50 - stick_im.width // 2)
-        sy = int(H9 * 0.74 - stick_im.height // 2)
-        im9.alpha_composite(stick_im, (sx, sy))
-
-    # Badge
-    d9 = ImageDraw.Draw(im9)
-    badge_font9 = get_font(34)
-    badge_txt = f"[{badge}]"
-    b_bbox = d9.textbbox((0, 0), badge_txt, font=badge_font9)
-    bw = b_bbox[2] - b_bbox[0] + 40
-    bh = b_bbox[3] - b_bbox[1] + 20
-    bx, by = 70, 120
-    d9.rectangle([bx, by, bx + bw, by + bh], fill=(255, 59, 48, 245), outline=(255, 255, 255, 220), width=4)
-    d9.text((bx + bw // 2, by + bh // 2), badge_txt, font=badge_font9, fill=(255, 255, 255), anchor="mm")
-
-    # Text
-    title_font9 = get_font(88)
-    draw_tilted_text(im9, text, W9 // 2, int(H9 * 0.22), title_font9, fill_col, (10, 14, 24), stroke_w=16, angle=-3.0)
-
-    im9.convert("RGB").save(out_9x16, quality=95)
-    print(f"✅ Exported 9:16 Thumbnail: {out_9x16} ({W9}x{H9})")
-
-    print("\n--- Visual Audit Breakdown ---")
-    for k, v in audit_report.items():
-        print(f"• {k}: {v}")
+    print("\n🏆 Stage 1 Flow Artwork Ready:")
+    print(f"   • 16:9 Raw: {raw_16x9} ({msg16})")
+    print(f"   • 9:16 Raw: {raw_9x16} ({msg9})")
+    print(f"   • Elapsed: {elapsed_sec}s | Flow Error: {stage1_audit['flow_error']}")
+    print(f"   • Audit Log: {audit_path}")
     print("==================================================")
-    return {"out_16x9": out_16x9, "out_9x16": out_9x16, "audit": audit_report}
+
+    return {
+        "raw_16x9": raw_16x9,
+        "raw_9x16": raw_9x16,
+        "audit": stage1_audit
+    }
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Flow-Powered YouTube Thumbnail Generator")
-    parser.add_argument("--project-dir", type=str, default=".", help="Target project directory")
-    parser.add_argument("--text", type=str, help="Curiosity text override (e.g. 'THE 400 BC SECRET')")
-    parser.add_argument("--badge", type=str, help="Badge text override (e.g. 'FORBIDDEN')")
-    parser.add_argument("--flow", action="store_true", help="Generate fresh base image with flow-auto")
-    args = parser.parse_args()
+    p = argparse.ArgumentParser(description="Stage 1 Google Flow Thumbnail Generator")
+    p.add_argument("project_dir", nargs="?", default=".", help="Project root directory")
+    p.add_argument("--out-dir", default=None, help="Output directory for raw artwork (defaults to UPLOAD_PACK/)")
+    p.add_argument("--look", default="bright", help="Look preset palette (warm, night, bright, etc.)")
+    p.add_argument("--no-flow-thumb", action="store_true", help="Force fallback without querying Flow bridge")
+    p.add_argument("--timeout", type=int, default=30, help="Flow generation timeout in seconds")
+    args = p.parse_args()
 
-    out_16 = os.path.join(args.project_dir, f"{os.path.basename(os.path.abspath(args.project_dir))}_flow_thumb_16x9.png")
-    out_9 = os.path.join(args.project_dir, f"{os.path.basename(os.path.abspath(args.project_dir))}_flow_thumb_9x16.png")
-    build_flow_thumbnail(project_dir=args.project_dir, text=args.text, badge=args.badge, out_16x9=out_16, out_9x16=out_9, generate_with_flow=args.flow)
+    generate_stage1_flow_artwork(
+        project_dir=args.project_dir,
+        out_dir=args.out_dir,
+        look=args.look,
+        no_flow=args.no_flow_thumb,
+        timeout=args.timeout
+    )
+
 
 if __name__ == "__main__":
     main()

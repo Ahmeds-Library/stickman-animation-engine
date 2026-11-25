@@ -10,7 +10,7 @@ Features:
 5. Zero-Skip Guarantee: Never leaves a placeholder or duplicate box.
 """
 
-import glob, json, os, re, shutil, subprocess, sys, time
+import csv, glob, json, os, re, shutil, subprocess, sys, time
 from PIL import Image
 import numpy as np
 
@@ -34,7 +34,28 @@ SENSITIVE_REPLACEMENTS = {
     r"\bblood\b": "red aura",
 }
 
-def get_style_tokens():
+def get_style_tokens(look_override=None):
+    look_name = look_override
+    if not look_name:
+        for p in ["STYLE.txt", "../STYLE.txt"]:
+            if os.path.exists(p):
+                for line in open(p, encoding="utf-8"):
+                    if line.strip().lower().startswith("look:"):
+                        look_name = line.strip().split(":", 1)[1].strip()
+                        break
+    if look_name:
+        md_paths = [
+            os.path.join(SKILL_SCRIPTS, f"../looks/{look_name}.md"),
+            f"/home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/looks/{look_name}.md"
+        ]
+        for mp in md_paths:
+            if os.path.exists(mp):
+                content = open(mp, encoding="utf-8").read()
+                if "**STYLE**" in content:
+                    part = content.split("**STYLE**", 1)[1]
+                    lines = [l.strip() for l in part.splitlines() if l.strip() and not l.strip().startswith("(") and not l.strip().startswith("#")]
+                    if lines:
+                        return lines[0]
     for p in ["STYLE.txt", "../STYLE.txt"]:
         if os.path.exists(p):
             lines = open(p, encoding="utf-8").read().splitlines()
@@ -307,7 +328,16 @@ def generate_smart(prompt, aspect, target_path, is_sticker=False, max_retries=3)
                     return True
                 else:
                     print(f"⚠️ Image verification failed ({msg}), refining prompt for retry...")
-                    current_prompt = f"Tight vertical portrait shot, centered vertical composition, full bleed tall frame, towering vertical scale, absolutely no letterbox, no bars. {prompt}"
+                    if attempt >= 2:
+                        # 3-Strike Shot Simplification Rule: simplify to clean single-subject composition on 3rd try
+                        core_base = re.split(r"\b(?:Composition:|Style:|Negative:)\b", prompt)[0].strip()[:260]
+                        st_tok = get_style_tokens()[:220]
+                        if aspect == "9:16":
+                            current_prompt = f"A true full-height vertical 9:16 portrait orientation illustration, no phone bezel, no text: clean single focal subject of {core_base}. Style: {st_tok}. Negative: photorealistic, 3D CGI, horizontal bars, text, watermark."
+                        else:
+                            current_prompt = f"Clean 16:9 single-subject 2D cartoon illustration of {core_base}. Style: {st_tok}. Negative: photorealistic, 3D CGI, text, watermark."
+                    else:
+                        current_prompt = f"Tight vertical portrait shot, centered vertical composition, full bleed tall frame, towering vertical scale, absolutely no letterbox, no bars. {prompt}"
             else:
                 # Chroma-key sticker
                 print(f"🎨 Chroma-keying {dest_raw} -> {cut_path}...")
@@ -316,6 +346,22 @@ def generate_smart(prompt, aspect, target_path, is_sticker=False, max_retries=3)
                         cut_im = key.key(dest_raw)
                         cut_im.save(cut_path)
                         ok, msg = verify_sticker_cutout(cut_path)
+                        if not ok:
+                            print(f"⚠️ Keying verification failed: {msg}")
+                            # Self-healing cutout fallback: try luminance/border flood-fill via cutout.py
+                            try:
+                                import cutout
+                                print(f"🔧 [Self-Healing Cutout]: Keying failed ({msg}). Attempting luminance/border flood-fill via cutout.py...")
+                                cut_im_healed = cutout.cutout(dest_raw)
+                                cut_im_healed.save(cut_path)
+                                ok_healed, msg_healed = verify_sticker_cutout(cut_path)
+                                if ok_healed:
+                                    ok = True
+                                    msg = f"Self-healed via cutout.py: {msg_healed}"
+                                    print(f"✅ Self-healing cutout succeeded: {cut_path} ({msg})")
+                            except Exception as heal_err:
+                                print(f"⚠️ Self-healing cutout fallback error: {heal_err}")
+
                         if ok:
                             try:
                                 shared_pool_cut = os.path.join(os.path.dirname(os.path.abspath(os.getcwd())), "elements", "cut")
@@ -326,7 +372,6 @@ def generate_smart(prompt, aspect, target_path, is_sticker=False, max_retries=3)
                             print(f"✅ Transparent sticker ready: {cut_path} ({msg})")
                             return True
                         else:
-                            print(f"⚠️ Keying verification failed: {msg}")
                             current_prompt = (
                                 f"{prompt}. Isolated subject centered on pure solid flat magenta background #FF00FF, "
                                 f"crisp clean dark ink outlines, ample negative margin around subject, zero edge clipping, "
@@ -409,19 +454,31 @@ def generate_all_shots(aspect=None, force=False, target_shot=None):
             continue
             
         prompt = s["prompt"].strip()
+        ref_char = (s.get("ref") or "").strip()
+        try:
+            import flow_prompt_auditor
+            prompt = flow_prompt_auditor.strip_lazy_adjectives(prompt)
+            anchors = flow_prompt_auditor.load_cast_anchors(".")
+            if ref_char and ref_char in anchors and anchors[ref_char][:24].lower() not in prompt.lower():
+                prompt = f"{anchors[ref_char]} {prompt}"
+        except Exception:
+            pass
         side = s.get("space", "").strip().lower()
         if is_16x9:
             if side in ("left", "right"):
                 keep = "left" if side == "right" else "right"
-                prompt += f" Composition: a complete 16:9 widescreen landscape scene with the subject towards the {keep} and open background on the {side} side."
+                prompt += f" Composition: complete 16:9 widescreen scene, subject on {keep}, open background on {side}."
             elif side == "top":
-                prompt += " Composition: a complete 16:9 widescreen landscape scene with the subject in lower half and open sky/wall at top."
+                prompt += " Composition: complete 16:9 widescreen scene, subject in lower half, open sky above."
             else:
-                prompt += " Composition: a complete 16:9 cinematic widescreen landscape scene."
-            full_prompt = f"{prompt}. Style: {style_tok}. Absolutely no text, no letters, no labels, no watermark.{NEGATIVE_PROMPT}"
+                prompt += " Composition: complete 16:9 widescreen 2D cartoon scene."
+            neg_compact = " Negative: photorealistic, 3D CGI, text, watermark, no wristwatch, no plastic, no smartphone bezel, no electric light, no modern cars."
+            body_16 = f"{prompt}. Style: {style_tok}"
+            if len(body_16) + len(neg_compact) > 1190:
+                body_16 = body_16[:1190 - len(neg_compact)].rsplit(",", 1)[0]
+            full_prompt = f"{body_16}{neg_compact}"
         else:
-            # SHORTS 9:16 NATIVE VERTICAL PROMPT ARCHITECTURE:
-            # 1. Sanitize horizontal trigger words
+            # SHORTS 9:16 NATIVE VERTICAL PROMPT ARCHITECTURE (< 1200 chars, token-0 vertical prefix)
             sanitized = prompt
             for horiz_w, vert_rep in [
                 (r"\blandscape\b", "vertical environment"),
@@ -432,28 +489,21 @@ def generate_all_shots(aspect=None, force=False, target_shot=None):
             ]:
                 sanitized = re.sub(horiz_w, vert_rep, sanitized, flags=re.IGNORECASE)
 
-            # 2. Front-load vertical framing tokens (highest attention weight)
-            prefix = "A true full-height vertical 9:16 portrait illustration, tall mobile smartphone wallpaper framing: "
-
-            # 3. Dynamic space composition for overlays
+            prefix = "A true full-height vertical 9:16 portrait orientation illustration. Clean edge-to-edge canvas, no phone frame, no device bezel, no text: "
             if side in ("left", "right"):
                 keep = "left" if side == "right" else "right"
-                comp = (f"Framing: Strictly vertical 9:16 mobile phone portrait framing filling the entire canvas from top to bottom, "
-                        f"subject framed vertically towards the {keep} with open background on the {side} side. "
-                        f"Tall vertical perspective, subject filling full vertical height, absolutely no landscape composition, "
-                        f"no horizontal bars, no letterbox, no pillarbox, edge-to-edge illustration.")
+                comp = f"Tall 9:16 framing, subject on {keep}, open space on {side}, zero borders."
             elif side == "top":
-                comp = ("Framing: Strictly vertical 9:16 mobile phone portrait framing filling the entire canvas from top to bottom, "
-                        "subject framed vertically in lower half with open vertical space above. "
-                        "Tall vertical perspective, subject filling full vertical height, absolutely no landscape composition, "
-                        "no horizontal bars, no letterbox, no pillarbox, edge-to-edge illustration.")
+                comp = "Tall 9:16 framing, subject in lower half, open vertical space above, zero borders."
             else:
-                comp = ("Framing: Strictly vertical 9:16 mobile phone portrait framing filling the entire canvas from top to bottom, "
-                        "subject centered vertically with generous top and bottom height. "
-                        "Tall vertical perspective, subject filling full vertical height, absolutely no landscape composition, "
-                        "no horizontal bars, no letterbox, no pillarbox, edge-to-edge illustration.")
+                comp = "Tall 9:16 framing, centered vertical composition filling full height, zero borders."
 
-            full_prompt = f"{prefix}{sanitized}. {comp} Style: {style_tok}. Absolutely no text, no letters, no labels, no watermark.{SHORTS_NEGATIVE_PROMPT}"
+            neg_9 = " Negative: horizontal, widescreen, 16:9, letterboxing, phone mockup, photorealistic, 3D CGI, text, watermark, no wristwatch, no plastic, no smartphone bezel, no electric light, no cars."
+            style_short = style_tok[:260]
+            max_san = max(180, 1180 - len(prefix) - len(comp) - len(style_short) - len(neg_9) - 16)
+            if len(sanitized) > max_san:
+                sanitized = sanitized[:max_san].rsplit(",", 1)[0].strip()
+            full_prompt = f"{prefix}{sanitized}. {comp} Style: {style_short}.{neg_9}"[:1198]
 
         print(f"\n[{idx}/{total}] 🎬 Generating Scene {sid_raw}: {target} ({aspect})...")
         generate_smart(full_prompt, aspect=aspect, target_path=target, is_sticker=False)
@@ -585,11 +635,13 @@ def generate_all_elements(force=False, target_element=None):
                   f"no table, no floor, no background clutter, no people. Style: {style_tok}. "
                   f"Absolutely no text, no letters, no labels, no watermark.{NEGATIVE_PROMPT}")
         print(f"\n[{idx}/{total}] 🎨 Generating Sticker Prop {eid_raw}: {target_cut}...")
-        generate_smart(prompt, aspect="1:1", target_path=target_cut, is_sticker=True)
+        ok_gen = generate_smart(prompt, aspect="1:1", target_path=target_cut, is_sticker=True)
         try:
             import asset_registry
             p_root = asset_registry.resolve_project_root(os.getcwd())
             asset_registry.scan_and_rebuild_registry(p_root)
+            if ok_gen and os.path.exists(target_cut):
+                asset_registry.register_sticker_in_global_vault(target_cut, eid_raw, tags=obj)
         except Exception:
             pass
 

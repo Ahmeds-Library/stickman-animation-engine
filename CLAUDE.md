@@ -6,8 +6,9 @@ The user has opened this unzipped folder, pointed you at it, or given a prompt l
 Follow this exact protocol:
 
 ## 1. Global Skills Installation & Sync
-- Ensure every skill in `skills/` is installed globally:
+- Ensure every skill in `skills/` is installed and synced identically:
   - Copy `skills/stickman-hybrid/` to `~/.claude/skills/stickman-hybrid/` and `~/.gemini/config/skills/stickman-hybrid/`.
+  - Copy `skills/stickman-stickers/` to `~/.claude/skills/stickman-stickers/` and `~/.gemini/config/skills/stickman-stickers/`.
   - Copy `skills/vox-doc-sound/` to `~/.claude/skills/vox-doc-sound/` and `~/.gemini/config/skills/vox-doc-sound/`.
   - Copy companion intelligence skills (`youtube-seo-optimizer`, `emotional-arc-designer`, `visual-emotion-engineer`, `headline-psychologist`, `loss-aversion-designer`, `data-storytelling`, `viral-generator-builder`) to `~/.claude/skills/` and `~/.gemini/config/skills/`.
   - Preserve any existing user `.env`, `SETUP_STATUS.md`, `CATALOG.tsv`.
@@ -54,8 +55,8 @@ Follow `skills/stickman-hybrid/PLAYBOOK.md` Rules 1–45:
 - **Stage 2 & 3 (Look, Pictures & Voice)**: Start in parallel upon script approval:
   - Select look (`looks/`), write `STYLE.txt`, character sheet -> `pictures.py refs` -> `SHOTS.tsv` -> submit shots.
   - Voice with intelligent documentary cadence (`kokoro_vo.py` for English, Parler Aman for Urdu/Roman Urdu) -> `vo_join.py` -> `align.py` -> `WORDS.tsv`.
-- **Stage 4 (Scenes & Stickers)**: Map script keywords to prop cutouts (`ELEMENTS.tsv` keyed with `key.py` on `#FF00FF`, true alpha `alpha.min() == 0`). Anti-occlusion guard: center zone ($0.35 \le x, y \le 0.65$) is strictly protected. Zero duplicate text.
-- **Stage 5 (Storytelling Golden Ratio Sound)**: Tactile SFX and Kurzgesagt Auditory Highlighters (`sfx_smart_designer.py` -> `cues_pro.tsv`) -> `mix.py` (-17 dB bed with vocal pocket EQ, gentle 2.8:1 sidechain, vocal warmth filter) -> -14 LUFS broadcast mix (`mix_pro.wav`).
+- **Stage 4 (Scenes, 3-Tier Sticker Vault & Multi-Sticker Solver)**: Map script keywords to transparent cutouts via `skills/stickman-stickers/` (Tier 1 `flow_vault/` -> Tier 2 `cc0_library/` -> Tier 3 Google Flow `#FF00FF` auto-harvested via `key.py`/`cutout.py` with alpha rim erosion). Supports unlimited simultaneous multi-stickers (1–4+ props) distributed via collision-free `>= 32px` slot layout, cached static anchors, and subtitle clearance.
+- **Stage 5 (Warm Cinematic Sound Ratio)**: Tactile SFX and Kurzgesagt Auditory Highlighters (`sfx_smart_designer.py` -> `cues_pro.tsv`) -> `mix.py` (-11 dB to -13 dB bed rel to VO starting at 0.0s, vocal pocket EQ -3.2dB @ 1.8kHz, gentle 1.9:1 sidechain) -> -14.0 LUFS broadcast mix (`mix_pro.wav`).
 - **Rule 21 (Zero-Crop Full-Frame)**: Direct 100% native resolution scaling ($1536 \times 2752$ for 9:16 and $2752 \times 1536$ for 16:9). No cropping or edge loss.
 - **Rule 22 (Dual Independent Flow Pipelines)**: In Format "Both", `short/` and `long/` MUST have completely independent Flow generation:
   - `short/shots/`: Dedicated native 9:16 vertical Flow art (`--aspect 9:16`).
@@ -66,12 +67,14 @@ Follow `skills/stickman-hybrid/PLAYBOOK.md` Rules 1–45:
   - Shorts (9:16): Opening title banner at $y \in [190, 250]$ only during first 2.5s; scene tag at $y = 230$ (suppressed during first 2.5s); right 220px margin preserved ($x \le 860$); bottom 660px preserved ($y > 1250$); kinetic subtitles at $y = 1180$; sticker bottom strictly above $y = 1040$ ($\ge 140\text{px}$ buffer above subtitles).
   - Long Form (16:9): Chapter slug at Top-Left ($x \approx 140, y \approx 100$); subtitles at $y = 920-940$; stickers at $y \le 820$.
 - **Stage 6 (Render & QC - Phase 2 Intelligence)**:
-  - **Single-Entry Orchestrator**: Run `studio.py create "<Topic>" --format both --captions [--dry-run]`.
-  - **Rule 25 (Autonomous Spatial Placement)**: `render_pro.py` runs `calculate_intelligent_sticker_anchor` with negative-space luminance/gradient scoring, zero subtitle overlap ($\ge 140\text{px}$ buffer in Shorts, $\ge 80\text{px}$ in Long), and 0.82x auto-scaling in dense frames.
-  - **Rule 26 (Calibrated Tasteful Motion)**: Damped spring pop-in physics `spring_p(p) = 1.0 - exp(-8.5 * p) * cos(8.0 * p)`, micro Ken Burns drift (1.0 to 1.025), and edge restraint dampening near boundaries.
-  - **Rule 27 (Bounded Flow Visual QC)**: `verify_sticker_cutout` detects magenta halo (>1.8%) and canvas edge clipping (>15%); `verify_vertical_layout` detects letterboxing; bounded auto-rebuild loop retries up to 3 attempts with prompt refinement.
-  - **Rule 28 (4 Mandatory Pre-Render Quality Gates)**: `validate_pipeline.py` enforces Gate 1 (Manifest & Cutouts), Gate 2 (9:16 Vertical Framing), Gate 3 (3-Stem Audio), and Gate 4 (Multi-Track Sync <100ms drift).
+  - **Single-Entry Orchestrator**: Run `studio.py create "<Topic>" --format both --captions [--look bright] [--suggest] [--dry-run]`.
+  - **Curated Typography & 9 Editorial Looks**: 4 distinct fonts (`PermanentMarker`, `Bangers`, `Caveat`, `SedgwickAve`, `PatrickHand`) across 9 looks (`bright`, `warm`, `night`, `ink`, `oversimplified`, `cgp_grey`, `casually_explained`, `minute_physics`, `painted`).
+  - **6 Full-Bleed Editorial Archetypes**: `card_stat`, `split_compare` (Top-vs-Bottom on 9:16 Shorts / Left-vs-Right on 16:9 Long), `bar_timeline`, `stat_pie`, calm eased Flow drift, and hand-drawn verdict accents (`stamp_x`, `stamp_check`) rendered at 2x Lanczos Supersampling onto paper-grain/dot-grid canvas.
+  - **Rule 25 (Multi-Slot Collision-Free Placement)**: `render_pro.py` runs `calculate_intelligent_sticker_anchor` with negative-space scoring, `>= 32px` padding, cached spawn-time anchors/scales (0.83x at 3 props, 0.78x at 4+), zero subtitle overlap (`>= 140px` Shorts / `>= 80px` Long).
+  - **Rule 26 (Director-Supervised Motion & Animated Choreography)**: `director_supervisor.py` emits `DIRECTOR_PLAN.json` auditing relevance (zero redundant stickers on matching shots), locking exact `WORDS.tsv` triggers at `-0.06s`, tracking `WIDE`/`MEDIUM`/`TIGHT`/`EDITORIAL_CARD` scale flow, and assigning 6 context-aware motion archetypes (`slide_arc_left`/`right`, `drop_weight`, `peel_reveal`, `bloom_focus`, `swing_strike`) + group choreography (`duo_converge`, `cause_effect` with `0%->100%` animated Bezier ink arrows, `trio_cascade`, `quad_showcase`) + subtle continuous alive idle breathing (`±3.2px`/`±0.45°`) and calm `0.22s` exit ease.
+  - **Rule 27 (Bounded Flow Visual QC & Alpha Rim Erosion)**: `verify_sticker_cutout` + inward alpha rim erosion (`key.py`/`cutout.py`) eliminate white fringes; local fallbacks heal before re-generation.
+  - **Rule 28 (6 Mandatory Pre-Render Quality Gates)**: `validate_pipeline.py` enforces Gates 1–5 plus Gate 6 (`DIRECTOR_PLAN.json` 0-redundancy check, unique Flow shot density, dual-extreme anti-stagnation/anti-flicker, zero ping-pong, and `card_stat`/`split_compare` pixel balance audit).
   - Single still frame test (`--frame T`) first before full video render. **Never render final video without user explicit command!**
-- **Stage 7 (Viral SEO & Packaging)**: Run `viral_seo_intelligence.py` for 5 high-CTR psychological titles, search description, curiosity timestamps, and 3-element thumbnail blueprint. Run `flow_thumbnail_generator.py` for native Flow thumbnails.
+- **Stage 7 (Viral SEO & Automated Upload Packaging)**: Run `social_packager.py` and `thumbnail_generator.py` to auto-populate `UPLOAD_PACK/` with `thumbnail_16x9.png`, `thumbnail_9x16.png`, `METADATA.json`, and `POSTING_GUIDE.md`. Explore trending topics via `studio.py trends`.
 
 Prerequisite: Flow Connector extension CLI (`flow-auto`). Never ask for API keys in chat.

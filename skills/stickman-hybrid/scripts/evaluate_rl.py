@@ -117,11 +117,11 @@ def evaluate_pacing(scenes_path, total_duration, is_short=False):
     avg_beat_dur = total_duration / max(1, len(visual_timestamps))
     
     if is_short:
-        # Rule 26: Shorts Viral Pacing (Target 1.5s - 2.5s per visual beat, max hold <= 3.0s)
-        grade = "A+" if avg_beat_dur <= 2.2 and max_hold <= 3.0 else ("A" if avg_beat_dur <= 2.8 and max_hold <= 3.4 else ("B" if avg_beat_dur <= 3.5 else "C"))
+        # Smooth documentary Shorts pacing: target 2.5s - 4.0s per visual beat, max <= 4.2s, no chaotic <1.5s flicker
+        grade = "A+" if 2.0 <= avg_beat_dur <= 3.8 and max_hold <= 4.2 else ("A" if avg_beat_dur <= 4.2 and max_hold <= 4.6 else ("B" if avg_beat_dur <= 5.0 else "C"))
     else:
-        # Rule 26: Long Documentary Pacing (Target 2.2s - 3.8s per visual beat, max hold <= 4.5s)
-        grade = "A+" if avg_beat_dur <= 3.5 and max_hold <= 4.5 else ("A" if avg_beat_dur <= 4.2 and max_hold <= 5.0 else ("B" if avg_beat_dur <= 5.5 else "C"))
+        # Smooth Long Documentary pacing: target 3.5s - 5.5s per visual beat, max <= 6.5s
+        grade = "A+" if 2.6 <= avg_beat_dur <= 5.2 and max_hold <= 6.5 else ("A" if avg_beat_dur <= 5.8 and max_hold <= 7.0 else ("B" if avg_beat_dur <= 7.5 else "C"))
         
     return {
         "total_scenes": len(scene_cuts),
@@ -133,6 +133,182 @@ def evaluate_pacing(scenes_path, total_duration, is_short=False):
         "max_hold_sec": round(max_hold, 2),
         "pacing_grade": grade
     }
+
+def export_contact_sheets(mp4_path, out_dir=None, duration=None):
+    """Exports qa/hook_sheet.jpg (0-3s), qa/phone_sheet.jpg (1fps), and qa/beats_sheet.jpg (12 beats)."""
+    if not os.path.exists(mp4_path):
+        return {}
+    if out_dir is None:
+        out_dir = os.path.join(os.path.dirname(os.path.abspath(mp4_path)), "qa")
+    os.makedirs(out_dir, exist_ok=True)
+    if duration is None:
+        info = get_media_info(mp4_path)
+        duration = float(info.get("format", {}).get("duration", 10.0)) if info else 10.0
+
+    hook_p = os.path.join(out_dir, "hook_sheet.jpg")
+    phone_p = os.path.join(out_dir, "phone_sheet.jpg")
+    beats_p = os.path.join(out_dir, "beats_sheet.jpg")
+
+    # 1. hook_sheet.jpg (0-3s @ 4fps -> 4x3 grid of 360px tiles)
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error", "-t", "3.0", "-i", mp4_path,
+        "-vf", "fps=4,scale=360:-2,tile=4x3", "-frames:v", "1", "-q:v", "4", hook_p
+    ], check=False)
+
+    # 2. phone_sheet.jpg (1fps @ 360px wide -> 4 columns, capped up to 48 tiles so always crisp & fast)
+    step_fps = "1" if duration <= 48 else f"1/{max(1, int(round(duration / 48)))}"
+    n_tiles = min(48, max(4, int(round(duration if duration <= 48 else 48))))
+    rows_n = max(1, (n_tiles + 3) // 4)
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error", "-i", mp4_path,
+        "-vf", f"fps={step_fps},scale=360:-2,tile=4x{rows_n}", "-frames:v", "1", "-q:v", "4", phone_p
+    ], check=False)
+
+    # 3. beats_sheet.jpg (12 evenly spaced beats across whole duration)
+    beats_fps = f"{12.0 / max(1.0, duration):.4f}"
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error", "-i", mp4_path,
+        "-vf", f"fps={beats_fps},scale=360:-2,tile=4x3", "-frames:v", "1", "-q:v", "4", beats_p
+    ], check=False)
+
+    return {"hook_sheet": hook_p, "phone_sheet": phone_p, "beats_sheet": beats_p}
+
+
+def _otsu_contrast_ratio(gray_patch):
+    """Computes approximate WCAG contrast ratio between Otsu dark/light pixel clusters (advisory)."""
+    arr = gray_patch.astype(np.float32).ravel()
+    if arr.size < 64:
+        return 21.0
+    hist, _ = np.histogram(arr, bins=256, range=(0, 256))
+    total = arr.size
+    sum_tot = float(np.dot(np.arange(256), hist))
+    sum_b, w_b, best_var, thresh = 0.0, 0, 0.0, 128
+    for t in range(256):
+        w_b += int(hist[t])
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += t * int(hist[t])
+        m_b = sum_b / w_b
+        m_f = (sum_tot - sum_b) / w_f
+        var_between = w_b * w_f * ((m_b - m_f) ** 2)
+        if var_between > best_var:
+            best_var = var_between
+            thresh = t
+    fg = arr[arr <= thresh]
+    bg = arr[arr > thresh]
+    if fg.size == 0 or bg.size == 0:
+        return 1.0
+    l1 = float(np.mean(bg)) / 255.0
+    l2 = float(np.mean(fg)) / 255.0
+    hi, lo = max(l1, l2), min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def scan_video_signals(mp4_path, dip_t=None, duration=None):
+    """Fast (<10s) full-MP4 192px grayscale forensic scan + Otsu contrast + optional pre-twist silence drop check."""
+    res = {
+        "blank_frame0": False,
+        "flash_frames": 0,
+        "freeze_runs_2_5s": 0,
+        "min_advisory_contrast": 21.0,
+        "dip_silence_dur_sec": None,
+        "dip_ok": None,
+        "f_codes": [],
+        "warnings": [],
+    }
+    if not os.path.exists(mp4_path):
+        return res
+
+    if duration is None:
+        info = get_media_info(mp4_path)
+        v_s = next((s for s in info.get("streams", []) if s["codec_type"] == "video"), None) if info else None
+        duration = float(info.get("format", {}).get("duration", 10.0)) if info else 10.0
+        w_orig = int(v_s.get("width", 1080)) if v_s else 1080
+        h_orig = int(v_s.get("height", 1920)) if v_s else 1920
+    else:
+        info = get_media_info(mp4_path)
+        v_s = next((s for s in info.get("streams", []) if s["codec_type"] == "video"), None) if info else None
+        w_orig = int(v_s.get("width", 1080)) if v_s else 1080
+        h_orig = int(v_s.get("height", 1920)) if v_s else 1920
+
+    sw = 192
+    sh = max(2, (int(round(h_orig * (sw / max(1, w_orig)))) // 2) * 2)
+    fps_scan = 6
+    p_v = subprocess.run([
+        "ffmpeg", "-v", "error", "-i", mp4_path,
+        "-vf", f"fps={fps_scan},scale={sw}:{sh},format=gray",
+        "-f", "rawvideo", "-pix_fmt", "gray", "-"
+    ], capture_output=True)
+    frame_bytes = sw * sh
+    if p_v.returncode == 0 and len(p_v.stdout) >= frame_bytes:
+        n_fr = len(p_v.stdout) // frame_bytes
+        arr = np.frombuffer(p_v.stdout[:n_fr * frame_bytes], dtype=np.uint8).reshape((n_fr, sh, sw))
+        means = arr.mean(axis=(1, 2))
+        if float(arr[0].std()) < 2.0 and (means[0] < 12.0 or means[0] > 248.0):
+            res["blank_frame0"] = True
+            res["f_codes"].append("F_STUTTER")
+        # Single-frame flash detection
+        for k in range(1, n_fr - 1):
+            if abs(float(means[k]) - float(means[k - 1])) > 42.0 and abs(float(means[k + 1]) - float(means[k])) > 42.0 and abs(float(means[k + 1]) - float(means[k - 1])) < 14.0:
+                res["flash_frames"] += 1
+        if res["flash_frames"] > 0:
+            res["f_codes"].append("F_FLASH_FRAME")
+        # Unplanned freeze >= 2.5s (15 consecutive frames @ 6fps)
+        diffs = np.mean(np.abs(arr[1:].astype(np.int16) - arr[:-1].astype(np.int16)), axis=(1, 2))
+        freeze_len = 0
+        for d_v in diffs:
+            if d_v < 0.08:
+                freeze_len += 1
+                if freeze_len == int(2.5 * fps_scan):
+                    res["freeze_runs_2_5s"] += 1
+            else:
+                freeze_len = 0
+        if res["freeze_runs_2_5s"] > 0:
+            res["f_codes"].append("F_STUTTER")
+        # Advisory Otsu contrast across sampled subtitle/card bands
+        sample_idxs = sorted({min(n_fr - 1, max(0, int(n_fr * r))) for r in (0.12, 0.45, 0.78)})
+        contrasts = [_otsu_contrast_ratio(arr[si_f, int(sh * 0.2):int(sh * 0.85), :]) for si_f in sample_idxs]
+        if contrasts:
+            res["min_advisory_contrast"] = round(min(contrasts), 2)
+            if res["min_advisory_contrast"] < 4.5:
+                res["warnings"].append(f"Advisory low Otsu contrast {res['min_advisory_contrast']}:1 (< 4.5:1) on textured/dark sample")
+
+    # Optional pre-twist >=0.4s silence drop verification (>=12 dB below local p90)
+    if dip_t is not None:
+        win_s = max(0.0, float(dip_t) - 4.0)
+        win_e = min(duration, float(dip_t) + 3.0)
+        if win_e - win_s >= 1.5:
+            p_a = subprocess.run([
+                "ffmpeg", "-v", "error", "-ss", f"{win_s:.3f}", "-t", f"{win_e - win_s:.3f}",
+                "-i", mp4_path, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"
+            ], capture_output=True)
+            if p_a.returncode == 0 and len(p_a.stdout) >= 1600:
+                pcm = np.frombuffer(p_a.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+                hop = 800  # 50ms chunks
+                n_ch = len(pcm) // hop
+                if n_ch > 10:
+                    rms_db = np.array([20.0 * np.log10(np.sqrt(np.mean(pcm[i * hop:(i + 1) * hop] ** 2)) + 1e-7) for i in range(n_ch)])
+                    times = win_s + (np.arange(n_ch) + 0.5) * 0.05
+                    outside_dip = rms_db[np.abs(times - float(dip_t)) > 0.65]
+                    local_p90 = float(np.percentile(outside_dip if len(outside_dip) > 4 else rms_db, 90))
+                    near_dip = rms_db[np.abs(times - float(dip_t)) <= 0.70]
+                    max_run, cur_run = 0, 0
+                    for v_db in near_dip:
+                        if v_db <= local_p90 - 12.0:
+                            cur_run += 1
+                            max_run = max(max_run, cur_run)
+                        else:
+                            cur_run = 0
+                    res["dip_silence_dur_sec"] = round(max_run * 0.05, 2)
+                    res["dip_ok"] = (res["dip_silence_dur_sec"] >= 0.40)
+                    if not res["dip_ok"]:
+                        res["f_codes"].append("F_NO_SILENCE_DROP")
+
+    return res
+
 
 def evaluate_video(filepath, expected_res=(1920, 1080)):
     if not os.path.exists(filepath):
@@ -160,17 +336,255 @@ def evaluate_video(filepath, expected_res=(1920, 1080)):
     deductions = []
     if not res_match:
         score -= 25
-        deductions.append(f"Resolution mismatch: got {width}x{height}, expected {expected_res[0]}x{expected_res[1]}")
+        deductions.append(f"[-25 pts] Resolution mismatch: got {width}x{height}, expected {expected_res[0]}x{expected_res[1]}")
     if not codec_match:
         score -= 15
-        deductions.append(f"Codec mismatch: got {v_stream.get('codec_name')}, expected h264")
+        deductions.append(f"[-15 pts] Codec mismatch: got {v_stream.get('codec_name')}, expected h264")
     if not audio_present:
         score -= 30
-        deductions.append("Missing audio or non-AAC codec")
+        deductions.append("[-30 pts] Missing audio or non-AAC codec")
     if fps < 29.0:
         score -= 10
-        deductions.append(f"Framerate low: {fps} fps")
-        
+        deductions.append(f"[-10 pts] Framerate low: {fps} fps")
+
+    vid_dir = os.path.dirname(os.path.abspath(filepath)) or "."
+    is_short_vid = (expected_res[1] > expected_res[0])
+    pipe_sub = os.path.join(vid_dir, "short" if is_short_vid else "long")
+    active_pipe_dir = pipe_sub if os.path.isdir(pipe_sub) and os.path.exists(os.path.join(pipe_sub, "WORDS.tsv")) else vid_dir
+    scenes_file = os.path.join(active_pipe_dir, "SCENES_HYBRID.tsv") if os.path.exists(os.path.join(active_pipe_dir, "SCENES_HYBRID.tsv")) else os.path.join(active_pipe_dir, "SCENES.tsv")
+    words_file_vid = os.path.join(active_pipe_dir, "WORDS.tsv")
+
+    # 0. Honest Unique Shot Density & Opening 15s Flow Check (Kills fake shot-recycling 100/100!)
+    try:
+        import validate_pipeline
+        ok_dens, _, dens_deductions = validate_pipeline.audit_timeline_real_visual_density(
+            active_pipe_dir, format_type="9:16" if is_short_vid else "16:9"
+        )
+        if not ok_dens:
+            for d_str in dens_deductions:
+                pen = 20
+                if "[-30 pts]" in d_str:
+                    pen = 30
+                score -= pen
+                deductions.append(d_str)
+                print(f"❌ {d_str}")
+        else:
+            print("✅ Unique Hero Shot Density & Opening 15s Flow Verified")
+    except Exception as e:
+        print(f"⚠️ Unique Shot Density check notice: {e}")
+
+    # 0.5 Forensic Rendered Frame Inspection for card_stat and split_compare (Real MP4 Pixel Check!)
+    if os.path.exists(scenes_file) and os.path.exists(words_file_vid):
+        try:
+            import validate_pipeline
+            w_map_vid = {}
+            with open(words_file_vid, encoding="utf-8") as wf:
+                for wr in csv.DictReader(wf, delimiter="\t"):
+                    w_map_vid[f"{wr.get('line', '')}.{wr.get('i', '')}"] = float(wr.get("start", 0.0))
+            sc_rows = list(csv.DictReader(open(scenes_file, encoding="utf-8"), delimiter="\t"))
+            checked_cards = 0
+            checked_splits = 0
+            card_fail_reported = False
+            split_fail_reported = False
+
+            for idx_r, r in enumerate(sc_rows):
+                cue_s = (r.get("cue") or "").strip()
+                if not cue_s or cue_s.startswith("#") or cue_s.startswith("+"):
+                    continue
+                img_s = (r.get("img") or "").strip()
+                base_tok = os.path.splitext(os.path.basename(img_s))[0].split(":")[0].strip()
+                is_c = (base_tok in ("card", "card_stat", "card_phrase") or base_tok.startswith("card_"))
+                is_sp = (base_tok in ("split_compare", "split_contrast") or base_tok.startswith("split_"))
+                if not (is_c or is_sp):
+                    continue
+                t_sc = w_map_vid.get(cue_s)
+                if t_sc is None:
+                    continue
+                t_sample = max(0.2, min(duration - 0.3, t_sc + (1.7 if is_sp else 0.8)))
+                # If split_compare has an overlay slightly after t_sc, sample while sticker & right reveal are active
+                for nr in sc_rows[idx_r + 1:]:
+                    ncue = (nr.get("cue") or "").strip()
+                    if not ncue.startswith("+"):
+                        break
+                    t_ov_s = w_map_vid.get(ncue.lstrip("+"))
+                    if t_ov_s is not None:
+                        t_sample = max(t_sample, min(duration - 0.3, t_ov_s + 0.4))
+
+                tmp_fr = os.path.join(vid_dir, f"_qc_arch_{os.getpid()}_{idx_r}.png")
+                subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t_sample:.2f}", "-i", filepath, "-vframes", "1", tmp_fr],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(tmp_fr):
+                    fr_im = Image.open(tmp_fr)
+                    ok_px, msg_px = validate_pipeline.inspect_card_split_frame_pixels(
+                        fr_im, "card" if is_c else "split", is_shorts=is_short_vid
+                    )
+                    os.remove(tmp_fr)
+                    if is_c:
+                        checked_cards += 1
+                        if not ok_px and not card_fail_reported:
+                            score -= 20
+                            deductions.append(f"[-20 pts] Rendered Card Layout Defect at t={t_sample:.1f}s ({cue_s}): {msg_px}")
+                            print(f"❌ Card Frame Defect @ {t_sample:.1f}s: {msg_px}")
+                            card_fail_reported = True
+                    else:
+                        checked_splits += 1
+                        if not ok_px and not split_fail_reported:
+                            score -= 20
+                            deductions.append(f"[-20 pts] Rendered Split-Compare Layout Defect at t={t_sample:.1f}s ({cue_s}): {msg_px}")
+                            print(f"❌ Split Frame Defect @ {t_sample:.1f}s: {msg_px}")
+                            split_fail_reported = True
+            if (checked_cards or checked_splits) and not card_fail_reported and not split_fail_reported:
+                print(f"✅ Rendered Card & Split Frames Verified ({checked_cards} cards, {checked_splits} splits cleanly filled)")
+        except Exception as e:
+            print(f"⚠️ Rendered Card/Split pixel audit notice: {e}")
+
+    # 1. Forensic Rendered Sticker Inspection
+    sticker_telem_path = os.path.join(vid_dir, "sticker_telemetry.json")
+    scheduled_stk_count = 0
+    if os.path.exists(scenes_file):
+        try:
+            with open(scenes_file, encoding="utf-8") as sf:
+                for line in sf:
+                    parts = line.strip().split("\t")
+                    if parts and parts[0].startswith("+") and not parts[1].startswith("bars:") and parts[1] not in ("tag", "count"):
+                        scheduled_stk_count += 1
+        except Exception:
+            pass
+
+    if scheduled_stk_count > 0:
+        if os.path.exists(sticker_telem_path):
+            try:
+                st_data = json.load(open(sticker_telem_path, encoding="utf-8"))
+                frame_hits = st_data.get("rendered_sticker_frame_hits", 0)
+                missing = st_data.get("missing_stickers", [])
+                if frame_hits == 0:
+                    score -= 25
+                    deductions.append("[-25 pts] CRITICAL DEFECT: 0 stickers were rendered on video frames despite scheduled overlays in SCENES_HYBRID.tsv!")
+                elif missing:
+                    pen = min(25, len(missing) * 8)
+                    score -= pen
+                    deductions.append(f"[-{pen} pts] Scheduled sticker(s) failed to render on frames: {missing}")
+                else:
+                    print(f"✅ Rendered Sticker Telemetry Verified: All {len(st_data.get('unique_rendered_stickers', []))} stickers composited across {frame_hits} frames")
+
+                # Check Sticker Stability (Assert zero teleportation / anchor jumping)
+                telemetry_events = st_data.get("rendered_stickers_telemetry", [])
+                stk_anchors = {}
+                for ev in telemetry_events:
+                    stk_name = ev.get("sticker", "")
+                    anc = ev.get("anchor")
+                    if stk_name and anc:
+                        stk_anchors.setdefault(stk_name, set()).add((anc[0], anc[1]))
+                for stk_name, anc_set in stk_anchors.items():
+                    if len(anc_set) > 1:
+                        score -= 20
+                        deductions.append(f"[-20 pts] Sticker teleportation/instability detected on {stk_name}: jumped between {anc_set}")
+            except Exception as e:
+                deductions.append(f"[-10 pts] Corrupt sticker telemetry: {e}")
+        else:
+            # Fallback direct MP4 frame inspection at sticker timestamp
+            score -= 25
+            deductions.append("[-25 pts] Missing sticker compositing telemetry (unverified sticker presence)")
+
+    # 2. Forensic 0.0s Intro Music & Rolling Bed Check
+    stem_telem_path = os.path.join(vid_dir, "stem_telemetry.json")
+    if os.path.exists(stem_telem_path):
+        try:
+            stem_data = json.load(open(stem_telem_path, encoding="utf-8"))
+            bed_0_5 = stem_data.get("bed_to_vo_0_5s_ratio_db", -99.0)
+            bed_all = stem_data.get("bed_to_vo_global_ratio_db", -99.0)
+            if bed_0_5 < -15.5:
+                score -= 20
+                deductions.append(f"[-20 pts] Silent/too-quiet opening music in 0-5s: {bed_0_5:.1f} dB rel to VO (target -11 to -13 dB)")
+            elif bed_0_5 > -8.5:
+                score -= 10
+                deductions.append(f"[-10 pts] Opening music overpowering dialogue: {bed_0_5:.1f} dB rel to VO (target -11 to -13 dB)")
+            else:
+                print(f"✅ 0.0s Intro Music Verified: Bed is warm and audible at {bed_0_5:.1f} dB rel to VO in 0-5s")
+
+            # 3. Forensic SFX Audibility Check
+            sfx_ratio = stem_data.get("sfx_peak_to_vo_ratio_db")
+            if sfx_ratio is not None:
+                if sfx_ratio < -5.0:
+                    score -= 20
+                    deductions.append(f"[-20 pts] SFX stem is buried/inaudible: peak {sfx_ratio:.1f} dB rel to VO (target -2 to +1 dB)")
+                else:
+                    print(f"✅ SFX Impact Level Verified: Peak {sfx_ratio:.1f} dB rel to VO (broadcast compliant)")
+
+            sfx_med_ratio = stem_data.get("sfx_median_to_vo_ratio_db")
+            if sfx_med_ratio is not None:
+                if sfx_med_ratio < -6.5:
+                    score -= 15
+                    deductions.append(f"[-15 pts] Median micro-SFX cues are buried: median {sfx_med_ratio:.1f} dB rel to VO (target >= -5.0 dB)")
+                else:
+                    print(f"✅ Median SFX Audibility Verified: Median cue at {sfx_med_ratio:.1f} dB rel to VO")
+        except Exception as e:
+            deductions.append(f"[-10 pts] Corrupt stem telemetry: {e}")
+    else:
+        # Measure opening audio slice directly from video container
+        try:
+            p_slice = subprocess.run(["ffmpeg", "-ss", "0.0", "-t", "5.0", "-i", filepath, "-af", "volumedetect", "-f", "null", "-"],
+                                     stderr=subprocess.PIPE, text=True)
+            m_mean = re.search(r"mean_volume:\s+([-\d.]+)\s+dB", p_slice.stderr)
+            mean_v = float(m_mean.group(1)) if m_mean else -99.0
+            if mean_v < -35.0:
+                score -= 20
+                deductions.append(f"[-20 pts] Opening audio 0-5s is near silent: mean {mean_v:.1f} dB")
+        except Exception:
+            pass
+
+    # 4. Forensic Real VFX & Frame Motion Delta Check
+    try:
+        # Sample two frames at t=0.08s and t=0.28s to measure transition / punch zoom / shake motion delta
+        f1_path = os.path.join(vid_dir, f"_qc_f1_{os.getpid()}.png")
+        f2_path = os.path.join(vid_dir, f"_qc_f2_{os.getpid()}.png")
+        subprocess.run(["ffmpeg", "-y", "-ss", "0.08", "-i", filepath, "-vframes", "1", f1_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["ffmpeg", "-y", "-ss", "0.28", "-i", filepath, "-vframes", "1", f2_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.path.exists(f1_path) and os.path.exists(f2_path):
+            im1 = np.array(Image.open(f1_path)).astype(float)
+            im2 = np.array(Image.open(f2_path)).astype(float)
+            vfx_delta = float(np.mean(np.abs(im2 - im1)))
+            if vfx_delta < 4.0:
+                score -= 15
+                deductions.append(f"[-15 pts] VFX / camera shake / punch zoom inactive: pixel motion delta={vfx_delta:.2f} < 4.0 (static freeze)")
+            else:
+                print(f"✅ Kinetic Motion & VFX Verified: Frame motion delta={vfx_delta:.2f} (dynamic visual energy)")
+            os.remove(f1_path)
+            os.remove(f2_path)
+    except Exception:
+        pass
+
+    # 5. Fast Signal Scan & Auto Contact Sheets Export (qa/)
+    sig_scan = {}
+    try:
+        dip_target = None
+        na_p = os.path.join(active_pipe_dir, "NARRATIVE_AUDIT.json")
+        vo_p = os.path.join(active_pipe_dir, "VO.tsv")
+        if os.path.exists(na_p) and os.path.exists(vo_p):
+            tw_id = str(json.load(open(na_p, encoding="utf-8")).get("twist_line_id") or "").strip()
+            for vr in csv.DictReader(open(vo_p, encoding="utf-8"), delimiter="\t"):
+                if vr.get("id", "").strip() == tw_id:
+                    dip_target = float(vr.get("start", 0.0))
+                    break
+        sig_scan = scan_video_signals(filepath, dip_t=dip_target, duration=duration)
+        if sig_scan.get("blank_frame0"):
+            score -= 15
+            deductions.append("[-15 pts] F_STUTTER: Blank frame 0 detected")
+        if sig_scan.get("flash_frames", 0) > 0:
+            score -= 10
+            deductions.append(f"[-10 pts] F_FLASH_FRAME: {sig_scan['flash_frames']} unintended flash frame(s)")
+        if sig_scan.get("freeze_runs_2_5s", 0) > 0:
+            score -= 12
+            deductions.append(f"[-12 pts] F_STUTTER: {sig_scan['freeze_runs_2_5s']} unplanned >=2.5s video freeze(s)")
+        if sig_scan.get("dip_ok") is False:
+            score -= 8
+            deductions.append(f"[-8 pts] F_NO_SILENCE_DROP: Pre-twist dip {sig_scan.get('dip_silence_dur_sec')}s < 0.40s")
+        for w_s in sig_scan.get("warnings", []):
+            print(f"⚠️ {w_s}")
+        export_contact_sheets(filepath, out_dir=os.path.join(vid_dir, "qa"), duration=duration)
+    except Exception:
+        pass
+
     return {
         "exists": True,
         "width": width,
@@ -180,6 +594,7 @@ def evaluate_video(filepath, expected_res=(1920, 1080)):
         "size_mb": round(size_mb, 2),
         "codec_video": v_stream.get("codec_name") if v_stream else None,
         "codec_audio": a_stream.get("codec_name") if a_stream else None,
+        "signal_scan": sig_scan,
         "rl_score": max(0, score),
         "deductions": deductions,
         "status": "PASS" if score >= 85 else "FAIL"
@@ -879,12 +1294,52 @@ def audit_pipeline(base_dir=".", is_short=False):
         print(f"Opening 15s Hook Density: {pacing['opening_hook_pace_sec']}s per beat (Target: 1.2-2.2s)")
         print(f"Max Visual Hold: {pacing['max_hold_sec']}s (Max allowed: {'3.0s' if is_short else '4.5s'})")
         print(f"Pacing Grade: {pacing['pacing_grade']}")
-        if is_short and (pacing['avg_visual_beat_sec'] > 2.8 or pacing['max_hold_sec'] > 3.0):
-            print(f"⚠️ Pacing Advisory (Rule 26): Shorts visual beat hold ({pacing['max_hold_sec']}s) > 3.0s. Target is 1.5-2.5s visual beats for competitor-grade retention.")
+        if is_short and (pacing['avg_visual_beat_sec'] > 4.2 or pacing['max_hold_sec'] > 4.2):
+            print(f"⚠️ Pacing Advisory (Rule 26): Shorts visual beat hold ({pacing['max_hold_sec']}s) > 4.2s. Target is 2.5-4.0s clause-locked documentary beats.")
             pipeline_deductions.append(f"Shorts visual hold too long: {pacing['max_hold_sec']}s")
-        elif not is_short and (pacing['avg_visual_beat_sec'] > 4.2 or pacing['max_hold_sec'] > 4.5):
-            print(f"⚠️ Pacing Advisory (Rule 26): Long documentary visual hold ({pacing['max_hold_sec']}s) > 4.5s. Target is 2.2-3.8s visual beats for competitor-grade flow.")
+        elif not is_short and (pacing['avg_visual_beat_sec'] > 5.8 or pacing['max_hold_sec'] > 6.5):
+            print(f"⚠️ Pacing Advisory (Rule 26): Long documentary visual hold ({pacing['max_hold_sec']}s) > 6.5s. Target is 3.5-5.5s clause-locked documentary flow.")
             pipeline_deductions.append(f"Long visual hold too long: {pacing['max_hold_sec']}s")
+
+    # 2.2 Honest Unique Shot Density & Opening 15s Flow Check
+    try:
+        import validate_pipeline
+        ok_real, _, real_deductions = validate_pipeline.audit_timeline_real_visual_density(
+            base_dir, format_type="9:16" if is_short else "16:9"
+        )
+        if not ok_real:
+            for d_str in real_deductions:
+                print(f"❌ {d_str}")
+                pipeline_deductions.append(d_str)
+        else:
+            print("✅ Unique Hero Shot Density & Opening 15s Flow: PASS")
+    except Exception as e:
+        print(f"⚠️ Real Visual Density audit notice: {e}")
+
+    # 2.25 Director Supervision & Choreography Audit (Rule 46)
+    dp_path = os.path.join(base_dir, "DIRECTOR_PLAN.json")
+    try:
+        if not os.path.exists(dp_path) and os.path.exists(scenes_file):
+            import director_supervisor
+            director_supervisor.supervise_project(base_dir)
+        if os.path.exists(dp_path):
+            dplan = json.load(open(dp_path, encoding="utf-8"))
+            dsum = dplan.get("summary", {})
+            rej_n = int(dsum.get("rejected_redundant_stickers", 0))
+            off_n = int(dsum.get("flagged_offtopic_stickers", 0))
+            if rej_n > 0:
+                msg = f"[-20 pts] Director Audit FAILED: {rej_n} redundant sticker(s) in {dp_path}"
+                print(f"❌ {msg}")
+                pipeline_deductions.append(msg)
+            elif off_n > 0:
+                pipeline_warnings.append(f"Director flagged {off_n} potentially off-topic sticker(s) in {dp_path}")
+                print(f"⚠️ Director Audit: {dsum.get('approved_stickers', 0)} approved, {off_n} flagged off-topic")
+            else:
+                print(f"✅ Director Supervision Verified: {dsum.get('approved_stickers', 0)} approved stickers, 0 redundant, scale variety={dsum.get('scale_variety', [])}")
+        else:
+            pipeline_deductions.append("[-15 pts] Missing DIRECTOR_PLAN.json (Director supervision unverified)")
+    except Exception as de:
+        print(f"⚠️ Director audit notice: {de}")
 
     # 2.5 Style
     audit_style_consistency(base_dir)
@@ -949,8 +1404,8 @@ def main():
         print(f"\n==================================================")
         print(f"🎬 FINAL VIDEO DELIVERABLES AUDIT")
         print(f"==================================================")
-        s_vid = f"short/{slug}_short_9x16.mp4" if os.path.exists(f"short/{slug}_short_9x16.mp4") else f"{slug}_short_9x16.mp4"
-        l_vid = f"long/{slug}_long_16x9.mp4" if os.path.exists(f"long/{slug}_long_16x9.mp4") else f"{slug}_master_16x9.mp4"
+        s_vid = next((p for p in [f"short/{slug}_short_9x16.mp4", f"{slug}_short_9x16.mp4", f"{slug}_shorts_9x16.mp4"] if os.path.exists(p)), f"{slug}_short_9x16.mp4")
+        l_vid = next((p for p in [f"long/{slug}_long_16x9.mp4", f"{slug}_long_16x9.mp4", f"{slug}_master_16x9.mp4"] if os.path.exists(p)), f"{slug}_long_16x9.mp4")
         
         print("\n--- [Shorts 9:16 Video Deliverable] ---")
         s_res = evaluate_video(s_vid, expected_res=(1080, 1920))
@@ -999,8 +1454,24 @@ def main():
                 all_deductions.extend(s_res.get("deductions", []))
             print(f"File: {s_file} [{s_res['width']}x{s_res['height']}] | Duration: {s_res['duration_sec']}s | Score: {s_res['rl_score']}/100 -> {s_res['status']}")
 
-    final_rl_score = int(np.mean(deliverable_scores)) if deliverable_scores else (100 - len(all_deductions) * 5)
-    final_rl_score = max(50, min(100, final_rl_score))
+    # Honest Reinforcement Learning Quality Score (Fake 100/100 Perm-Killed)
+    pipe_only_deductions = all_deductions if not deliverable_scores else []
+    total_penalty = 0
+    for d in all_deductions:
+        if "[-" in d and "pts]" in d:
+            try:
+                pts = int(d.split("[-")[1].split("pts]")[0])
+                total_penalty += pts
+            except Exception:
+                total_penalty += 10
+        else:
+            total_penalty += 8
+
+    if deliverable_scores:
+        # Cap final score by worst pipeline/deliverable deductions so neither Short nor Long can hide defects
+        final_rl_score = max(0, min(100, min(deliverable_scores) if len(deliverable_scores) > 1 else int(deliverable_scores[0])))
+    else:
+        final_rl_score = max(0, min(100, 100 - total_penalty))
 
     if rl_memory:
         feedback_arg = None
@@ -1019,9 +1490,12 @@ def main():
         )
         print(f"🧠 RL Memory Synced: Active policies updated for subsequent video generations ({len(all_deductions)} deductions recorded).")
 
+    status_lbl = "PASS" if final_rl_score >= 85 else "FAIL"
     print("\n==================================================")
-    print("✅ RL-QC AUDIT COMPLETE")
+    print(f"{'✅' if final_rl_score >= 85 else '❌'} RL-QC FINAL SCORE: {final_rl_score}/100 -> {status_lbl}")
     print("==================================================")
+    if final_rl_score < 85:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

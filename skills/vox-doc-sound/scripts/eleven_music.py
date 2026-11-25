@@ -35,12 +35,20 @@ def key():
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Generate music bed via paid ElevenLabs API (Manual Opt-In Only)")
     ap.add_argument("prompt")
     ap.add_argument("--seconds", type=float, default=90, help="3-600")
     ap.add_argument("--mood", default="beds", help="sub-folder of music/, e.g. explainer, tension")
     ap.add_argument("--name", required=True)
+    ap.add_argument("--opt-in-paid", action="store_true", help="Explicitly opt into paid ElevenLabs API credits consumption")
     a = ap.parse_args()
+    
+    if not a.opt_in_paid:
+        sys.exit(
+            "⚠️ [PAID API SAFEGUARD]: eleven_music.py consumes paid ElevenLabs API credits.\n"
+            "   Our production pipeline runs 100% FREE using CC0_PublicDomain and Gemini mood beds.\n"
+            "   To manually use ElevenLabs, re-run with: --opt-in-paid"
+        )
     body = {"prompt": a.prompt + TAIL, "music_length_ms": int(a.seconds * 1000), "force_instrumental": True}
     req = urllib.request.Request(URL, data=json.dumps(body).encode(), method="POST",
                                  headers={"xi-api-key": key(), "Content-Type": "application/json"})
