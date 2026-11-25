@@ -469,16 +469,27 @@ def calculate_intelligent_sticker_anchor(
             safety_net.append((f"safe_{gx:.2f}_{gy:.2f}", int(min_safe_x + max(40, max_safe_x - min_safe_x) * gx), int(min_safe_y + span_y * gy)))
 
     # First prioritize keeping the exact intentional formation by trying uniform scale steps on formation slots
+    # Enforce strict subject/head-avoidance: score negative space cleanliness and penalize central focal character zone
     for scale_try in (1.0, 0.90, 0.80, 0.70, 0.58):
         bw = max(32, int(item_w * scale_try))
         bh = max(32, int(item_h * scale_try))
         msx, mxsx, msy, mxsy = _bounds_for_size(bw, bh)
+        best_cand = None
+        best_cand_score = float("inf")
         for _, raw_cx, raw_cy in candidates:
             cx = max(msx, min(raw_cx, mxsx))
             cy = max(msy, min(raw_cy, mxsy))
             bx0, by0, bx1, by1 = cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2
             if not _collides(bx0, by0, bx1, by1):
-                return cx, cy, scale_try
+                sc = compute_negative_space_score(bg_im, bx0, by0, bx1, by1)
+                # Penalize placing sticker on top of centered stickman / focal character head/food
+                if 0.38 < (cx / W) < 0.62 and 0.30 < (cy / H) < 0.65:
+                    sc += 160.0
+                if sc < best_cand_score:
+                    best_cand_score = sc
+                    best_cand = (cx, cy)
+        if best_cand and best_cand_score < 240.0:
+            return best_cand[0], best_cand[1], scale_try
 
     # Last-resort clean slot search across safety net
     for scale_try in (0.85, 0.72, 0.60, 0.50):
@@ -754,55 +765,192 @@ def _draw_elliptical_ground_shadow(overlay_im, cx, base_y, width):
     overlay_im.alpha_composite(sh, (int(cx - sh.width // 2), int(base_y - sh.height // 2)))
 
 
-def _draw_highlighter_swipe(overlay_im, cx, cy, sw_w, sw_h, color, tilt=-1.6):
-    """Draws a tapered, slightly angled hand-drawn marker highlighter brush stroke with organic rough edges."""
+def _apply_alpha_to_image(im, alpha):
+    """Multiplies the alpha channel of an image by alpha factor."""
+    if alpha >= 0.999 or im is None:
+        return im
+    out = im.copy()
+    bands = list(out.split())
+    if len(bands) == 4:
+        bands[3] = bands[3].point(lambda a: int(a * max(0.0, min(1.0, alpha))))
+        return Image.merge("RGBA", bands)
+    return out
+
+
+def _interpolate_stat_numbers(target_text, ease_val):
+    """Interpolates numbers in target_text smoothly from 0 up to final values over ease curve."""
+    if ease_val >= 0.999:
+        return target_text
+    def _repl(m):
+        raw = m.group(0).replace(",", "")
+        try:
+            val = float(raw)
+            cur = int(round(val * ease_val))
+            if "," in m.group(0):
+                return f"{cur:,}"
+            return str(cur)
+        except Exception:
+            return m.group(0)
+    return re.sub(r'\b\d+(?:,\d+)?\b', _repl, target_text)
+
+
+def _draw_highlighter_swipe(overlay_im, cx, cy, sw_w, sw_h, color, tilt=-1.6, progress=1.0):
+    """Draws a tapered, slightly angled hand-drawn marker highlighter brush stroke with organic rough edges.
+    Supports live progressive sweep 0% -> 100% left-to-right.
+    """
+    p = max(0.0, min(1.0, float(progress)))
+    if p <= 0.02:
+        return
+    cur_w = max(12, int(sw_w * p))
+    cur_cx = (cx - sw_w // 2) + cur_w // 2
+
     pad = 44
-    sw_im = Image.new("RGBA", (sw_w + 2 * pad, sw_h + 2 * pad), (0, 0, 0, 0))
+    sw_im = Image.new("RGBA", (cur_w + 2 * pad, sw_h + 2 * pad), (0, 0, 0, 0))
     sd = ImageDraw.Draw(sw_im)
     y0 = pad + int(sw_h * 0.10)
     y1 = pad + int(sw_h * 0.94)
-    x0, x1 = pad, pad + sw_w
-    # Multi-vertex rough hand-drawn polygon mimicking authentic chisel-tip highlighter sweep
+    x0, x1 = pad, pad + cur_w
     poly = [
-        (x0 + 16, y0 + 7),
-        (x0 + int(sw_w * 0.25), y0 + 2),
-        (x0 + int(sw_w * 0.55), y0 + 5),
-        (x0 + int(sw_w * 0.82), y0 + 1),
+        (x0 + min(16, cur_w // 4), y0 + 7),
+        (x0 + int(cur_w * 0.25), y0 + 2),
+        (x0 + int(cur_w * 0.55), y0 + 5),
+        (x0 + int(cur_w * 0.82), y0 + 1),
         (x1 - 4, y0 + 4),
         (x1, y1 - 9),
-        (x0 + int(sw_w * 0.78), y1 - 3),
-        (x0 + int(sw_w * 0.45), y1 - 6),
-        (x0 + int(sw_w * 0.18), y1 - 2),
+        (x0 + int(cur_w * 0.78), y1 - 3),
+        (x0 + int(cur_w * 0.45), y1 - 6),
+        (x0 + int(cur_w * 0.18), y1 - 2),
         (x0, y1 - 5),
     ]
     sd.polygon(poly, fill=color)
-    # Second translucent inner overlap pass for real ink pooling
-    sd.rounded_rectangle((x0 + 20, y0 + 10, x1 - 16, y1 - 6), radius=max(10, sw_h // 5), fill=color[:3] + (max(18, int(color[3] * 0.45)),))
+    sd.rounded_rectangle((x0 + min(20, cur_w // 4), y0 + 10, max(x0 + 20, x1 - 16), y1 - 6),
+                         radius=max(8, sw_h // 5), fill=color[:3] + (max(18, int(color[3] * 0.45)),))
     sw_im = sw_im.rotate(tilt, resample=Image.BILINEAR, expand=True)
-    overlay_im.alpha_composite(sw_im, (int(cx - sw_im.width // 2), int(cy - sw_im.height // 2)))
+    overlay_im.alpha_composite(sw_im, (int(cur_cx - sw_im.width // 2), int(cy - sw_im.height // 2)))
 
 
-def _draw_per_line_highlighters(overlay_im, block_x0, block_y0, line_boxes, color, pad_x=42):
+def _draw_per_line_highlighters(overlay_im, block_x0, block_y0, line_boxes, color, pad_x=42, progress=1.0):
     """Draws tight individual organic marker brush swipes behind each wrapped line (never across line gaps)."""
+    p = max(0.0, min(1.0, float(progress)))
+    if p <= 0.02:
+        return
     tilts = (-1.8, 1.3, -1.4)
     for li, (lx, ly, lw, lh) in enumerate(line_boxes):
         cx = block_x0 + lx + lw // 2
         cy = block_y0 + ly + int(lh * 0.56)
         sw_w = lw + pad_x * 2
         sw_h = max(38, int(lh * 0.54))
-        _draw_highlighter_swipe(overlay_im, cx, cy, sw_w, sw_h, color, tilt=tilts[li % len(tilts)])
+        if len(line_boxes) > 1:
+            line_p = max(0.0, min(1.0, (p - li * 0.20) / 0.80))
+        else:
+            line_p = p
+        if line_p > 0.02:
+            _draw_highlighter_swipe(overlay_im, cx, cy, sw_w, sw_h, color, tilt=tilts[li % len(tilts)], progress=line_p)
 
 
-def _draw_editorial_corner_ticks(d, x0, y0, x1, y1, color, arm=44, width=6):
+def _draw_editorial_corner_ticks(d, x0, y0, x1, y1, color, arm=44, width=6, progress=1.0):
     """Draws crisp minimalist editorial registration corner brackets around an impact stage."""
+    p = max(0.0, min(1.0, float(progress)))
+    if p <= 0.05:
+        return
+    eff_arm = int(arm * (1.0 - (1.0 - p) ** 2))
+    if eff_arm <= 4:
+        return
     # Top-Left
-    d.line((x0, y0 + arm, x0, y0, x0 + arm, y0), fill=color, width=width)
+    d.line((x0, y0 + eff_arm, x0, y0, x0 + eff_arm, y0), fill=color, width=width)
     # Top-Right
-    d.line((x1 - arm, y0, x1, y0, x1, y0 + arm), fill=color, width=width)
+    d.line((x1 - eff_arm, y0, x1, y0, x1, y0 + eff_arm), fill=color, width=width)
     # Bottom-Left
-    d.line((x0, y1 - arm, x0, y1, x0 + arm, y1), fill=color, width=width)
+    d.line((x0, y1 - eff_arm, x0, y1, x0 + eff_arm, y1), fill=color, width=width)
     # Bottom-Right
-    d.line((x1 - arm, y1, x1, y1, x1, y1 - arm), fill=color, width=width)
+    d.line((x1 - eff_arm, y1, x1, y1, x1, y1 - eff_arm), fill=color, width=width)
+
+
+def draw_kinetic_editorial_badge(fr, W, H, text, dt, duration=3.0, is_shorts=False):
+    """Draws a kinetic hand-styled editorial fact badge (e.g. '14,000 YEARS AGO') in clean upper space with live ink underline."""
+    p_ent = min(1.0, max(0.0, dt / 0.28))
+    ease_ent = 1.0 - (1.0 - p_ent) ** 3
+    alpha = min(1.0, ease_ent * 1.35)
+
+    rem = duration - dt
+    if rem < 0.25:
+        alpha *= max(0.0, rem / 0.25)
+    if alpha <= 0.02:
+        return
+
+    dy_ent = int(22 * (1.0 - ease_ent))
+    badge_im = text_layer(text, 36 if is_shorts else 38, (252, 248, 240), font_role="hero")
+    if not badge_im:
+        return
+
+    pad_x = 28
+    pad_y = 12
+    bw = badge_im.width + pad_x * 2
+    bh = badge_im.height + pad_y * 2
+
+    layer = Image.new("RGBA", (bw + 20, bh + 24), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    # Subtle drop shadow
+    ld.rounded_rectangle((10 + 3, 10 + 4, 10 + bw + 3, 10 + bh + 4), radius=16, fill=(0, 0, 0, int(60 * alpha)))
+    # Warm dark charcoal plate
+    ld.rounded_rectangle((10, 10, 10 + bw, 10 + bh), radius=16, fill=(24, 28, 38, int(238 * alpha)),
+                         outline=(235, 140, 40, int(220 * alpha)), width=3)
+    layer.alpha_composite(badge_im, (10 + pad_x, 10 + pad_y))
+
+    # Live brush ink underline sweeping 0% -> 100% underneath text
+    und_prog = min(1.0, max(0.0, (dt - 0.14) / 0.26))
+    ease_und = 1.0 - (1.0 - und_prog) ** 2.2
+    _draw_live_ink_underline(ld, 10 + pad_x, 10 + bh - 6, 10 + bw - pad_x, 10 + bh - 6,
+                             progress=ease_und, color=(245, 160, 50, int(240 * alpha)), width=5)
+
+    cx = W // 2
+    cy = int(H * (0.13 if is_shorts else 0.15)) + dy_ent
+    fr.alpha_composite(layer, (cx - layer.width // 2, cy - layer.height // 2))
+
+
+def _extract_editorial_fact_badges(words_list):
+    """Detects spoken historical dates, metrics, and milestones from WORDS.tsv for live kinetic badge display."""
+    badges = []
+    if not words_list:
+        return badges
+    words = [w.get("word", "").lower().strip('.,!?":;') for w in words_list]
+    starts = [float(w.get("start", 0.0)) for w in words_list]
+    n = len(words)
+    i = 0
+    while i < n:
+        w = words[i]
+        if w in ("fourteen", "14") and i + 1 < n and words[i + 1] in ("thousand", "000"):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "14,000 YEARS AGO"))
+            i += 2
+            continue
+        elif w in ("six", "6") and i + 1 < n and words[i + 1] in ("thousand", "000"):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "6,500 YEARS AGO"))
+            i += 2
+            continue
+        elif w in ("1498", "fourteen-ninety-eight") or (w in ("fourteen", "14") and i + 1 < n and words[i + 1] in ("ninety", "98", "ninety-eight")):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "YEAR 1498"))
+            i += 2
+            continue
+        elif w in ("two", "2") and i + 1 < n and words[i + 1] in ("percent", "%"):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "2% CAVITY RATE"))
+            i += 2
+            continue
+        elif w in ("twenty", "20") and i + 1 < n and words[i + 1] in ("percent", "%"):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "20% CAVITY SPIKE"))
+            i += 2
+            continue
+        elif w in ("1177",) or (w in ("eleven", "11") and i + 1 < n and words[i + 1] in ("seventy-seven", "77")):
+            t_s = starts[i]
+            badges.append((t_s, t_s + 3.2, "1177 BC"))
+            i += 2
+            continue
+        i += 1
+    return badges
 
 
 def _resolve_timeline_row_sticker(seg_text, used_paths=None):
@@ -922,6 +1070,54 @@ def _draw_curved_ink_arrow(d, x0, y0, x1, y1, color, width=10, ctrl_pt=None, dra
         d.line([p1, (x1, y1), p2], fill=color, width=max(3, int(width * 0.96)))
 
 
+def _draw_live_ink_circle(d, cx, cy, rx, ry, progress=1.0, color=(220, 48, 38, 235), width=7):
+    """Draws an animated organic hand-drawn ink callout circle sweeping 0% -> 100%."""
+    dp = max(0.0, min(1.0, float(progress)))
+    if dp <= 0.02:
+        return
+    n_pts = max(6, int(36 * dp))
+    angles = np.linspace(-math.pi / 2, -math.pi / 2 + 2 * math.pi * dp, n_pts)
+    pts = []
+    for idx_a, theta in enumerate(angles):
+        wobble = 1.0 + 0.032 * math.sin(idx_a * 1.9)
+        px = cx + rx * wobble * math.cos(theta)
+        py = cy + ry * wobble * math.sin(theta)
+        pts.append((px, py))
+    if len(pts) >= 2:
+        for k in range(len(pts) - 1):
+            d.line([pts[k], pts[k + 1]], fill=color, width=width)
+
+
+def _draw_live_ink_underline(d, x0, y0, x1, y1, progress=1.0, color=(235, 140, 40, 235), width=8):
+    """Draws an animated organic hand-drawn ink underline sweeping 0% -> 100%."""
+    dp = max(0.0, min(1.0, float(progress)))
+    if dp <= 0.02:
+        return
+    cur_x = x0 + (x1 - x0) * dp
+    cur_y = y0 + (y1 - y0) * dp
+    mid_x = (x0 + cur_x) * 0.5
+    mid_y = y0 + 3.0 * math.sin(dp * math.pi)
+    d.line([(x0, y0), (mid_x, mid_y), (cur_x, cur_y)], fill=color, width=width)
+
+
+def detect_panel_polarity(badge_txt, body_txt=""):
+    """Detects positive vs negative polarity from panel headers and labels for sentiment-aware badges."""
+    combined = f"{badge_txt} {body_txt}".lower()
+    if "[+]" in combined or "(+)" in combined or "✓" in combined:
+        return "stamp_check", (28, 152, 82)
+    if "[-]" in combined or "(-)" in combined or "✗" in combined or "x" in combined.split():
+        return "stamp_x", (208, 48, 38)
+    pos_kws = {"reality", "truth", "fact", "ancient", "sugar-free", "healthy", "natural", "clean", "solution", "correct", "real", "cure", "verified", "safe", "pure"}
+    neg_kws = {"myth", "fake", "lie", "modern", "sugar", "acid", "decay", "cavity", "rot", "pain", "danger", "crisis", "wrong", "false", "ruin", "culprit", "attacks", "fatal"}
+    pos_score = sum(1 for w in pos_kws if w in combined)
+    neg_score = sum(1 for w in neg_kws if w in combined)
+    if pos_score > neg_score:
+        return "stamp_check", (28, 152, 82)
+    elif neg_score > pos_score:
+        return "stamp_x", (208, 48, 38)
+    return None, None
+
+
 def _auto_resolve_second_split_sticker(existing_stk, other_text):
     """Picks a contrasting second transparent sticker from elements/cut/ when split_compare only supplied one."""
     exist_base = os.path.splitext(os.path.basename(str(existing_stk or "")))[0].lower()
@@ -991,16 +1187,41 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
     stat_txt = parts[0] if parts else "100%"
     sub_txt = " ".join(parts[1].split()[:6]) if len(parts) > 1 and parts[1].strip() else ""
 
-    p = min(1.0, dt / 0.30)
-    ease_s = 0.96 + 0.04 * spring_p(p)
+    # Live entrance dynamics:
+    p_ent = min(1.0, max(0.0, dt / 0.35))
+    ease_ent = 1.0 - (1.0 - p_ent) ** 3
+    dy_ent = int(56 * (1.0 - ease_ent))
+    alpha_ent = min(1.0, ease_ent * 1.35)
+
+    # Number roll settle over 0.45s
+    p_roll = min(1.0, max(0.0, dt / 0.45))
+    ease_roll = 1.0 - (1.0 - p_roll) ** 3
+    disp_stat_txt = _interpolate_stat_numbers(stat_txt, ease_roll)
+
+    # Live brush highlighter sweep over 0.18s -> 0.52s
+    hl_prog = min(1.0, max(0.0, (dt - 0.18) / 0.34))
+    ease_hl = 1.0 - (1.0 - hl_prog) ** 2.2
+
+    # Live ink underline sweep over 0.35s -> 0.65s
+    und_prog = min(1.0, max(0.0, (dt - 0.35) / 0.30))
+    ease_und = 1.0 - (1.0 - und_prog) ** 2.2
+
+    # Corner ticks pop over 0.30s -> 0.55s
+    tick_prog = min(1.0, max(0.0, (dt - 0.30) / 0.25))
+
+    # Sub-label upward slide & fade over 0.35s -> 0.65s
+    sub_prog = min(1.0, max(0.0, (dt - 0.35) / 0.30))
+    ease_sub = 1.0 - (1.0 - sub_prog) ** 3
+    dy_sub = int(32 * (1.0 - ease_sub))
+    alpha_sub = min(1.0, ease_sub * 1.35)
+
     has_sticker = (sticker_im is not None)
 
     if is_shorts:
         # Full active visual stage on 9:16 Shorts: Y 10% - 72% (strict >=9% horizontal margin left/right!)
         max_w = int(W2 * 0.78)
-        _draw_editorial_corner_ticks(d2, int(W2 * 0.085), int(H2 * 0.11), int(W2 * 0.915), int(H2 * 0.69), INK + (58,), arm=48, width=6)
+        _draw_editorial_corner_ticks(d2, int(W2 * 0.085), int(H2 * 0.11), int(W2 * 0.915), int(H2 * 0.69), INK + (58,), arm=48, width=6, progress=tick_prog)
         if has_sticker:
-            # 1. Generous sticker cleanly inside Y: 11% - 36% with seamless radial backplate lift (leaves safe room above bottom caption pill)
             stk_img = fit_sticker_in_box(sticker_im, max_w=int(W2 * 0.54), max_h=int(H2 * 0.24))
             stk_cy = int(H2 * 0.235)
             stk_w = stk_img.width if stk_img else 420
@@ -1014,29 +1235,31 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
                 stk_sh = add_sticker_drop_shadow(stk_img, offset=(10, 14), shadow_color=(0, 0, 0, 42), blur_radius=12)
                 overlay2.alpha_composite(stk_sh, (W2 // 2 - stk_sh.width // 2, stk_cy - stk_sh.height // 2))
 
-            # 2. Giant Hero Stat with PER-LINE organic brush highlighters cleanly inside <=80% width
             stat_raw, line_boxes = render_wrapped_text_block(
-                stat_txt, "hero", start_size=int(345 * ease_s), min_size=190,
+                disp_stat_txt, "hero", start_size=345, min_size=190,
                 max_w=max_w, max_h=int(H2 * 0.17), color=INK, max_lines=2, return_line_boxes=True
             )
             stat_block = _text_with_offset_shadow(stat_raw, dx=8, dy=10)
+            stat_block = _apply_alpha_to_image(stat_block, alpha_ent)
             sub_block = render_wrapped_text_block(
                 sub_txt.upper(), "annotation", start_size=118, min_size=82,
                 max_w=max_w, max_h=int(H2 * 0.08), color=ACCENT, max_lines=2
             ) if sub_txt else None
+            if sub_block:
+                sub_block = _apply_alpha_to_image(sub_block, alpha_sub)
 
             tot_h = stat_block.height + (36 + sub_block.height if sub_block else 0)
             txt_top = int(H2 * 0.485) - tot_h // 2
             bx_stat = W2 // 2 - stat_block.width // 2
-            _draw_per_line_highlighters(overlay2, bx_stat, txt_top, line_boxes, SUB_ACCENT + (132,), pad_x=34)
-            overlay2.alpha_composite(stat_block, (bx_stat, txt_top))
-            cur_y = txt_top + stat_block.height
+            _draw_per_line_highlighters(overlay2, bx_stat, txt_top + dy_ent, line_boxes, SUB_ACCENT + (132,), pad_x=34, progress=ease_hl)
+            overlay2.alpha_composite(stat_block, (bx_stat, txt_top + dy_ent))
+            cur_y = txt_top + stat_block.height + dy_ent
             if sub_block:
                 rule_w = min(int(max_w * 0.80), stat_raw.width + 32)
-                d2.line((W2 // 2 - rule_w // 2, cur_y + 10, W2 // 2 + rule_w // 2, cur_y + 6), fill=ACCENT + (240,), width=11)
-                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 30))
+                _draw_live_ink_underline(d2, W2 // 2 - rule_w // 2, cur_y + 10, W2 // 2 + rule_w // 2, cur_y + 6,
+                                         progress=ease_und, color=ACCENT + (240,), width=11)
+                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 30 + dy_sub))
 
-            # 3. Aim curved arrow cleanly inward at the lower-left flank of the sticker (stopping 44px @ 2x = 22px @ 1x outside outline)
             flank_x, flank_y = stk_x0 + int(stk_w * 0.08), stk_y0 + int(stk_h * 0.74)
             if stk_img is not None:
                 try:
@@ -1062,7 +1285,6 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
             _draw_curved_ink_arrow(d2, arr_x0, arr_y0, arr_x1, arr_y1, ACCENT + (235,), width=11, ctrl_pt=(ctrl_x, ctrl_y), draw_progress=arrow_prog)
 
         else:
-            # Preview 1 (No Sticker): Gently offset 5.2% watermark + Per-Line Swipes strictly inside ~80% width
             num_m = re.search(r"([0-9]+)", stat_txt)
             wm_str = num_m.group(1) if num_m else stat_txt.split()[0]
             wm_im = text_layer(wm_str, 720, INK, font_role="hero")
@@ -1074,55 +1296,63 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
             overlay2.alpha_composite(wm_im, (W2 // 2 - wm_im.width // 2 + 28, int(H2 * 0.39) - wm_im.height // 2 - 20))
 
             stat_raw, line_boxes = render_wrapped_text_block(
-                stat_txt, "hero", start_size=int(480 * ease_s), min_size=220,
+                disp_stat_txt, "hero", start_size=480, min_size=220,
                 max_w=int(W2 * 0.80), max_h=int(H2 * 0.24), color=INK, max_lines=2, return_line_boxes=True
             )
             stat_block = _text_with_offset_shadow(stat_raw, dx=10, dy=12)
+            stat_block = _apply_alpha_to_image(stat_block, alpha_ent)
             sub_block = render_wrapped_text_block(
                 sub_txt.upper(), "annotation", start_size=126, min_size=88,
                 max_w=int(W2 * 0.80), max_h=int(H2 * 0.12), color=ACCENT, max_lines=2
             ) if sub_txt else None
+            if sub_block:
+                sub_block = _apply_alpha_to_image(sub_block, alpha_sub)
 
             tot_h = stat_block.height + (56 + sub_block.height if sub_block else 0)
             txt_top = int(H2 * 0.425) - tot_h // 2
             bx_stat = W2 // 2 - stat_block.width // 2
 
-            _draw_per_line_highlighters(overlay2, bx_stat, txt_top, line_boxes, SUB_ACCENT + (138,), pad_x=40)
-            _draw_radial_ticks(d2, bx_stat - 14, txt_top + 14, scale=1.55, color=ACCENT + (228,))
-            overlay2.alpha_composite(stat_block, (bx_stat, txt_top))
+            _draw_per_line_highlighters(overlay2, bx_stat, txt_top + dy_ent, line_boxes, SUB_ACCENT + (138,), pad_x=40, progress=ease_hl)
+            _draw_radial_ticks(d2, bx_stat - 14, txt_top + 14 + dy_ent, scale=1.55, color=ACCENT + (228,))
+            overlay2.alpha_composite(stat_block, (bx_stat, txt_top + dy_ent))
 
-            cur_y = txt_top + stat_block.height
+            cur_y = txt_top + stat_block.height + dy_ent
             if sub_block:
                 rule_w = min(int(W2 * 0.74), stat_raw.width)
-                d2.rounded_rectangle((W2 // 2 - rule_w // 2, cur_y + 18, W2 // 2 + rule_w // 2, cur_y + 30), radius=6, fill=ACCENT + (240,))
-                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 52))
+                _draw_live_ink_underline(d2, W2 // 2 - rule_w // 2, cur_y + 18, W2 // 2 + rule_w // 2, cur_y + 24,
+                                         progress=ease_und, color=ACCENT + (240,), width=10)
+                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 46 + dy_sub))
 
     else:
         # Long (16:9): Clean authoritative widescreen editorial composition with registration corners & per-line highlighters
-        _draw_editorial_corner_ticks(d2, 120, 120, W2 - 120, H2 - 140, INK + (52,), arm=52, width=6)
+        _draw_editorial_corner_ticks(d2, 120, 120, W2 - 120, H2 - 140, INK + (52,), arm=52, width=6, progress=tick_prog)
         if has_sticker:
             left_cx = int(W2 * 0.34)
             left_max_w = int(W2 * 0.46)
             stat_raw, line_boxes = render_wrapped_text_block(
-                stat_txt, "hero", start_size=int(360 * ease_s), min_size=180,
+                disp_stat_txt, "hero", start_size=360, min_size=180,
                 max_w=left_max_w, max_h=int(H2 * 0.38), color=INK, max_lines=2, return_line_boxes=True
             )
             stat_block = _text_with_offset_shadow(stat_raw, dx=9, dy=11)
+            stat_block = _apply_alpha_to_image(stat_block, alpha_ent)
             sub_block = render_wrapped_text_block(
                 sub_txt.upper(), "annotation", start_size=122, min_size=80,
                 max_w=int(left_max_w * 0.94), max_h=int(H2 * 0.16), color=ACCENT, max_lines=2
             ) if sub_txt else None
+            if sub_block:
+                sub_block = _apply_alpha_to_image(sub_block, alpha_sub)
 
             tot_h = stat_block.height + (44 + sub_block.height if sub_block else 0)
             cur_y = int(H2 * 0.44) - tot_h // 2
             bx_stat = left_cx - stat_block.width // 2
-            _draw_per_line_highlighters(overlay2, bx_stat, cur_y, line_boxes, SUB_ACCENT + (135,), pad_x=40)
-            overlay2.alpha_composite(stat_block, (bx_stat, cur_y))
-            cur_y += stat_block.height
+            _draw_per_line_highlighters(overlay2, bx_stat, cur_y + dy_ent, line_boxes, SUB_ACCENT + (135,), pad_x=40, progress=ease_hl)
+            overlay2.alpha_composite(stat_block, (bx_stat, cur_y + dy_ent))
+            cur_y += stat_block.height + dy_ent
             if sub_block:
                 rule_w = min(int(left_max_w * 0.72), stat_raw.width)
-                d2.line((left_cx - rule_w // 2, cur_y + 14, left_cx + rule_w // 2, cur_y + 10), fill=ACCENT + (240,), width=11)
-                overlay2.alpha_composite(sub_block, (left_cx - sub_block.width // 2, cur_y + 42))
+                _draw_live_ink_underline(d2, left_cx - rule_w // 2, cur_y + 14, left_cx + rule_w // 2, cur_y + 10,
+                                         progress=ease_und, color=ACCENT + (240,), width=11)
+                overlay2.alpha_composite(sub_block, (left_cx - sub_block.width // 2, cur_y + 40 + dy_sub))
 
             right_cx = int(W2 * 0.74)
             stk_img = fit_sticker_in_box(sticker_im, max_w=int(W2 * 0.35), max_h=int(H2 * 0.52))
@@ -1134,15 +1364,15 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
                 stk_sh = add_sticker_drop_shadow(stk_img, offset=(10, 14), shadow_color=(0, 0, 0, 42), blur_radius=12)
                 overlay2.alpha_composite(stk_sh, (right_cx - stk_sh.width // 2, stk_cy - stk_sh.height // 2))
                 arrow_prog = min(1.0, max(0.0, (dt - 0.28) / 0.32))
-                # Graceful arched draw-on arrow from first headline line shoulder directly toward sticker upper-left alpha flank
                 hdr_top = int(H2 * 0.44) - tot_h // 2
                 l0_x, l0_y, l0_w, l0_h = line_boxes[0]
-                ax0 = min(int(W2 * 0.48), bx_stat + l0_x + l0_w + 68)
+                min_clearance_ax0 = bx_stat + l0_x + l0_w + 64
+                ax0 = max(min_clearance_ax0, min(int(W2 * 0.54), bx_stat + l0_x + l0_w + 80))
                 ay0 = max(int(H2 * 0.18), hdr_top + l0_y + int(l0_h * 0.32))
 
                 stk_x0 = right_cx - stk_img.width // 2
                 stk_y0 = stk_cy - stk_img.height // 2
-                ax1 = stk_x0 - 52
+                ax1 = max(ax0 + 120, stk_x0 - 52)
                 ay1 = stk_y0 + int(stk_img.height * 0.28)
                 try:
                     a16 = np.array(stk_img.split()[3])
@@ -1154,7 +1384,6 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
                         ay1 = stk_y0 + int(r16[k16])
                 except Exception:
                     pass
-                # Ensure arrow stays cleanly above the 2nd line / bottom of headline block
                 ax0 = min(ax0, ax1 - 180)
                 ay1 = min(ay1, hdr_top + l0_y + l0_h + 120)
                 ctrl_x = (ax0 + ax1) * 0.50
@@ -1164,29 +1393,40 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
         else:
             max_w = int(W2 * 0.80)
             stat_raw, line_boxes = render_wrapped_text_block(
-                stat_txt, "hero", start_size=int(460 * ease_s), min_size=220,
+                disp_stat_txt, "hero", start_size=460, min_size=220,
                 max_w=max_w, max_h=int(H2 * 0.40), color=INK, max_lines=2, return_line_boxes=True
             )
             stat_block = _text_with_offset_shadow(stat_raw, dx=10, dy=12)
+            stat_block = _apply_alpha_to_image(stat_block, alpha_ent)
             sub_block = render_wrapped_text_block(
                 sub_txt.upper(), "annotation", start_size=132, min_size=84,
                 max_w=int(max_w * 0.88), max_h=int(H2 * 0.16), color=ACCENT, max_lines=2
             ) if sub_txt else None
+            if sub_block:
+                sub_block = _apply_alpha_to_image(sub_block, alpha_sub)
+
             tot_h = stat_block.height + (48 + sub_block.height if sub_block else 0)
             cur_y = int(H2 * 0.44) - tot_h // 2
             bx_stat = W2 // 2 - stat_block.width // 2
-            _draw_per_line_highlighters(overlay2, bx_stat, cur_y, line_boxes, SUB_ACCENT + (135,), pad_x=48)
-            _draw_radial_ticks(d2, bx_stat - 16, cur_y + 16, scale=1.5, color=ACCENT + (225,))
-            overlay2.alpha_composite(stat_block, (bx_stat, cur_y))
-            cur_y += stat_block.height
+            _draw_per_line_highlighters(overlay2, bx_stat, cur_y + dy_ent, line_boxes, SUB_ACCENT + (135,), pad_x=48, progress=ease_hl)
+            _draw_radial_ticks(d2, bx_stat - 16, cur_y + 16 + dy_ent, scale=1.5, color=ACCENT + (225,))
+            overlay2.alpha_composite(stat_block, (bx_stat, cur_y + dy_ent))
+            cur_y += stat_block.height + dy_ent
             if sub_block:
                 rule_w = min(int(max_w * 0.64), stat_raw.width)
-                d2.rounded_rectangle((W2 // 2 - rule_w // 2, cur_y + 14, W2 // 2 + rule_w // 2, cur_y + 26), radius=6, fill=ACCENT + (240,))
-                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 46))
+                _draw_live_ink_underline(d2, W2 // 2 - rule_w // 2, cur_y + 14, W2 // 2 + rule_w // 2, cur_y + 20,
+                                         progress=ease_und, color=ACCENT + (240,), width=10)
+                overlay2.alpha_composite(sub_block, (W2 // 2 - sub_block.width // 2, cur_y + 44 + dy_sub))
 
     overlay = overlay2.resize((w, h), Image.LANCZOS)
     fr = card_bg(w, h).convert("RGBA")
     fr.alpha_composite(overlay)
+    # Slow continuous documentary drift (1.00 -> 1.035 over scene hold)
+    if dt > 0.0:
+        drift_scale = 1.00 + 0.035 * min(1.0, dt / 4.8)
+        dw = int(w * drift_scale)
+        dh = int(h * drift_scale)
+        fr = fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
     return fr
 
 
@@ -1214,18 +1454,29 @@ def draw_split_compare(w, h, text, is_shorts=False, dt=0.0, left_sticker=None, r
     elif right_sticker and not left_sticker:
         left_sticker = _auto_resolve_second_split_sticker(right_sticker, raw_left)
 
-    eff_left_stamp = left_stamp or "stamp_x"
-    eff_right_stamp = right_stamp or "stamp_check"
+    # Sentiment-Aware Polarity Detection
+    left_pol_stamp, left_pol_col = detect_panel_polarity(badge_l, body_l)
+    right_pol_stamp, right_pol_col = detect_panel_polarity(badge_r, body_r)
+
+    eff_left_stamp = left_stamp or left_pol_stamp or "stamp_x"
+    eff_right_stamp = right_stamp or right_pol_stamp or "stamp_check"
+    left_accent_col = left_pol_col or (208, 48, 38)
+    right_accent_col = right_pol_col or (28, 152, 82)
+
+    if eff_left_stamp == eff_right_stamp and not left_stamp and not right_stamp:
+        eff_left_stamp, left_accent_col = "stamp_x", (208, 48, 38)
+        eff_right_stamp, right_accent_col = "stamp_check", (28, 152, 82)
 
     left_alpha = min(1.0, max(0.0, dt / 0.25)) if dt < 0.25 else 1.0
     reveal_t = max(0.7, min(1.4, duration * 0.38))
     right_alpha = min(1.0, max(0.0, (dt - reveal_t) / 0.30)) if dt >= reveal_t else 0.10
 
     if is_shorts:
-        # 9:16 Vertical Shorts: Exact 50/50 full-bleed top/bottom split (Y = 50% divider, zero bottom beige cutoff strip)
+        # 9:16 Vertical Shorts: Exact 50/50 full-bleed top/bottom split (Y = 50% divider)
+        # Content bounded strictly to Y: 12% - 46% (top) and Y: 54% - 72% (bottom) to prevent subtitle collisions!
         div_y = H2 // 2
-        top_box = (0, int(H2 * 0.08), W2, int(H2 * 0.43))
-        bot_box = (0, int(H2 * 0.52), W2, int(H2 * 0.77))
+        top_box = (0, int(H2 * 0.12), W2, int(H2 * 0.46))
+        bot_box = (0, int(H2 * 0.54), W2, int(H2 * 0.72))
 
         top_tint = Image.new("RGBA", (W2, div_y), (255, 228, 210, 148))
         bot_tint = Image.new("RGBA", (W2, H2 - div_y), (212, 236, 250, 155))
@@ -1240,8 +1491,8 @@ def draw_split_compare(w, h, text, is_shorts=False, dt=0.0, left_sticker=None, r
             curr_x += 70
 
         panels = [
-            (top_box, badge_l, body_l, (208, 48, 38), left_sticker, eff_left_stamp, left_alpha),
-            (bot_box, badge_r, body_r, (28, 152, 82), right_sticker, eff_right_stamp, right_alpha),
+            (top_box, badge_l, body_l, left_accent_col, left_sticker, eff_left_stamp, left_alpha),
+            (bot_box, badge_r, body_r, right_accent_col, right_sticker, eff_right_stamp, right_alpha),
         ]
 
         for (bx0, by0, bx1, by1), badge_txt, body_txt, accent_col, stk_src, stmp_tok, side_alpha in panels:
@@ -1321,8 +1572,8 @@ def draw_split_compare(w, h, text, is_shorts=False, dt=0.0, left_sticker=None, r
         margin = 76
         gutter = 48
         sides = [
-            ((margin, top_div_y, div_x - gutter, bot_div_y - 110), badge_l, body_l, (208, 48, 38), left_sticker, eff_left_stamp, left_alpha),
-            ((div_x + gutter, top_div_y, W2 - margin, bot_div_y - 110), badge_r, body_r, (28, 152, 82), right_sticker, eff_right_stamp, right_alpha),
+            ((margin, top_div_y, div_x - gutter, bot_div_y - 110), badge_l, body_l, left_accent_col, left_sticker, eff_left_stamp, left_alpha),
+            ((div_x + gutter, top_div_y, W2 - margin, bot_div_y - 110), badge_r, body_r, right_accent_col, right_sticker, eff_right_stamp, right_alpha),
         ]
 
         for (bx0, by0, bx1, by1), badge_txt, body_txt, accent_col, stk_src, stmp_tok, side_alpha in sides:
@@ -1385,6 +1636,11 @@ def draw_split_compare(w, h, text, is_shorts=False, dt=0.0, left_sticker=None, r
     overlay = overlay2.resize((w, h), Image.LANCZOS)
     fr = card_bg(w, h).convert("RGBA")
     fr.alpha_composite(overlay)
+    if dt > 0.0:
+        drift_scale = 1.00 + 0.035 * min(1.0, dt / 4.8)
+        dw = int(w * drift_scale)
+        dh = int(h * drift_scale)
+        fr = fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
     return fr
 
 
@@ -1557,6 +1813,11 @@ def draw_data_timeline(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None,
     overlay = overlay2.resize((w, h), Image.LANCZOS)
     fr = card_bg(w, h).convert("RGBA")
     fr.alpha_composite(overlay)
+    if dt > 0.0:
+        drift_scale = 1.00 + 0.035 * min(1.0, dt / 4.8)
+        dw = int(w * drift_scale)
+        dh = int(h * drift_scale)
+        fr = fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
     return fr
 
 
@@ -1616,6 +1877,11 @@ def draw_stat_pie(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None):
     overlay = overlay2.resize((w, h), Image.LANCZOS)
     fr = card_bg(w, h).convert("RGBA")
     fr.alpha_composite(overlay)
+    if dt > 0.0:
+        drift_scale = 1.00 + 0.035 * min(1.0, dt / 4.8)
+        dw = int(w * drift_scale)
+        dh = int(h * drift_scale)
+        fr = fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
     return fr
 
 
@@ -1754,8 +2020,10 @@ def render_subtitles(fr, words_list, t, w, h, is_shorts):
     # Eye-level position: dynamically calibrated via Reinforcement Learning policy
     pos_x = (w - bw) // 2
     spatial_policy = ACTIVE_RL_POLICY.get("rule_24_spatial_hierarchy", {})
-    sub_y_short = spatial_policy.get("subtitles_center_y_shorts", 1180)
-    sub_y_long = spatial_policy.get("subtitles_center_y_long", h - 150)
+    # Lower safe zone for 9:16 Shorts (Y: 81%–88%, 1590px in 1920p, safely clear of bottom graphics)
+    sub_y_short = int(spatial_policy.get("subtitles_center_y_shorts", int(h * 0.83)))
+    sub_y_short = max(int(h * 0.81), min(int(h * 0.88), sub_y_short))
+    sub_y_long = int(spatial_policy.get("subtitles_center_y_long", h - 150))
     pos_y = sub_y_short if is_shorts else sub_y_long
 
     if fr.mode != "RGBA":
@@ -1872,7 +2140,10 @@ def main():
     ap.add_argument("--header", action="store_true", default=False, help="Render top title banner in Shorts (default: False to avoid screen clutter)")
     ap.add_argument("--frame", type=float, default=None, help="Render a single still frame at timestamp T seconds and exit")
     ap.add_argument("--frame-out", default="frame.png", help="Output path for single still frame")
+    ap.add_argument("--outro-sec", type=float, default=None, help="Duration of standalone music-only outro (default: 8.0 for 16:9, 0.0 for 9:16)")
     args = ap.parse_args()
+    if args.outro_sec is None:
+        args.outro_sec = 8.0 if args.format == "16:9" else 0.0
 
     try:
         from anti_pollution import validate_external_output_dir
@@ -2021,9 +2292,10 @@ def main():
                            capture_output=True, text=True)
     audio_dur = float(probe.stdout.strip()) if probe.stdout.strip() else (scenes[-1]["t0"] + 3.0)
     total = min(audio_dur, args.clip_seconds) if args.clip_seconds else audio_dur
+    story_dur = max(0.1, total - args.outro_sec) if args.outro_sec > 0 else total
 
     for i in range(len(scenes)):
-        scenes[i]["t1"] = scenes[i + 1]["t0"] if i + 1 < len(scenes) else total
+        scenes[i]["t1"] = scenes[i + 1]["t0"] if i + 1 < len(scenes) else story_dur
 
     # Robust Overlay Re-Parenting Gate:
     # Guarantees that every overlay belongs to the scene active during its timestamp t_ov,
@@ -2133,11 +2405,15 @@ def main():
         sd.rounded_rectangle((8, 8, stage_w + 16, stage_h + 16), radius=24, fill=(0, 0, 0, 80))
         sd.rounded_rectangle((4, 4, stage_w + 20, stage_h + 20), radius=24, fill=PAPER + (255,), outline=INK, width=6)
 
-    def draw_youtube_outro_slate(fr, W, H, dt):
+    def draw_youtube_outro_slate(fr, W, H, dt, standalone=False):
         """Renders broadcast YouTube End Screen Slate with designated 16:9 video boxes and subscribe bubble."""
         d = ImageDraw.Draw(fr)
-        slate_dark = Image.new("RGBA", (W, H), (14, 18, 26, 235))
-        fr.alpha_composite(slate_dark)
+        if standalone:
+            d.rectangle((0, 0, W, H), fill=(16, 20, 28, 255))
+            _draw_editorial_corner_ticks(d, 80, 80, W - 80, H - 80, (65, 80, 105, 180), arm=44, width=4)
+        else:
+            slate_dark = Image.new("RGBA", (W, H), (14, 18, 26, 235))
+            fr.alpha_composite(slate_dark)
 
         # Header
         header_im = text_layer("THANKS FOR WATCHING", 52, (255, 230, 80))
@@ -2180,26 +2456,40 @@ def main():
         fr.alpha_composite(bot_im, ((W - bot_im.width) // 2, H - 110))
 
     def draw_shorts_subscribe_callout(fr, W, H, dt):
-        """Draws floating subscribe callout pill in lower safe area during Shorts closing."""
-        p = min(1.0, dt / 0.4)
-        d = ImageDraw.Draw(fr)
-        pulse = 1.0 + 0.04 * math.sin(dt * 8.0)
-        pill_w = int(620 * pulse)
-        pill_h = int(90 * pulse)
+        """Draws floating sleek modern dark/amber editorial subscribe badge in lower safe area during Shorts closing."""
+        p = min(1.0, dt / 0.35)
+        ease = 1.0 - (1.0 - p) ** 3
+        dy = int(24 * (1.0 - ease))
+        alpha = min(1.0, ease * 1.3)
+        pulse = 1.0 + 0.02 * math.sin(dt * 6.0)
+        pill_w = int(580 * pulse)
+        pill_h = 76
         pill_x = (W - pill_w) // 2
-        pill_y = 1360
-        d.rounded_rectangle((pill_x + 4, pill_y + 4, pill_x + pill_w + 4, pill_y + pill_h + 4), radius=24, fill=(0, 0, 0, 90))
-        d.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=24, fill=(255, 215, 30, 245), outline=(20, 24, 32, 255), width=4)
-        txt = text_layer("🔔 SUBSCRIBE FOR MORE", 38, (20, 24, 32))
-        fr.alpha_composite(txt, ((W - txt.width) // 2, pill_y + (pill_h - txt.height) // 2 - 2))
+        pill_y = 1380 + dy
+        badge_im = Image.new("RGBA", (pill_w + 16, pill_h + 16), (0, 0, 0, 0))
+        bd = ImageDraw.Draw(badge_im)
+        bd.rounded_rectangle((8 + 3, 8 + 5, 8 + pill_w + 3, 8 + pill_h + 5), radius=22, fill=(0, 0, 0, int(75 * alpha)))
+        bd.rounded_rectangle((8, 8, 8 + pill_w, 8 + pill_h), radius=22, fill=(24, 28, 38, int(245 * alpha)),
+                             outline=ACCENT + (int(235 * alpha),), width=3)
+        fr.alpha_composite(badge_im, (pill_x - 8, pill_y - 8))
+        txt = text_layer("SUBSCRIBE • FULL VIDEO ON CHANNEL", 30, (250, 248, 240))
+        if txt:
+            fr.alpha_composite(txt, ((W - txt.width) // 2, pill_y + (pill_h - txt.height) // 2))
 
     # Runtime Compositing Counter & Telemetry
     rendered_stickers_counter = [0]
     rendered_unique_stickers = set()
     rendered_stickers_telemetry = []
     overlay_anchor_cache = {}
+    fact_badges = _extract_editorial_fact_badges(words_list)
 
     def compose_frame_at(t):
+        if args.outro_sec > 0 and t >= story_dur:
+            dt_outro = t - story_dur
+            fr = Image.new("RGBA", (W, H), (16, 20, 28, 255))
+            draw_youtube_outro_slate(fr, W, H, dt_outro, standalone=True)
+            return fr
+
         si = 0
         while si + 1 < len(scenes) and t >= scenes[si + 1]["t0"]:
             si += 1
@@ -2231,6 +2521,7 @@ def main():
         is_timeline_card = (token in ("bar_timeline", "timeline") or token_base in ("bar_timeline", "timeline") or token_key in ("bar_timeline", "timeline") or token.startswith(("timeline_", "bar_")))
         is_pie_card = (token in ("stat_pie", "stat_ring") or token_base in ("stat_pie", "stat_ring") or token_key in ("stat_pie", "stat_ring") or token.startswith("stat_"))
         is_native_archetype = (is_stat_card or is_split_card or is_timeline_card or is_pie_card)
+        is_archetype_card = (is_native_archetype or img_path == "card")
 
         # Collect stickers ONLY if current scene is an archetype card that actually embeds them natively
         paired_stk = None
@@ -2324,29 +2615,33 @@ def main():
                             mv = "zoom_in_tight" if tok_m == "crop_focus" else tok_m
                             break
                 if mv == "static":
-                    return src_im.resize((out_w, out_h), Image.LANCZOS)
-                if mv == "pan_left":
-                    scale = 1.12
+                    scale = 1.00 + 0.025 * ease
+                    dx_frac = 0.01 * (ease - 0.5)
+                    dy_frac = 0.0
+                elif mv == "pan_left":
+                    scale = 1.14
                     dx_frac = 0.45 - 0.90 * ease
                     dy_frac = 0.0
                 elif mv == "pan_right":
-                    scale = 1.12
+                    scale = 1.14
                     dx_frac = -0.45 + 0.90 * ease
                     dy_frac = 0.0
                 elif mv == "zoom_in_tight":
-                    scale = 1.02 + 0.12 * ease
+                    scale = 1.04 + 0.14 * ease
                     dx_frac = 0.0
                     dy_frac = -0.05 * ease
                 elif mv == "pull_back":
-                    scale = 1.045 - 0.045 * ease
-                    dx_frac = 0.02 * (0.5 - ease)
-                    dy_frac = -0.015 * ease
-                elif mv == "push_in":
-                    scale = 1.00 + 0.045 * ease
-                    dx_frac = 0.02 * (ease - 0.5)
+                    scale = 1.085 - 0.085 * ease
+                    dx_frac = 0.035 * (0.5 - ease)
                     dy_frac = -0.02 * ease
+                elif mv == "push_in":
+                    scale = 1.00 + 0.085 * ease
+                    dx_frac = 0.035 * (ease - 0.5)
+                    dy_frac = -0.025 * ease
                 else:
-                    return src_im.resize((out_w, out_h), Image.LANCZOS)
+                    scale = 1.00 + 0.085 * ease
+                    dx_frac = 0.035 * (ease - 0.5)
+                    dy_frac = -0.02 * ease
 
                 cw = max(1, int(src_im.width / scale))
                 ch = max(1, int(src_im.height / scale))
@@ -2412,57 +2707,68 @@ def main():
         if shake_dx != 0 or shake_dy != 0:
             fr = fr.transform(fr.size, Image.AFFINE, (1, 0, shake_dx, 0, 1, shake_dy))
 
-        # Zoom Punch Transition (Cinematic 1.12x/1.10x Snap to 1.00x)
-        if "zoom_punch" in trans_type and dt_scene < 0.28:
-            scale_zp = 1.0 + (0.12 if is_shorts else 0.10) * ((1.0 - dt_scene / 0.28) ** 2)
+        # Kinetic Editorial Motion Transitions & Micro-Settle:
+        # Micro punch-scale settle (1.055 -> 1.00 over 0.18s) on rhythmic beats and default scene cuts
+        has_explicit_trans = any(k in trans_type for k in ("zoom_punch", "slide_wipe", "whip_blur", "flash", "crossfade", "fade"))
+        is_card_scene = (img_path == "card" or is_archetype_card)
+        if ("punch_settle" in trans_type or (si > 0 and not has_explicit_trans and not is_card_scene)) and dt_scene < 0.18:
+            scale_ps = 1.0 + 0.055 * ((1.0 - dt_scene / 0.18) ** 2)
+            cw = int(W / scale_ps)
+            ch = int(H / scale_ps)
+            fr = fr.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
+
+        # Zoom Punch (Cinematic 1.10x Snap to 1.00x over 0.24s)
+        elif "zoom_punch" in trans_type and dt_scene < 0.24:
+            scale_zp = 1.0 + (0.10 if is_shorts else 0.08) * ((1.0 - dt_scene / 0.24) ** 2)
             cw = int(W / scale_zp)
             ch = int(H / scale_zp)
             fr = fr.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
 
-        # Black & White / Grayscale / Historical Tragedy
-        if "bw" in trans_type or "grayscale" in trans_type or "monochrome" in trans_type:
-            gray = fr.convert("L").convert("RGBA")
-            fr = Image.blend(fr, gray, 0.92)
-
-        # Danger Crimson / Blood Vignette (Rich atmospheric edge gradient)
-        if "blood" in trans_type or "danger" in trans_type or "hazard" in trans_type:
-            pulse_v = 0.70 + 0.30 * np.sin(dt_scene * 6.0)
-            danger_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            dd = ImageDraw.Draw(danger_layer)
-            border_w = 160 if is_shorts else 200
-            for i in range(0, border_w, 2):
-                p_edge = 1.0 - (i / border_w)
-                alpha_v = int((p_edge ** 1.5) * 190 * pulse_v)
-                dd.rectangle((i, i, W - i, H - i), outline=(225, 20, 20, alpha_v), width=2)
-            fr.alpha_composite(danger_layer)
-
-        # Ice / Frost Cyan Vignette (Vibrant freezing atmospheric edge)
-        if "ice" in trans_type or "frost" in trans_type or "cold" in trans_type:
-            frost_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            fd = ImageDraw.Draw(frost_layer)
-            border_w = 160 if is_shorts else 200
-            for i in range(0, border_w, 2):
-                p_edge = 1.0 - (i / border_w)
-                alpha_v = int((p_edge ** 1.5) * 185)
-                fd.rectangle((i, i, W - i, H - i), outline=(40, 205, 255, alpha_v), width=2)
-            fr.alpha_composite(frost_layer)
-
-        # Scene Transition VFX:
-        # Clean 0.22s smooth crossfades between calm narrative scenes (crisp cuts for explicit dramatic impacts)
+        # Directional Paper/Ink Slide-Wipe (0.22s eased slide)
         dt_scene = t - t0
-        is_hard_impact = ("zoom_punch" in trans_type or "shake" in trans_type or "danger" in trans_type or "flash" in trans_type)
-        if dt_scene < 0.22 and si > 0:
-            if "flash" in trans_type:
-                flash_p = max(0.0, 1.0 - dt_scene / 0.12)
-                flash_layer = Image.new("RGBA", (W, H), (255, 252, 240, int(flash_p * 180)))
-                fr.alpha_composite(flash_layer)
-            elif "fade" in trans_type or "crossfade" in trans_type or not is_hard_impact:
-                prev_img_path = scenes[si - 1]["img"]
-                if prev_img_path in img_cache:
-                    prev_raw = img_cache[prev_img_path]
-                    prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw
-                    blend_alpha = min(1.0, max(0.0, dt_scene / 0.22))
-                    fr = Image.blend(prev_fr.convert("RGBA"), fr, blend_alpha)
+        if "slide_wipe" in trans_type and dt_scene < 0.22 and si > 0:
+            prev_img_path = scenes[si - 1]["img"]
+            if prev_img_path in img_cache:
+                prev_raw = img_cache[prev_img_path]
+                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw.copy()
+                p_slide = min(1.0, max(0.0, dt_scene / 0.22))
+                ease_s = 1.0 - (1.0 - p_slide) ** 3
+                slide_offset = int((1.0 - ease_s) * W)
+                comp_slide = Image.new("RGBA", (W, H))
+                comp_slide.paste(prev_fr, (-int(slide_offset * 0.35), 0))
+                comp_slide.paste(fr, (W - slide_offset, 0))
+                sd = ImageDraw.Draw(comp_slide)
+                div_x = W - slide_offset
+                sd.line([(div_x, 0), (div_x, H)], fill=(20, 24, 32, 220), width=4)
+                fr = comp_slide
+
+        # Crisp Subtle Directional Whip-Blur (0.14s on energetic beat shifts)
+        elif "whip_blur" in trans_type and dt_scene < 0.14 and si > 0:
+            prev_img_path = scenes[si - 1]["img"]
+            p_whip = min(1.0, max(0.0, dt_scene / 0.14))
+            blur_shift = int(np.sin(p_whip * np.pi) * 36)
+            if p_whip < 0.5 and prev_img_path in img_cache:
+                prev_raw = img_cache[prev_img_path]
+                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw.copy()
+                prev_fr = prev_fr.transform((W, H), Image.AFFINE, (1, 0, blur_shift, 0, 1, 0))
+                fr = prev_fr
+            else:
+                fr = fr.transform((W, H), Image.AFFINE, (1, 0, -blur_shift, 0, 1, 0))
+
+        # Flash impact
+        elif "flash" in trans_type and dt_scene < 0.12 and si > 0:
+            flash_p = max(0.0, 1.0 - dt_scene / 0.12)
+            flash_layer = Image.new("RGBA", (W, H), (255, 252, 240, int(flash_p * 180)))
+            fr.alpha_composite(flash_layer)
+
+        # Calm Reflective Dissolves / Crossfades (0.18s)
+        elif ("crossfade" in trans_type or "fade" in trans_type) and dt_scene < 0.18 and si > 0:
+            prev_img_path = scenes[si - 1]["img"]
+            if prev_img_path in img_cache:
+                prev_raw = img_cache[prev_img_path]
+                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw
+                blend_alpha = min(1.0, max(0.0, dt_scene / 0.18))
+                fr = Image.blend(prev_fr.convert("RGBA"), fr, blend_alpha)
 
         # Label Deduplication & Clash Check:
         # Scene heading text label: Suppressed on standard scenes so stickers, art, and captions remain uncluttered.
@@ -2499,9 +2805,15 @@ def main():
 
         # Overlays / Stickers (Intelligent positioning, boundary clamping, and anti-collision)
         active_overlays = []
+        seen_stk_names = set()
         for o_idx, o in enumerate(sc["ov"]):
             if o_idx in natively_consumed_indices:
                 continue
+            stk_name = os.path.basename(o["img"].strip()).lower()
+            if stk_name and stk_name not in ("tag", "count") and not stk_name.startswith("bars:"):
+                if stk_name in seen_stk_names:
+                    continue
+                seen_stk_names.add(stk_name)
             dt = t - o["t"]
             if dt >= 0:
                 # Rule 29 & Rule 70: Smart Scene-Locked Duration
@@ -2524,9 +2836,15 @@ def main():
         # Multi-Sticker Collision-Free Composition (unlimited simultaneous logical stickers per scene!)
         # Pre-compute spawn-time cohort scaling from scene schedule so stickers NEVER resize or jump mid-display.
         scheduled_spans = []
+        seen_sched_stks = set()
         for idx_s, os_ov in enumerate(sc["ov"]):
             if idx_s in natively_consumed_indices:
                 continue
+            stk_name_s = os.path.basename(os_ov["img"].strip()).lower()
+            if stk_name_s and stk_name_s not in ("tag", "count") and not stk_name_s.startswith("bars:"):
+                if stk_name_s in seen_sched_stks:
+                    continue
+                seen_sched_stks.add(stk_name_s)
             rem = max(0.2, t1 - os_ov["t"])
             d_s = min(rem, max(2.5, min(4.2, rem))) if is_shorts else min(rem, max(3.5, min(6.5, rem)))
             for pt in str(os_ov.get("extra", "")).split("|"):
@@ -2687,8 +3005,8 @@ def main():
             # Multi-Slot Collision-Free Anchor Solver (Locked Anchor Cache: zero jitter/teleporting)
             sub_top_y = (1180 - 60) if is_shorts else (H - 150 - 50)
             ov_cache_key = f"{si}_{o_idx}_{o.get('t', 0.0)}"
+            base_ref = clean_base_fr if 'clean_base_fr' in locals() and clean_base_fr is not None else fr
             if ov_cache_key not in overlay_anchor_cache:
-                base_ref = clean_base_fr if 'clean_base_fr' in locals() and clean_base_fr is not None else fr
                 usable_w = W - (268 if is_shorts else 108)
                 usable_h = max(240, sub_top_y - (250 if is_shorts else 145))
                 max_prop_w = int(usable_w * (0.48 if peak_cohort == 1 else (0.39 if peak_cohort == 2 else 0.34)))
@@ -2823,9 +3141,21 @@ def main():
 
             # Soft feathered backdrop separation scrim on busy illustrated background shots
             if img_path != "card":
-                halo_base = PAPER if sum(PAPER) > 380 else (28, 34, 48)
-                halo_im = _soft_backdrop_halo(nw, nh, base_rgb=halo_base, peak_alpha=min(110, int((66 + halo_boost) * max(0.0, min(1.0, alpha)))))
-                fr.alpha_composite(halo_im, (cx - halo_im.width // 2, cy - halo_im.height // 2))
+                clutter = compute_negative_space_score(base_ref, cx - nw // 2, cy - nh // 2, cx + nw // 2, cy + nh // 2)
+                if clutter >= 22.0:
+                    callout_pad = 32 if is_shorts else 26
+                    c_dim = max(nw, nh) + callout_pad * 2
+                    callout_im = Image.new("RGBA", (c_dim + 16, c_dim + 16), (0, 0, 0, 0))
+                    cd = ImageDraw.Draw(callout_im)
+                    cd.ellipse((8 + 4, 8 + 6, 8 + c_dim + 4, 8 + c_dim + 6), fill=(0, 0, 0, int(52 * max(0.0, min(1.0, alpha)))))
+                    cd.ellipse((8, 8, 8 + c_dim, 8 + c_dim), fill=PAPER + (int(248 * max(0.0, min(1.0, alpha))),),
+                               outline=INK + (int(220 * max(0.0, min(1.0, alpha))),), width=3)
+                    cd.ellipse((14, 14, 8 + c_dim - 6, 8 + c_dim - 6), outline=ACCENT + (int(120 * max(0.0, min(1.0, alpha))),), width=1)
+                    fr.alpha_composite(callout_im, (cx - callout_im.width // 2, cy - callout_im.height // 2))
+                else:
+                    halo_base = PAPER if sum(PAPER) > 380 else (28, 34, 48)
+                    halo_im = _soft_backdrop_halo(nw, nh, base_rgb=halo_base, peak_alpha=min(110, int((66 + halo_boost) * max(0.0, min(1.0, alpha)))))
+                    fr.alpha_composite(halo_im, (cx - halo_im.width // 2, cy - halo_im.height // 2))
 
             # Grounded shadow scales subtly for drop_weight landings
             sh_w = max(8, int(nw * shadow_scale))
@@ -2838,6 +3168,25 @@ def main():
 
             fr.alpha_composite(scaled_im, (cx - nw // 2, cy - nh // 2))
             scene_drawn_stickers[o_idx] = (cx, cy, scaled_im, o["t"], exit_e)
+
+            # Rule: Crisp animated sparkle ticks / pop lines on sticker entrance
+            if dt <= 0.22:
+                spark_p = dt / 0.22
+                spark_alpha = int(220 * (1.0 - spark_p))
+                if spark_alpha > 10:
+                    spark_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                    sd = ImageDraw.Draw(spark_layer)
+                    rad_dist = int(12 + 24 * spark_p)
+                    tick_len = int(10 * (1.0 - spark_p * 0.5))
+                    corners = [
+                        (cx - nw // 2 - rad_dist, cy - nh // 2 - rad_dist, -1, -1),
+                        (cx + nw // 2 + rad_dist, cy - nh // 2 - rad_dist, 1, -1),
+                        (cx - nw // 2 - rad_dist, cy + nh // 2 + rad_dist, -1, 1),
+                        (cx + nw // 2 + rad_dist, cy + nh // 2 + rad_dist, 1, 1),
+                    ]
+                    for x0, y0, dx, dy in corners:
+                        sd.line([(x0, y0), (x0 + dx * tick_len, y0 + dy * tick_len)], fill=(245, 180, 50, spark_alpha), width=3)
+                    fr.alpha_composite(spark_layer)
 
             # Runtime Compositing Telemetry
             rendered_stickers_counter[0] += 1
@@ -2922,11 +3271,13 @@ def main():
                 _draw_curved_ink_arrow(ad, ax0, ay0, ax1, ay1, ACCENT + (int(238 * arrow_alpha),), width=7 if is_shorts else 8, ctrl_pt=(ctrl_x, ctrl_y), draw_progress=arrow_prog)
                 fr.alpha_composite(arr_layer)
 
-        # Shorts Header & Progress Bar
+        # Shorts Header & Progress Bar (14px with dark track & precise 0%->100% clamping)
         if is_shorts:
             d = ImageDraw.Draw(fr)
-            prog_w = int(W * (t / total))
-            d.rectangle((0, 0, prog_w, 8), fill=(236, 140, 50, 255))
+            prog_ratio = min(1.0, max(0.0, t / max(0.1, total)))
+            prog_w = int(W * prog_ratio)
+            d.rectangle((0, 0, W, 14), fill=(20, 24, 32, 160))
+            d.rectangle((0, 0, prog_w, 14), fill=(240, 145, 45, 255))
             # Display title banner ONLY if explicitly requested via --header
             if args.header and t <= 2.5:
                 header_txt = text_layer(title_text, 34, INK)
@@ -2935,18 +3286,28 @@ def main():
                 d.rounded_rectangle((hp_x, 190, hp_x + hp_w, 190 + hp_h), radius=16, fill=PAPER + (240,), outline=INK, width=3)
                 fr.alpha_composite(header_txt, ((W - header_txt.width) // 2, 196))
 
+        # On-Shot Kinetic Fact / Date Badges (e.g. 14,000 YEARS AGO synced to spoken words)
+        if img_path != "card" and not is_archetype_card and fact_badges:
+            for b_t0, b_t1, b_text in fact_badges:
+                if b_t0 <= t <= b_t1:
+                    draw_kinetic_editorial_badge(fr, W, H, b_text, t - b_t0, duration=(b_t1 - b_t0), is_shorts=is_shorts)
+                    break
+
         # Kinetic Subtitles
         if args.subtitles:
             render_subtitles(fr, words_list, t, W, H, is_shorts)
 
-        # Professional Outro Slate for 16:9 Long-Form
-        if not is_shorts and (img_path == "outro" or (t >= total - 12.0 and total >= 45.0)):
-            dt_outro = max(0.0, t - (total - 12.0) if img_path != "outro" else (t - t0))
-            draw_youtube_outro_slate(fr, W, H, dt_outro)
+        # Professional Outro Slate for 16:9 Long-Form (explicit outro scene only; standalone handled at start of compose_frame_at)
+        if not is_shorts and img_path == "outro":
+            dt_outro = t - t0
+            draw_youtube_outro_slate(fr, W, H, dt_outro, standalone=True)
 
         # Shorts Ending Follow Callout
-        if is_shorts and t >= total - 3.5:
-            dt_s_end = t - (total - 3.5)
+        # Only triggers during actual final CTA lines of a full Short
+        # Disabled when --clip-seconds preview mode cuts mid-story or t < story_dur - 4.5s
+        is_clip_preview = bool(args.clip_seconds and args.clip_seconds < (audio_dur - 2.0))
+        if is_shorts and not args.clip_seconds and not is_clip_preview and t >= (story_dur - 4.2):
+            dt_s_end = t - (story_dur - 4.2)
             draw_shorts_subscribe_callout(fr, W, H, dt_s_end)
 
         return fr
@@ -2986,7 +3347,7 @@ def main():
 
     # Runtime Compositing Verification & Telemetry Export (Rule 20 / Rule 24 / Gate 1)
     scheduled_stickers = [ov["img"] for sc in scenes for ov in sc.get("ov", [])
-                          if ov.get("img") not in ("tag", "count") and not ov.get("img", "").startswith("bars:")]
+                          if ov.get("t", 0.0) <= total and ov.get("img") not in ("tag", "count") and not ov.get("img", "").startswith("bars:")]
     unique_scheduled = set(scheduled_stickers)
 
     telemetry_path = os.path.join(os.path.dirname(out_file) or ".", "sticker_telemetry.json")

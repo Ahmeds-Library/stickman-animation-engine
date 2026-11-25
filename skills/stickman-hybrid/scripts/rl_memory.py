@@ -27,7 +27,7 @@ DEFAULT_POLICY = {
         "rule_24_spatial_hierarchy": {
             "shorts_margin_right_px": 220,
             "shorts_bottom_clearance_px": 660,
-            "subtitles_center_y_shorts": 1180,
+            "subtitles_center_y_shorts": 1590,
             "subtitles_center_y_long": 930,
             "min_cutout_subtitle_buffer_px": 140,
             "multi_sticker_min_padding_px": 32,
@@ -57,22 +57,25 @@ DEFAULT_POLICY = {
             "true_peak_max_dbfs": -1.0,
             "min_sfx_cues_per_minute": 14,
             "enforce_four_audio_layers": True,
-            "music_bed_gain_long_db": -12.0,
-            "music_bed_gain_shorts_db": -11.5,
-            "ambient_foley_gain_db": -16.0,
+            "music_bed_gain_long_db": -13.0,
+            "music_bed_gain_shorts_db": -12.5,
+            "ambient_foley_gain_db": -24.0,
             "vocal_pocket_eq_enabled": True,
             "vocal_warmth_eq_enabled": True,
-            "sidechain_ducking_ratio": 1.9,
-            "sidechain_ducking_threshold": 0.15,
-            "sidechain_ducking_release_ms": 450
+            "sidechain_ducking_ratio": 3.0,
+            "sidechain_ducking_threshold": 0.14,
+            "sidechain_ducking_release_ms": 550
         },
         "rule_28_dynamic_vfx": {
             "camera_shake_on_catastrophe": True,
             "tension_rumble_enabled": True,
-            "flashback_grayscale_enabled": True,
-            "crimson_hazard_vignette_enabled": True,
-            "cyan_frost_vignette_enabled": True,
-            "punch_zoom_enabled": True
+            "flashback_grayscale_enabled": False,
+            "crimson_hazard_vignette_enabled": False,
+            "cyan_frost_vignette_enabled": False,
+            "punch_zoom_enabled": True,
+            "editorial_slide_wipe_enabled": True,
+            "whip_blur_enabled": True,
+            "punch_settle_enabled": True
         },
         "rule_29_sticker_synchronization": {
             "strict_word_onset": True,
@@ -84,7 +87,8 @@ DEFAULT_POLICY = {
         "rule_33_youtube_outro": {
             "long_end_screen_safe_zones": True,
             "shorts_follow_callout_pill": True,
-            "outro_duration_sec": 12.0
+            "separate_standalone_outro": True,
+            "outro_duration_sec": 8.0
         },
         "rule_35_thumbnail_3_elements": {
             "enforce_expressive_stickman": True,

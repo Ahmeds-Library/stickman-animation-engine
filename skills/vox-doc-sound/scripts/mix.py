@@ -170,8 +170,8 @@ def build(cues, vo, out, dur, dip):
             # while keeping the narrator firmly centered in mono focus!
             f.append("equalizer=f=1800:width_type=q:w=1.2:g=-3.2,equalizer=f=3200:width_type=q:w=1.4:g=-2.2,extrastereo=m=1.12")
             if dip is not None:
-                # Measurable >= 0.4s pre-twist silence drop (>= 12 dB below local p90) via flat-bottom super-Gaussian envelope
-                f.append(f"volume='1-0.985*exp(-pow((t-{dip:.3f})/0.38,4))':eval=frame")
+                # Tight 0.45s-0.65s pre-twist silence drop (clean mute, zero rumble) via super-Gaussian envelope
+                f.append(f"volume='1-0.985*exp(-pow((t-{dip:.3f})/0.26,4))':eval=frame")
 
         if c["t"] > 0:
             f.append(f"adelay={int(c['t'] * 1000)}:all=1")
@@ -187,35 +187,46 @@ def build(cues, vo, out, dur, dip):
     if has_sfx:
         sfx_tail = f"amix=inputs={len(sfx)}:normalize=0:dropout_transition=0,apad=whole_dur={dur:.3f}"
         if dip is not None:
-            sfx_tail += f",volume='1-0.94*exp(-pow((t-{dip:.3f})/0.30,4))':eval=frame"
+            sfx_tail += f",volume='1-0.94*exp(-pow((t-{dip:.3f})/0.22,4))':eval=frame"
         parts.append("".join(sfx) + sfx_tail + "[sfxmix]")
 
     if vo:
         cmd += ["-i", vo]
-        # Broadcast Documentary Vocal Mastering Chain:
-        # 1. highpass=f=75: eliminates rumble, mic plosives, and sub-frequencies
-        # 2. equalizer=f=220:width_type=q:w=1.2:g=1.8: warm chest resonance (combats dry textbook TTS reading)
-        # 3. equalizer=f=3400:width_type=q:w=1.2:g=2.2: vocal presence and consonant articulation
-        # 4. equalizer=f=8500:width_type=q:w=1.0:g=1.2: broadcast air and silky sheen
-        # 5. loudnorm=I=-19:TP=-1.5:LRA=10: consistent vocal dialogue loudness
+        # Broadcast Vocal Mastering Chain (V6 Studio Standard):
+        # 1. highpass=f=85: kills low-end fan/air rumble and sub-frequencies
+        # 2. equalizer=f=180:width_type=q:w=1.2:g=-2.0: subtle sub/mud cut
+        # 3. equalizer=f=3200:width_type=q:w=1.0:g=+1.8: crisp vocal presence and consonant articulation
+        # 4. equalizer=f=8500:width_type=q:w=1.0:g=1.0: silky broadcast sheen
+        # 5. afftdn=nf=-28:tn=1: gentle acoustic noise-floor cleanup
+        # 6. agate=threshold=-38dB:ratio=2.5:range=-24dB:attack=20:release=140: dead-clean speech pauses (zero fan hiss)
+        # 7. loudnorm=I=-19:TP=-1.5:LRA=10: consistent broadcast vocal loudness
+        # 8. apad=whole_dur={dur:.3f},atrim=0:{dur:.3f}: zero VO bleed during outro
         vox_chain = (
             f"[{n}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,"
-            "highpass=f=75,"
-            "equalizer=f=220:width_type=q:w=1.2:g=1.8,"
-            "equalizer=f=3400:width_type=q:w=1.2:g=2.2,"
-            "equalizer=f=8500:width_type=q:w=1.0:g=1.2,"
+            "highpass=f=85,"
+            "equalizer=f=180:width_type=q:w=1.2:g=-2.0,"
+            "equalizer=f=3200:width_type=q:w=1.0:g=+1.8,"
+            "equalizer=f=8500:width_type=q:w=1.0:g=1.0,"
+            "afftdn=nf=-28:tn=1,"
+            "agate=threshold=-38dB:ratio=2.5:range=-24dB:attack=20:release=140,"
             "loudnorm=I=-19:TP=-1.5:LRA=10,"
-            "aresample=48000,volume=1.2dB,asplit=2[vomix][vokey]"
+            "aresample=48000,volume=1.0dB,"
+            f"apad=whole_dur={dur:.3f},atrim=0:{dur:.3f},"
+            "asplit=2[vomix][vokey]"
         )
         parts.append(vox_chain)
 
-        # Build Bed Ducked Stem: Sidechain ducked under voice key (gentle 1.9:1 ratio, max 6dB ducking)
+        # Build Bed Ducked Stem: Sidechain ducked under voice key (silky documentary continuity)
+        # attack=30ms, release=550ms, ratio=3.0, threshold=0.14
+        # Smooth 1.8s fade-out at end of audio
+        bed_fade_st = max(0.0, dur - 1.8)
+        bed_post = f"apad=whole_dur={dur:.3f},atrim=0:{dur:.3f},afade=t=out:st={bed_fade_st:.3f}:d=1.8"
         if len(bed_indices) > 1:
             bed_mix_str = "".join(f"[a{bi}]" for bi in bed_indices) + f"amix=inputs={len(bed_indices)}:normalize=0[bed_all]"
             parts.append(bed_mix_str)
-            parts.append(f"[bed_all][vokey]sidechaincompress=threshold=0.15:ratio=1.9:attack=30:release=450,apad=whole_dur={dur:.3f}[bed_ducked]")
+            parts.append(f"[bed_all][vokey]sidechaincompress=threshold=0.14:ratio=3.0:attack=30:release=550,{bed_post}[bed_ducked]")
         elif len(bed_indices) == 1:
-            parts.append(f"[a{bed_indices[0]}][vokey]sidechaincompress=threshold=0.15:ratio=1.9:attack=30:release=450,apad=whole_dur={dur:.3f}[bed_ducked]")
+            parts.append(f"[a{bed_indices[0]}][vokey]sidechaincompress=threshold=0.14:ratio=3.0:attack=30:release=550,{bed_post}[bed_ducked]")
         else:
             # Silence bed fallback
             parts.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{dur:.3f}[bed_ducked]")
@@ -273,13 +284,13 @@ def build(cues, vo, out, dur, dip):
         ratio_0_5s = bed_rms_0_5s - vo_rms
         ratio_global = bed_rms_global - vo_rms
 
-        # Music Target: Maintain warm cinematic bed cleanly between -11 dB and -13 dB relative to Voice RMS (nominal -12.0 dB)
+        # Music Target: Maintain steady documentary bed cleanly between -12.5 dB and -14.5 dB relative to Voice RMS (nominal -13.5 dB)
         bed_boost_db = 0.0
         min_bed_ratio = min(ratio_0_5s, ratio_global)
-        if min_bed_ratio < -13.0:
-            bed_boost_db = min(12.0, max(0.0, -12.0 - min_bed_ratio))
-        elif max(ratio_0_5s, ratio_global) > -9.5:
-            bed_boost_db = max(-6.0, -11.5 - max(ratio_0_5s, ratio_global))
+        if min_bed_ratio < -14.5:
+            bed_boost_db = min(12.0, max(0.0, -13.5 - min_bed_ratio))
+        elif max(ratio_0_5s, ratio_global) > -12.0:
+            bed_boost_db = max(-6.0, -13.0 - max(ratio_0_5s, ratio_global))
 
         # Measure per-cue SFX transient peak energy (not just single global max!)
         sfx_boost_db = 0.0
@@ -427,7 +438,8 @@ def main():
     ap.add_argument("--lines", help="VO.tsv (id, start, dur, text) for @NN cues")
     ap.add_argument("--words", help="WORDS.tsv from align.py, for word cues")
     ap.add_argument("--out", default="mix.wav")
-    ap.add_argument("--dur", type=float, help="mix length (default: voice + 1.0 s)")
+    ap.add_argument("--dur", type=float, help="mix length (default: voice + 0.4s + outro-sec)")
+    ap.add_argument("--outro-sec", type=float, default=0.0, help="Standalone music-only outro duration (default: 0.0)")
     ap.add_argument("--dip", help="seconds or a cue: dip the bed here for a held breath")
     ap.add_argument("--selfcheck", action="store_true")
     a = ap.parse_args()
@@ -447,7 +459,8 @@ def main():
             aligned_t = start_time(raw_t, peak, c["file"])
             c["_trim_start"] = max(0.0, peak - raw_t) if (raw_t < peak and not ROLLING.search(c["file"].replace("\\", "/"))) else 0.0
             c["t"] = aligned_t
-    dur = a.dur or ((media_len(a.vo) + 1.0) if a.vo else max(c["t"] for c in cues) + 5)
+    story_dur = (media_len(a.vo) + 0.40) if a.vo else (max(c["t"] for c in cues) + 2.0)
+    dur = a.dur or (story_dur + a.outro_sec)
     dip = Resolver(tsv(a.lines) if a.lines else None, tsv(a.words) if a.words else None)(a.dip) \
         if a.dip else None
     build(cues, a.vo, a.out, dur, dip)

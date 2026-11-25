@@ -27,7 +27,9 @@ NEGATIVE_STICKMAN = (
 )
 
 NEGATIVE_CLEANLINESS = (
-    "watermark, logo, text, letters, numbers, labels, typography, subtitles, credits, signature, "
+    "no text, no words, no letters, no alphabet, no comic titles, no headers, no top banner, no captions, "
+    "no speech bubbles, no dialogue text, no lorem ipsum, no readable writing, no pseudo-text on scrolls or signs or banners, "
+    "watermark, logo, typography, subtitles, credits, signature, newspaper headline, label, numbers, "
     "phone frame, smartphone mockup, iphone frame, device bezel, tablet border, UI window, mockup, device casing, "
     "blurry, out of focus, low resolution, multiple versions of the character in one frame, cluttered background"
 )

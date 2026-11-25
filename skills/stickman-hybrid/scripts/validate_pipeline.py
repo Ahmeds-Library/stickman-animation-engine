@@ -73,6 +73,37 @@ def check_flow_bridge_active(port=8791):
         return False
 
 
+def detect_image_text_leak(img_path):
+    """Automated text-leak / top-banner sanity check using tesseract OCR."""
+    if not os.path.exists(img_path) or os.path.getsize(img_path) < 10000:
+        return False, ""
+    try:
+        im = Image.open(img_path)
+        w, h = im.size
+        # Crop top 28% where comic titles/headers appear
+        top_crop = im.crop((0, 0, w, int(h * 0.28)))
+        tmp_crop = f"/tmp/_ocr_crop_{os.getpid()}_{os.path.basename(img_path)}"
+        top_crop.save(tmp_crop)
+        
+        r = subprocess.run(["tesseract", tmp_crop, "stdout", "--oem", "1", "-l", "eng", "--psm", "6"],
+                           capture_output=True, text=True, timeout=5)
+        if os.path.exists(tmp_crop):
+            try: os.remove(tmp_crop)
+            except Exception: pass
+            
+        txt = r.stdout.strip()
+        words = re.findall(r"\b[A-Za-z]{3,}\b", txt)
+        suspect_kws = {"ancient", "history", "dental", "care", "pain", "tooth", "toothache", "ipsum", "lorem", "dolor", "chapter", "episode"}
+        hit_kws = [w for w in words if w.lower() in suspect_kws]
+        if hit_kws:
+            return True, f"Baked-in header/comic text detected: '{' '.join(words[:6])}' (matched {hit_kws})"
+        if len(words) >= 4:
+            return True, f"Baked-in text leak detected in top banner: '{' '.join(words[:6])}'"
+        return False, ""
+    except Exception:
+        return False, ""
+
+
 def inspect_sticker_cutout_quality(png_path):
     """Verifies that a resolved sticker has true alpha transparency, no magenta halo, and no edge clipping."""
     try:
@@ -118,6 +149,7 @@ def validate_stickers_and_shots(project_dir="."):
     missing_shots = []
     missing_stickers = []
     flawed_stickers = []
+    text_leaks = []
     total_scenes = 0
     total_stickers = 0
 
@@ -163,8 +195,13 @@ def validate_stickers_and_shots(project_dir="."):
                         os.path.join(project_dir, "shots", os.path.basename(shot_file)),
                         os.path.join(project_dir, shot_file)
                     ]
-                    if not any(os.path.exists(p) and os.path.getsize(p) > 20000 for p in shot_cands):
+                    found_p = next((p for p in shot_cands if os.path.exists(p) and os.path.getsize(p) > 20000), None)
+                    if not found_p:
                         missing_shots.append(f"Row {row_idx}: {shot_file}")
+                    else:
+                        has_leak, leak_msg = detect_image_text_leak(found_p)
+                        if has_leak:
+                            text_leaks.append(f"Row {row_idx}: '{shot_file}': {leak_msg}")
 
             # Check legacy overlays column if present
             ov_raw = r.get("ov", "").strip()
@@ -189,6 +226,8 @@ def validate_stickers_and_shots(project_dir="."):
     errors = []
     if missing_shots:
         errors.append(f"Missing {len(missing_shots)} scene shot(s):\n  " + "\n  ".join(missing_shots[:6]))
+    if text_leaks:
+        errors.append(f"Baked-in text leak / comic header detected on {len(text_leaks)} shot(s):\n  " + "\n  ".join(text_leaks[:4]))
     if missing_stickers:
         errors.append(f"Missing {len(missing_stickers)} sticker prop(s) on disk:\n  " + "\n  ".join(missing_stickers[:8]))
     if flawed_stickers:

@@ -132,33 +132,32 @@ def analyze_and_enrich_scenes(project_dir="."):
             if is_hook and "zoom_punch" not in vfx_tokens and "flash" not in vfx_tokens:
                 vfx_tokens.append("zoom_punch")
 
-            # Card / archetype scenes default cleanly without harsh shakes
+            # Card / archetype scenes default cleanly to kinetic editorial transition
             is_arch = img.startswith(("card", "split", "bar_", "timeline", "stat_"))
             if is_arch:
-                vfx_tokens = [t for t in vfx_tokens if t not in ("shake", "bw", "danger")]
-                if not vfx_tokens:
-                    vfx_tokens.append("crossfade")
+                vfx_tokens = [t for t in vfx_tokens if t not in ("shake", "bw", "danger", "blood")]
+                if not any(t in vfx_tokens for t in ("slide_wipe", "punch_settle", "whip_blur")):
+                    vfx_tokens.append("slide_wipe" if "split" in img else "punch_settle")
             else:
-                # High-emotion catastrophe / combat peril (require strong crisis trigger in spoken line!)
                 spoken_tokens = set(re.findall(r"\b[a-z0-9_]+\b", line_txt))
                 if any(w in spoken_tokens for w in DANGER_KEYWORDS):
-                    if "danger" not in vfx_tokens and "blood" not in vfx_tokens:
-                        vfx_tokens.append("danger")
-                    if any(w in spoken_tokens for w in ("earthquake", "explosion", "crushed", "burned", "battle", "collapse", "attack")):
+                    # High-tension crisis: kinetic whip blur or micro punch settle instead of ugly red overlay
+                    if "whip_blur" not in vfx_tokens and "punch_settle" not in vfx_tokens:
+                        vfx_tokens.append("whip_blur")
+                    if any(w in spoken_tokens for w in ("earthquake", "explosion", "crushed", "battle", "collapse")):
                         if "shake" not in vfx_tokens:
                             vfx_tokens.append("shake")
                 elif any(w in spoken_tokens for w in IMPACT_KEYWORDS):
+                    if "punch_settle" not in vfx_tokens:
+                        vfx_tokens.append("punch_settle")
                     if "shake" not in vfx_tokens:
                         vfx_tokens.append("shake")
-                elif any(w in spoken_tokens for w in COLD_KEYWORDS):
-                    if "ice" not in vfx_tokens:
-                        vfx_tokens.append("ice")
                 elif any(phrase in line_txt for phrase in TRAGEDY_HISTORICAL_KEYWORDS):
-                    if "bw" not in vfx_tokens:
-                        vfx_tokens.append("bw")
+                    if "crossfade" not in vfx_tokens:
+                        vfx_tokens.append("crossfade")
 
-            # Calm narrative scenes default to clean 0.22s smooth crossfade
-            active_vfx = {"zoom_punch", "danger", "shake", "ice", "bw", "flash", "blood"}
+            # Clean editorial motion transitions (banned cheap color overlays)
+            active_vfx = {"zoom_punch", "punch_settle", "whip_blur", "slide_wipe", "shake", "flash"}
             if any(tok in active_vfx for tok in vfx_tokens) and "fade" in vfx_tokens:
                 vfx_tokens = [tok for tok in vfx_tokens if tok != "fade"]
 
@@ -179,12 +178,8 @@ def analyze_and_enrich_scenes(project_dir="."):
             elif explicit_cam and explicit_cam != prev_cam_move:
                 cam_move = explicit_cam
             else:
-                # Cycle calmly with alternating static beats to avoid relentless motion fatigue
-                if cut_scene_idx % 3 == 1 and prev_cam_move != "static":
-                    cam_move = "static"
-                else:
-                    cand_moves = [m for m in cam_cycle if m != prev_cam_move]
-                    cam_move = cand_moves[cut_scene_idx % len(cand_moves)]
+                cand_moves = [m for m in cam_cycle if m != prev_cam_move]
+                cam_move = cand_moves[cut_scene_idx % len(cand_moves)]
             prev_cam_move = cam_move
 
             vfx_tokens = other_toks + kept_fx

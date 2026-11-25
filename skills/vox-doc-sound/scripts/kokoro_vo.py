@@ -28,11 +28,26 @@ def synthesize_line(pipe, text, voice="am_michael", speed=1.0):
     """Synthesizes text with natural English prosody at normal 1.0x speed.
     Kokoro's neural phonemizer automatically handles English punctuation,
     inflection, and clause cadence smoothly without dragging or artificial gaps.
+    Enforces V6 studio purity: DC-offset removal + 15ms boundary micro-fades to kill transient clicks.
     """
     clean_text = text.strip()
     gen = pipe(clean_text, voice=voice, speed=speed)
     audios = [np.asarray(x[2], np.float32) for x in gen]
-    return np.concatenate(audios) if audios else np.zeros(0, dtype=np.float32)
+    if not audios:
+        return np.zeros(0, dtype=np.float32)
+    arr = np.concatenate(audios)
+    if len(arr) == 0:
+        return arr
+    # 1. DC offset removal
+    arr = arr - np.mean(arr)
+    # 2. 0.015s boundary micro-fade to eliminate clicks/transients at take boundaries
+    fade_len = int(0.015 * 24000)
+    if len(arr) > 2 * fade_len:
+        fade_in = np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
+        fade_out = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+        arr[:fade_len] *= fade_in
+        arr[-fade_len:] *= fade_out
+    return arr
 
 
 def main():

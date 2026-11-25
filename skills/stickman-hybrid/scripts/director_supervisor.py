@@ -51,7 +51,7 @@ LAZY_ADJECTIVE_SOUP = (
     "ultra-detailed", "hyperdetailed", "hyper-realistic", "photorealistic", "8k", "award-winning"
 )
 
-CAMERA_MOVE_CYCLE = ("push_in", "pan_left", "pull_back", "pan_right")
+CAMERA_MOVE_CYCLE = ("push_in", "pan_right", "push_in", "pan_left", "pull_back")
 
 
 def _estimate_word_timings_from_lines(lines_rows):
@@ -489,8 +489,6 @@ def supervise_project(project_dir=".", pre_spend=False):
             cam_move = "static"
         elif explicit_cam and explicit_cam != prev_cam_move:
             cam_move = explicit_cam
-        elif sc["scene_idx"] % 3 == 1 and prev_cam_move != "static":
-            cam_move = "static"
         else:
             cands = [m for m in CAMERA_MOVE_CYCLE if m != prev_cam_move]
             cam_move = cands[sc["scene_idx"] % len(cands)]
@@ -520,6 +518,7 @@ def supervise_project(project_dir=".", pre_spend=False):
 
         used_word_times = []
         directed_ovs = []
+        scene_approved_stk = set()
         shot_primary_toks = _tok(shot_prompt)
         spoken_exp = _expand(_tok(f"{spoken_text} {sc['text']}"))
 
@@ -534,7 +533,10 @@ def supervise_project(project_dir=".", pre_spend=False):
             reason = "Aligned with spoken concept and distinct from background shot"
             is_special = stk_base in ("stamp_x", "stamp_check", "stamp_false", "stamp_true", "stamp_myth", "count", "tag") or ov["img"].startswith("bars:")
 
-            if not is_special and not is_editorial_card and shot_primary_toks:
+            if not is_special and stk_base in scene_approved_stk:
+                status = "REJECTED_REDUNDANT"
+                reason = f"Duplicate identical sticker '{stk_base}' already active in scene {sc['cue']}"
+            elif not is_special and not is_editorial_card and shot_primary_toks:
                 # Auto-reject redundant sticker if background shot's focal prompt already centers the identical prop
                 direct_dup = len(stk_raw_toks & shot_primary_toks)
                 if direct_dup >= 2 or (len(stk_raw_toks) == 1 and direct_dup == 1):
@@ -549,13 +551,19 @@ def supervise_project(project_dir=".", pre_spend=False):
 
             if status == "APPROVED":
                 approved_count += 1
+                scene_approved_stk.add(stk_base)
             elif status == "REJECTED_REDUNDANT":
                 rejected_count += 1
             else:
                 flagged_count += 1
 
             # 2. Exact Spoken Word Time-Sync Lock (-0.06s visual anticipation)
-            hit_t, hit_word = _find_best_word_in_window(words_rows, t0, t1, ov["img"], stk_desc, used_word_times)
+            clean_c = ov["cue"].lstrip("+")
+            if clean_c in words_map:
+                hit_t = words_map[clean_c]
+                hit_word = next((w.get("word", "") for w in words_rows if w.get("line") == clean_c.split(".")[0] and w.get("i") == clean_c.split(".")[1]), "")
+            else:
+                hit_t, hit_word = _find_best_word_in_window(words_rows, t0, t1, ov["img"], stk_desc, used_word_times)
             if hit_t is not None:
                 used_word_times.append(hit_t)
                 sync_t = max(t0, round(hit_t - 0.06, 3))

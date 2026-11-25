@@ -195,11 +195,14 @@ def generate_sound_mix(sub_dir):
         except Exception:
             pass
 
+        is_short = "short" in sub_dir.lower()
         if need_gen and os.path.exists(SFX_SMART_DESIGNER):
             print(f"🎵 Designing high-density smart sound cues for {sub_dir}...")
             sfx_cmd = [sys.executable, SFX_SMART_DESIGNER, "."]
-            if "short" in sub_dir.lower():
+            if is_short:
                 sfx_cmd.append("--short")
+            else:
+                sfx_cmd.extend(["--outro-sec", "8.0"])
             subprocess.run(sfx_cmd, check=True)
 
         mix_cmd = [
@@ -207,6 +210,8 @@ def generate_sound_mix(sub_dir):
             "--vo", "VO.wav", "--lines", "VO.tsv", "--words", "WORDS.tsv",
             "--out", "mix_pro.wav"
         ]
+        if not is_short:
+            mix_cmd.extend(["--outro-sec", "8.0"])
         # Auto-wire Vox Drop-Out silence dip from NARRATIVE_AUDIT.json if twist_line_id exists in VO.tsv
         na_path = "NARRATIVE_AUDIT.json"
         if os.path.exists(na_path) and os.path.exists("VO.tsv"):
@@ -327,6 +332,8 @@ def render_pipeline_video(sub_dir, fmt="9:16", out_name=None, dry_run=False):
             "--scenes", "SCENES_HYBRID.tsv",
             "--words", "WORDS.tsv"
         ]
+        if fmt == "16:9":
+            cmd += ["--outro-sec", "8.0"]
         if out_name:
             cmd += ["--out", out_name]
         subprocess.run(cmd, check=True)

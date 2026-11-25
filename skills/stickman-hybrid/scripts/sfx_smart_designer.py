@@ -42,12 +42,23 @@ def find_music_library():
             return r
     return None
 
+BANNED_SFX_KEYWORDS = (
+    "celesta", "sparkle", "twinkle", "chime", "bell", "ding", "jingle",
+    "boing", "squeak", "cartoon", "coin", "magic", "laser", "sci-fi",
+    "shimmer", "threetone", "twotone", "pepsound", "notification_ping",
+    "ping", "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out"
+)
+
 def collect_audio_catalog(sfx_root):
     catalog = {}
     if not sfx_root or not os.path.exists(sfx_root):
         return catalog
     for ext in ("*.mp3", "*.ogg", "*.wav"):
         for path in glob.glob(f"{sfx_root}/**/{ext}", recursive=True):
+            p_low = path.lower()
+            b_low = os.path.basename(path).lower()
+            if any(k in b_low or k in p_low for k in BANNED_SFX_KEYWORDS):
+                continue
             rel = os.path.relpath(path, sfx_root)
             parts = [p.lower() for p in rel.split(os.sep)]
             for part in parts[:-1]:
@@ -158,7 +169,7 @@ def resolve_word_time(cue_raw, words_list, words_map, scene_t0=0.0, scene_t1=Non
 # Semantic Keyword to Sound Matching Dictionary (Kenney CC0, Wyzowl CC0, StableAudio)
 SEMANTIC_SFX_MAP = {
     ("ice", "cold", "frost", "snow", "winter", "frozen"): [
-        "nature/b2_ice_crack_a.mp3", "nature/b2_ice_crack_b.mp3", "shimmers/shimmer-short-sparkle.wav", "impacts/impact-light-hard.wav"
+        "nature/b2_ice_crack_a.mp3", "nature/b2_ice_crack_b.mp3", "impacts/impact-light-hard.wav"
     ],
     ("water", "liquid", "milk", "drop", "evaporat", "sweat", "wet"): [
         "everyday-props/props-splash.wav", "everyday-props/props-drip.wav", "pops/pop-medium-bubble.wav", "tonal/b5_water_drop_tone_a.mp3"
@@ -167,7 +178,7 @@ SEMANTIC_SFX_MAP = {
         "nature/b2_fire_crackle_a.mp3", "nature/b2_fire_crackle_b.mp3", "archive/b3_steam_engine_a.mp3"
     ],
     ("fridge", "electric", "power", "grid", "machine", "tech"): [
-        "digital/digital-glitch-clear.wav", "digital/digital-process-clear.wav", "data/b4_notification_ping_h.mp3", "digital/threeTone1.ogg"
+        "digital/digital-glitch-clear.wav", "digital/digital-process-clear.wav", "interface/click-mouse-soft.wav"
     ],
     ("money", "gold", "coin", "trade", "millionaire", "hoard", "wealth"): [
         "money/coin-drop.wav", "money/register.wav", "casino/chipsStack1.ogg", "money/b2_coin_drop.mp3"
@@ -179,22 +190,22 @@ SEMANTIC_SFX_MAP = {
         "impacts/impact-medium-firm.wav", "rpg/chop.ogg", "emphasis/impactWood_light_000.ogg", "pops/pop-medium-in.wav"
     ],
     ("king", "emperor", "palace", "roman", "alexander", "conquer", "victory"): [
-        "cinematic-hits/cinematic-drum-big.wav", "jingle/jingle_win_00.ogg", "shimmers/shimmer-medium-sparkle.wav"
+        "cinematic-hits/cinematic-drum-big.wav", "emphasis/impactWood_light_000.ogg", "impacts/impact-medium-firm.wav"
     ],
     ("watch", "channel", "click", "video", "cta", "bell"): [
-        "interface/button-soft.wav", "office/b3_desk_bell_a.mp3", "ui/switch3.ogg"
+        "interface/button-soft.wav", "interface/click-button-medium.wav", "ui/switch3.ogg"
     ],
     ("slap", "idiot", "weirdo", "absurd", "ridiculous", "punish", "revolution", "crazy", "overthrow"): [
         "impacts/impact-light-hard.wav", "rpg/chop.ogg", "cinematic-hits/cinematic-slam-big.wav", "emphasis/impactWood_light_000.ogg"
     ],
     ("quiz", "scenario", "option", "maybe", "awkward", "signal", "dating", "deadpan"): [
-        "digital/threeTone1.ogg", "interface/button-soft.wav", "data/b4_notification_ping_h.mp3"
+        "interface/click-mouse-soft.wav", "interface/button-soft.wav", "interface/click-button-medium.wav"
     ],
     ("ruler", "dictator", "power", "key", "treasury", "bureaucracy", "tax", "rule", "incentive"): [
         "money/coin-drop.wav", "digital/digital-process-clear.wav", "cinematic-hits/cinematic-drum-big.wav", "money/register.wav"
     ],
     ("flat", "disc", "orbit", "planet", "solar", "gravity", "dimension", "geometry", "space"): [
-        "digital/digital-process-clear.wav", "shimmers/shimmer-short-sparkle.wav", "tonal/s1_drone_dark_a.mp3"
+        "digital/digital-process-clear.wav", "tonal/s1_drone_dark_a.mp3"
     ]
 }
 
@@ -240,31 +251,39 @@ def pick_sfx_for_text(text, catalog, default_cat="paper", cooldown=None):
     return cd.pick(cat_list)
 
 def select_music_track(music_root, script_text=""):
-    """Intelligently match background music to script theme."""
-    candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
+    """Intelligently match background music to script theme.
+    Bans airy/windy ambient_* drones. Prioritizes rhythmic/melodic documentary beds."""
+    raw_candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
+    candidates = [p for p in raw_candidates if "ambient_" not in os.path.basename(p).lower() and "/ambient_" not in p.lower()]
+    if not candidates:
+        candidates = raw_candidates
     if not candidates:
         return None
     
     txt = script_text.lower()
-    if any(w in txt for w in ["ancient", "persia", "rome", "egypt", "king", "desert", "history"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["ancient", "attic", "vanished"])]
+    if any(w in txt for w in ["ancient", "persia", "rome", "egypt", "king", "history"]):
+        matched = [p for p in candidates if any(m in p.lower() for m in ["explainer", "history_serious", "ancient", "attic"])]
         if matched: return matched[0]
-    elif any(w in txt for w in ["physics", "science", "space", "star", "radiation", "quantum"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["clock", "spaceship", "alien", "dimension"])]
+    elif any(w in txt for w in ["physics", "science", "space", "star", "data", "quantum"]):
+        matched = [p for p in candidates if any(m in p.lower() for m in ["data", "explainer", "clock", "dimension"])]
         if matched: return matched[0]
     elif any(w in txt for w in ["danger", "war", "crisis", "blackout", "panic", "survival"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["action", "after the end", "anxiety"])]
+        matched = [p for p in candidates if any(m in p.lower() for m in ["tension", "reveal", "action", "after the end"])]
         if matched: return matched[0]
     elif any(w in txt for w in ["curious", "mystery", "why", "secret", "discover"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["asking", "attic", "questions"])]
+        matched = [p for p in candidates if any(m in p.lower() for m in ["explainer", "question", "asking", "attic"])]
         if matched: return matched[0]
     
-    chill = [p for p in candidates if any(m in p.lower() for m in ["chillin", "lofi", "roomscene", "arcade"])]
+    chill = [p for p in candidates if any(m in p.lower() for m in ["explainer_lofi", "explainer", "chillin", "lofi", "roomscene"])]
     return chill[0] if chill else candidates[0]
 
 def select_multi_act_music(music_root, script_text=""):
-    """Returns a list of 4 mood-matched music tracks for Long-form documentary progression."""
-    candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
+    """Returns a list of 4 melodic documentary tracks for Long-form progression.
+    Bans airy ambient drones. Ensures continuous musical melody and rhythm."""
+    raw_candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
+    candidates = [p for p in raw_candidates if "ambient_" not in os.path.basename(p).lower() and "/ambient_" not in p.lower()]
+    if not candidates:
+        candidates = raw_candidates
     if not candidates:
         return []
     
@@ -277,10 +296,10 @@ def select_multi_act_music(music_root, script_text=""):
             if m: return random.choice(m)
         return random.choice(candidates)
 
-    act1 = find_match(["asking questions", "attic secrets", "abstract anxiety", "ambient_mystery", "question"], ["mystery", "asking"])
-    act2 = find_match(["ancient rite", "aquatic city", "explainer", "explainer_lofi", "ambient_history"], ["explainer", "ancient"])
-    act3 = find_match(["action strike", "after the end", "tension", "ambient_tension", "alternative clock"], ["tension", "action"])
-    act4 = find_match(["be chillin", "a waltz for naseem", "hopeful", "reflective", "duru-roomscene-lofi"], ["chillin", "hopeful", "arcade"])
+    act1 = find_match(["explainer_01", "explainer", "asking questions", "question_01", "attic secrets"], ["explainer", "asking"])
+    act2 = find_match(["data_01", "history_serious", "ancient rite", "explainer_02", "data"], ["data", "history"])
+    act3 = find_match(["tension_01", "reveal_01", "tension", "reveal", "alternative clock dimension"], ["tension", "reveal"])
+    act4 = find_match(["reflective_01", "hopeful_01", "be chillin", "duru-roomscene-lofi", "a waltz for naseem"], ["reflective", "hopeful", "chillin"])
     return [act1, act2, act3, act4]
 
 def compute_inputs_signature(project_dir="."):
@@ -334,7 +353,7 @@ def is_cues_cache_fresh(project_dir=".", cues_file="cues_pro.tsv"):
     return False
 
 
-def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False, force=False):
+def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False, force=False, outro_sec=0.0):
     scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
     if not os.path.exists(scenes_path):
         scenes_path = os.path.join(project_dir, "SCENES.tsv")
@@ -388,10 +407,11 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             t2 = total_dur * 0.25
             t3 = total_dur * 0.55
             t4 = total_dur * 0.80
+            dur_act4 = (total_dur + outro_sec - t4 + 1.5)
             cues.append({"label": "bed_act1", "kind": "loop", "file": act_tracks[0], "at": f"{t1:.2f}", "dur": f"{(t2 - t1 + 1.5):.2f}", "gain_db": music_gain, "fade_in": "0.3", "fade_out": "1.5"})
             cues.append({"label": "bed_act2", "kind": "loop", "file": act_tracks[1], "at": f"{(t2 - 1.5):.2f}", "dur": f"{(t3 - t2 + 3.0):.2f}", "gain_db": music_gain, "fade_in": "1.5", "fade_out": "1.5"})
             cues.append({"label": "bed_act3", "kind": "loop", "file": act_tracks[2], "at": f"{(t3 - 1.5):.2f}", "dur": f"{(t4 - t3 + 3.0):.2f}", "gain_db": music_gain, "fade_in": "1.5", "fade_out": "1.5"})
-            cues.append({"label": "bed_act4", "kind": "loop", "file": act_tracks[3], "at": f"{(t4 - 1.5):.2f}", "dur": f"{(total_dur - t4 + 1.5):.2f}", "gain_db": music_gain, "fade_in": "1.5", "fade_out": "2.0"})
+            cues.append({"label": "bed_act4", "kind": "loop", "file": act_tracks[3], "at": f"{(t4 - 1.5):.2f}", "dur": f"{dur_act4:.2f}", "gain_db": music_gain, "fade_in": "1.5", "fade_out": "2.0"})
         else:
             bg_music = select_music_track(music_root, script_txt)
             if bg_music:
@@ -400,26 +420,6 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
         bg_music = select_music_track(music_root, script_txt)
         if bg_music:
             cues.append({"label": "bed", "kind": "loop", "file": bg_music, "at": "0.0", "dur": "all", "gain_db": music_gain, "fade_in": "0.3", "fade_out": "2.0"})
-
-    # 2. Continuous Environmental Foley Loop
-    amb_file = None
-    if any(k in script_txt for k in ["desert", "persia", "egypt", "sand"]):
-        amb_candidates = [p for p in catalog.get("ambience", []) if "desert_wind" in p.lower()]
-        amb_file = amb_candidates[0] if amb_candidates else None
-    if not amb_file and catalog.get("ambience"):
-        amb_file = catalog["ambience"][0]
-        
-    if amb_file:
-        cues.append({
-            "label": "ambient_foley",
-            "kind": "loop",
-            "file": amb_file,
-            "at": "0.0",
-            "dur": "all",
-            "gain_db": "-14.0",
-            "fade_in": "0.5",
-            "fade_out": "2.0"
-        })
 
     # Frame-0 Auditory Attention Shock (50Hz Sub-Bass Impact on opening frame)
     booms = catalog.get("booms-and-bass", catalog.get("cinematic-hits", []))
@@ -436,11 +436,16 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
             "fade_out": "0"
         })
 
-    # 3. Transitions on Scene Cuts & Overlays (with Psychoacoustic 120ms J-Cut Pre-Lapping)
-    whooshes = catalog.get("whooshes", catalog.get("whoosh", catalog.get("ui", [])))
-    zip_outs = [p for p in catalog.get("swishes-and-zips", []) if "zip-out" in p.lower()]
-    pop_outs = [p for p in catalog.get("pops", []) if "pop" in p.lower() and "out" in p.lower()]
-    exit_sfx_pool = zip_outs or pop_outs
+    # 3. Transitions on Scene Cuts & Overlays (with Psychoacoustic 100ms J-Cut Pre-Lapping)
+    # Ban long breathy/windy whooshes (>0.4s). Select tight, crisp, tactile documentary SFX (0.15s–0.28s paper, pops, taps, soft swishes)
+    raw_transitions = catalog.get("whooshes", []) + catalog.get("swishes-and-zips", []) + catalog.get("pops", []) + catalog.get("ui", [])
+    tight_transitions = [
+        p for p in raw_transitions
+        if not any(b in os.path.basename(p).lower() for b in ("slow", "wind", "heavy", "rumble", "storm", "gust", "deep", "breath"))
+        and any(g in os.path.basename(p).lower() for g in ("fast", "soft", "light", "zip-out-soft", "swish-soft", "pop", "tap", "paper", "tick"))
+    ]
+    whooshes = tight_transitions if tight_transitions else [p for p in catalog.get("whooshes", []) if "slow" not in os.path.basename(p).lower()]
+    exit_sfx_pool = []  # Strictly silent sticker exit to preserve vocal clarity and prevent whistling noises
 
     cur_scene_t0 = 0.0
     ordinary_cut_idx = 0
@@ -502,7 +507,8 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                                 "fade_out": "0"
                             })
                     elif is_split:
-                        swishes = [p for p in catalog.get("swishes-and-zips", []) if "swish" in p.lower()] or whooshes
+                        swishes = [p for p in catalog.get("paper-and-office", []) if "slide" in p.lower() or "paper" in p.lower()] or \
+                                  [p for p in catalog.get("swishes-and-zips", []) if "swish" in p.lower()] or whooshes
                         sf = COOLDOWN.pick(swishes)
                         if sf:
                             cues.append({
@@ -517,8 +523,8 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                             })
                     elif is_data:
                         drawing_sfx = [p for p in catalog.get("writing-and-drawing", []) if "draw" in p.lower() or "tick" in p.lower() or "write" in p.lower()] or \
-                                      [p for p in catalog.get("digital-and-tech", []) if "notification_ping" in p.lower()] or \
-                                      [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower() or "notification_ping" in p.lower()]
+                                      [p for p in catalog.get("interface", []) if "click" in p.lower()] or \
+                                      [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower()]
                         sf = COOLDOWN.pick(drawing_sfx, fallback_pool=whooshes)
                         if sf:
                             cues.append({
@@ -547,16 +553,16 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                         is_act_boundary = (ln_int in act_boundary_lines)
                         tot_so_far = max(1, whoosh_cut_count + silent_cut_count + 1)
                         cur_silent_ratio = silent_cut_count / tot_so_far
-                        if is_high_energy or (is_act_boundary and cur_silent_ratio >= 0.40) or (not is_act_boundary and cur_silent_ratio >= 0.45):
+                        if is_high_energy or (is_act_boundary and cur_silent_ratio >= 0.45) or (not is_act_boundary and cur_silent_ratio >= 0.50):
                             wf = COOLDOWN.pick(whooshes)
-                            j_cut_time = max(0.0, cur_scene_t0 - 0.12)
+                            j_cut_time = max(0.0, cur_scene_t0 - 0.10)
                             cues.append({
-                                "label": f"jcut_whoosh_{cue.replace('@', '').replace('.', '_')}",
+                                "label": f"jcut_trans_{cue.replace('@', '').replace('.', '_')}",
                                 "kind": "one",
                                 "file": wf,
                                 "at": f"{j_cut_time:.2f}",
                                 "dur": "-",
-                                "gain_db": "-5.0",
+                                "gain_db": "-6.0",
                                 "fade_in": "0",
                                 "fade_out": "0"
                             })
@@ -578,17 +584,18 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                         sfx_file = COOLDOWN.pick(stamp_hits)
                         sfx_gain = "-4.0"
                     elif o_img in ("stamp_check", "stamp_true", "stamp_verified"):
-                        chimes = [p for p in catalog.get("tones", []) if "ding" in p.lower() or "high" in p.lower()] or \
-                                 [p for p in catalog.get("jingle", []) if "win" in p.lower()] or \
-                                 [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower()] or \
-                                 [p for p in catalog.get("pops", []) if "bubble" in p.lower()]
-                        sfx_file = COOLDOWN.pick(chimes)
+                        confirm_sfx = [p for p in catalog.get("interface", []) if "click" in p.lower() or "button" in p.lower()] or \
+                                      [p for p in catalog.get("emphasis", []) if "wood" in p.lower()] or \
+                                      [p for p in catalog.get("pops", []) if "bubble" in p.lower()]
+                        sfx_file = COOLDOWN.pick(confirm_sfx)
                         sfx_gain = "-4.5"
                     else:
                         d_ov = director_ov_map.get((cue, os.path.basename(o_img)))
                         sfx_kind = d_ov.get("sfx_kind", "") if d_ov else ""
                         if d_ov and d_ov.get("sync_t") is not None:
-                            resolved_t = float(d_ov["sync_t"])
+                            d_sync = float(d_ov["sync_t"])
+                            if abs(d_sync - resolved_t) <= 0.08:
+                                resolved_t = d_sync
                             cue_at_str = f"{resolved_t:.2f}"
                         if sfx_kind == "heavy_thud":
                             thuds = [p for p in catalog.get("impacts", []) if "firm" in p.lower() or "wood" in p.lower() or "chop" in p.lower()] or catalog.get("hits-and-impacts", [])
@@ -620,21 +627,6 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                             "fade_in": "0",
                             "fade_out": "0"
                         })
-                    
-                    # Rule 29: Sticker Exit SFX (subtle soft zip-out on disappear, >= 2.5s hold)
-                    if exit_sfx_pool:
-                        sticker_dur = 2.5 if is_shorts else 3.0
-                        exit_t = resolved_t + sticker_dur - 0.25
-                        cues.append({
-                            "label": f"exit_{cue.replace('+', '').replace('@', '').replace(':', '_')}",
-                            "kind": "one",
-                            "file": COOLDOWN.pick(exit_sfx_pool),
-                            "at": f"{exit_t:.2f}",
-                            "dur": "-",
-                            "gain_db": "-6.5",
-                            "fade_in": "0",
-                            "fade_out": "0"
-                        })
 
     # 3b. Subtle marker/pencil draw-on sound for Director-planned cause_effect arrows
     draw_pool = [p for p in catalog.get("writing-and-drawing", []) if "draw" in p.lower() or "write" in p.lower() or "pencil" in p.lower()] or \
@@ -662,26 +654,26 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
         "peril": ("emphasis/b2_boom_soft_a.mp3", "-4.0"),
         "starvation": ("tonal/s1_drone_dark_a.mp3", "-4.5"),
         "impossible": ("reveal/s1_swell_reverse_a.mp3", "-4.0"),
-        "conquered": ("jingle/jingle_win_00.ogg", "-4.0"),
+        "conquered": ("emphasis/impactWood_light_000.ogg", "-4.0"),
         "millionaire": ("money/coin-drop.wav", "-4.0"),
-        "miracle": ("shimmers/shimmer-short-sparkle.wav", "-4.0"),
+        "miracle": ("reveal/s1_swell_reverse_a.mp3", "-4.0"),
         "zero": ("digital/digital-glitch-clear.wav", "-4.5"),
         "fatal": ("cinematic-hits/cinematic-slam-big.wav", "-3.5"),
         "secret": ("reveal/s1_swell_reverse_a.mp3", "-4.0"),
-        "truth": ("shimmers/shimmer-short-sparkle.wav", "-4.0"),
+        "truth": ("emphasis/impactWood_light_000.ogg", "-4.0"),
         "collapse": ("booms-and-bass/boom-hit-medium.wav", "-3.5"),
-        "discovered": ("shimmers/shimmer-short-sparkle.wav", "-4.0"),
+        "discovered": ("impacts/impact-medium-firm.wav", "-4.0"),
         "ambush": ("cinematic-hits/cinematic-slam-big.wav", "-3.5"),
         "war": ("emphasis/b2_boom_soft_a.mp3", "-3.5"),
         "battle": ("cinematic-hits/cinematic-slam-big.wav", "-3.5"),
-        "empire": ("jingle/jingle_win_00.ogg", "-4.0"),
+        "empire": ("cinematic-hits/cinematic-drum-big.wav", "-4.0"),
         "legion": ("emphasis/b2_boom_soft_a.mp3", "-4.0")
     }
     
-    # Kurzgesagt Auditory Highlighter Pens: Subtly punctuate metrics, dates & statistical shifts
-    HIGHLIGHT_DATE_SFX = "data/b4_notification_ping_h.mp3"
-    HIGHLIGHT_METRIC_SFX = "pops/pop-medium-bubble.wav"
-    HIGHLIGHT_CURIOSITY_SFX = "digital/digital-glitch-clear.wav"
+    # Tactile Auditory Highlighter Pens: Subtly punctuate metrics, dates & statistical shifts (Zero chime/bell/sparkle)
+    HIGHLIGHT_DATE_SFX = "interface/click-mouse-soft.wav"
+    HIGHLIGHT_METRIC_SFX = "emphasis/impactWood_light_000.ogg"
+    HIGHLIGHT_CURIOSITY_SFX = "interface/click-button-medium.wav"
 
     if words_list:
         placed_times = set()
@@ -778,13 +770,22 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
 
 if __name__ == "__main__":
     if "--help" in sys.argv or "-h" in sys.argv:
-        print("Usage: python3 sfx_smart_designer.py [dir] [--short] [--force] [--check-cache]")
+        print("Usage: python3 sfx_smart_designer.py [dir] [--short] [--force] [--outro-sec 8.0] [--check-cache]")
         sys.exit(0)
     p_dir = sys.argv[1] if (len(sys.argv) > 1 and not sys.argv[1].startswith("-")) else "."
     is_s = "--short" in sys.argv or "--shorts" in sys.argv or "short" in p_dir.lower()
     force_gen = "--force" in sys.argv or "-f" in sys.argv
+    outro_s = 0.0
+    for idx_arg, arg_v in enumerate(sys.argv):
+        if arg_v == "--outro-sec" and idx_arg + 1 < len(sys.argv):
+            try:
+                outro_s = float(sys.argv[idx_arg + 1])
+            except ValueError:
+                pass
+    if outro_s == 0.0 and not is_s:
+        outro_s = 8.0
     if "--check-cache" in sys.argv:
         fresh = is_cues_cache_fresh(p_dir)
         print("FRESH" if fresh else "STALE")
         sys.exit(0 if fresh else 1)
-    generate_smart_cues(p_dir, is_shorts=is_s, force=force_gen)
+    generate_smart_cues(p_dir, is_shorts=is_s, force=force_gen, outro_sec=outro_s)
