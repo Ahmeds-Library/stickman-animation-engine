@@ -48,6 +48,7 @@ CATEGORY_KEYWORDS = {
     "modern_daily": {
         "alarm", "bulb", "lightbulb", "phone", "car", "house", "book", "coffee", "bed", "mattress",
         "flute", "badge", "channel", "megaphone", "microphone", "camera", "magnifying",
+        "soda", "cola", "pop", "fizzy", "can", "drink", "beverage", "sugar",
     },
     "editorial_accents": {
         "arrow", "cross", "check", "checkmark", "burst", "star", "bubble", "speech", "warning",
@@ -72,15 +73,36 @@ SYNONYMS = {
     "grain": {"wheat", "crop", "harvest", "food", "famine", "drought"},
     "ship": {"warship", "prow", "boat", "galley", "fleet", "vessel"},
     "ruin": {"column", "pillar", "temple", "stone", "wreck", "collapse"},
-    "coin": {"gold", "money", "currency", "wealth", "economy"},
-    "ingot": {"tin", "copper", "bronze", "metal", "bar", "ore"},
+    "coin": {"currency", "money", "wealth"},
+    "ingot": {"tin", "copper", "bronze", "ore", "smelt"},
     "skull": {"fossil", "bone", "skeleton", "sabertooth"},
     "thermometer": {"cold", "freeze", "ice", "temperature", "frost"},
     "dna": {"helix", "gene", "genetic", "genome"},
     "arrow": {"pointer", "direction", "vector", "curved"},
-    "check": {"checkmark", "tick", "fact", "verified", "true", "pass"},
+    "check": {"checkmark", "verified", "confirm"},
     "cross": {"x", "myth", "false", "wrong", "reject", "stop"},
+    "soda": {"cola", "fizzy", "softdrink", "beverage"},
 }
+
+ALCOHOL_TOKENS = {"wine", "beer", "champagne", "ale", "liquor", "whiskey", "vodka"}
+SODA_SPECIFIC_TOKENS = {"soda", "cola", "pop", "fizzy", "softdrink", "sprite", "coke", "pepsi"}
+KNOWN_MINI_SCENE_SLUGS = {
+    "skull_fossil",
+    "scientific_field_researcher",
+    "tribal_storytelling_pie",
+    "campfire_circle",
+}
+
+
+def is_mini_scene_prop(png_path, name_or_tags=""):
+    """Detects multi-character / multi-island mini-scene cutouts unsuitable for compact circular props."""
+    base = os.path.splitext(os.path.basename(str(png_path or "")))[0].lower()
+    if base in KNOWN_MINI_SCENE_SLUGS:
+        return True
+    txt = f"{base} {name_or_tags}".lower()
+    if any(w in txt for w in ("stickman", "stickmen", "researcher", "excavat", "storytelling")):
+        return True
+    return False
 
 
 def tokenize_text(txt):
@@ -120,10 +142,11 @@ def infer_category(name_and_tags):
 def inspect_png_alpha(png_path):
     """Verifies true RGBA transparency, non-empty subject, and low opaque border ratio."""
     try:
-        with Image.open(png_path) as im:
-            w, h = im.size
+        with Image.open(png_path) as im_raw:
+            w, h = im_raw.size
             if w < 48 or h < 48:
                 return False, f"{w}x{h}", "too_small"
+            im = im_raw.convert("RGBA") if png_path.lower().endswith((".webp", ".gif")) else im_raw
             if im.mode != "RGBA":
                 return False, f"{w}x{h}", f"mode_{im.mode}"
             arr = np.array(im)
@@ -170,7 +193,7 @@ def rebuild_catalog(skill_dir=None):
     # 1. Scan Tier 1: flow_vault (Owned-Flow)
     for root, _, files in os.walk(fvault):
         for fn in sorted(files):
-            if not fn.lower().endswith(".png"):
+            if not fn.lower().endswith((".png", ".webp", ".gif")):
                 continue
             fp = os.path.join(root, fn)
             meta = _sidecar_tags(fp)
@@ -184,25 +207,26 @@ def rebuild_catalog(skill_dir=None):
                 "path": rel_p,
                 "category": cat,
                 "source": "flow_vault",
-                "license": "Owned-Flow",
+                "license": meta.get("license", "Owned-Flow"),
                 "tags": ", ".join(expand_tags(toks)),
                 "alpha_ok": "True" if alpha_ok else "False",
                 "dims": dims,
+                "origin": meta.get("origin", "Google Flow"),
             })
 
-    # 2. Scan Tier 2: cc0_library/<category> (CC0-1.0)
+    # 2. Scan Tier 2: cc0_library/<category> (CC0-1.0 / Public Domain / MIT)
     for cat in CATEGORIES:
         cdir = os.path.join(cc0dir, cat)
         if not os.path.isdir(cdir):
             continue
         for fn in sorted(os.listdir(cdir)):
-            if not fn.lower().endswith(".png"):
+            if not fn.lower().endswith((".png", ".webp", ".gif")):
                 continue
             fp = os.path.join(cdir, fn)
             meta = _sidecar_tags(fp)
             base = os.path.splitext(fn)[0]
             raw_tags = meta.get("tags", "")
-            toks = tokenize_text(f"{cat} {base} {raw_tags}")
+            toks = tokenize_text(f"{base} {raw_tags}")
             alpha_ok, dims, _ = inspect_png_alpha(fp)
             rel_p = os.path.relpath(fp, sdir).replace(os.sep, "/")
             rows.append({
@@ -213,12 +237,13 @@ def rebuild_catalog(skill_dir=None):
                 "tags": ", ".join(expand_tags(toks)),
                 "alpha_ok": "True" if alpha_ok else "False",
                 "dims": dims,
+                "origin": meta.get("origin", "CC0-1.0 Local/Open"),
             })
 
     with open(cat_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["path", "category", "source", "license", "tags", "alpha_ok", "dims"],
+            fieldnames=["path", "category", "source", "license", "tags", "alpha_ok", "dims", "origin"],
             delimiter="\t",
         )
         writer.writeheader()
@@ -237,7 +262,7 @@ def _trigram_cos(a, b):
     return len(ta & tb) / ((len(ta) * len(tb)) ** 0.5)
 
 
-def search_stickers(query, min_score=0.35, require_alpha_ok=True, skill_dir=None):
+def search_stickers(query, min_score=0.35, require_alpha_ok=True, single_object_only=False, skill_dir=None):
     """Searches CATALOG.tsv prioritizing Tier 1 flow_vault over Tier 2 cc0_library."""
     sdir = skill_dir or SKILL_DIR
     cat_path = os.path.join(sdir, "CATALOG.tsv")
@@ -251,6 +276,9 @@ def search_stickers(query, min_score=0.35, require_alpha_ok=True, skill_dir=None
     if not q_toks:
         return []
 
+    wants_alcohol = bool(q_toks & ALCOHOL_TOKENS)
+    wants_soda = bool(q_toks & SODA_SPECIFIC_TOKENS)
+
     matches = []
     with open(cat_path, "r", encoding="utf-8") as f:
         for row in csv.DictReader(f, delimiter="\t"):
@@ -262,9 +290,19 @@ def search_stickers(query, min_score=0.35, require_alpha_ok=True, skill_dir=None
                 continue
 
             base = os.path.splitext(os.path.basename(rel_p))[0]
+            if single_object_only and is_mini_scene_prop(abs_p, row.get("tags", "")):
+                continue
+
             c_toks = set(tokenize_text(f"{base} {row.get('tags', '')}"))
             c_exp = set(expand_tags(c_toks))
             if not c_toks:
+                continue
+
+            # Never pick alcohol (e.g. wine bottle) for soda/coffee/soft-drink/water queries
+            if not wants_alcohol and (c_toks & ALCOHOL_TOKENS):
+                continue
+            # If user asked specifically for soda/cola, require concrete soda/can/fizzy token match
+            if wants_soda and not (c_toks & (SODA_SPECIFIC_TOKENS | {"can", "beverage"})):
                 continue
 
             direct_hits = len(q_toks & c_toks)

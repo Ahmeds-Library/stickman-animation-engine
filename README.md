@@ -1,325 +1,143 @@
-# 🎬 Stickman Hybrid: AI Documentary & Explainer Animation Studio
+# 🎬 Stickman Hybrid — Machine-First 2D Documentary & Explainer Studio (`v4.0`)
 
+[![Version](https://img.shields.io/badge/Release-v4.0%20Machine--First-blue.svg)](#old-version-vs-v40-comparison)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-Full%20Build%20(libass)-green.svg)](https://ffmpeg.org/)
-[![Google Flow](https://img.shields.io/badge/Google%20Flow-Chrome%20Connector-orange.svg)](https://labs.google/flow)
-[![Monetization Ready](https://img.shields.io/badge/YouTube%20YPP-100%25%20Monetizable-brightgreen.svg)](#-youtube-monetization--copyright-purity-guarantee)
-[![License: Apache 2.0 / MIT](https://img.shields.io/badge/License-Apache%202.0%20%2F%20MIT-lightgrey.svg)](LICENSE)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-libass%20%2B%20VA--API-green.svg)](https://ffmpeg.org/)
+[![Google Flow](https://img.shields.io/badge/Google%20Flow-Chrome%20Bridge-orange.svg)](https://labs.google/flow)
+[![Master Loudness](https://img.shields.io/badge/Audio--14.0%20LUFS-De--Rumbled%20VO-purple.svg)](#audio-storytelling--voiceover)
+[![License & Assets](https://img.shields.io/badge/Assets-100%25%20CC0%20%2F%20MIT-brightgreen.svg)](#youtube-monetization--copyright-purity-guarantee)
 
-> **The complete, end-to-end autonomous AI studio for viral 2D stickman documentaries, history explainers, and YouTube Shorts.**  
-> Inspired by the retention mastery of **Vox, Kurzgesagt, Johnny Harris, and Lemmino**.
+> **A 100% free, local, Machine-First 2D stickman documentary production engine (`9:16` Shorts + `16:9` Long)** featuring word-locked choreography, staged Vox-style motion cards, a 316-asset transparent sticker vault, studio `-14 LUFS` audio mastering, and 6 pre-render Quality Gates.
 
 ---
 
 ## 🌟 Overview
 
-**Stickman Hybrid** is a production-grade automated pipeline that generates full-length documentary explainers (16:9 widescreen) and vertical viral shorts (9:16) with hand-drawn stickman illustrations, dynamic cut-out props, tactile Foley sound design, and broadcast-grade audio mixing.
+**Stickman Hybrid (`v4.0`)** turns an approved documentary script into independent, zero-crop **`9:16` Vertical Shorts (`1080×1920`)** and **`16:9` Widescreen Master Documentaries (`1920×1080`)** with expressive 2D stickman art (`look: bright` warm vintage parchment), slow choreographed data graphics, animated WebP/PNG props, tactile Foley sound design, and automated signal QA.
 
-Unlike simplistic AI video generators that output random B-roll, **Stickman Hybrid** enforces a rigorous **6-Act Psychological Retention Tension Curve**, **The Vox Drop-Out Silence beat**, **Kurzgesagt Auditory Highlighter Pens**, **4–7 Second Pattern Interrupts**, and **100% CC0 Public Domain copyright-free audio**.
+### Machine-First Split (`~88% Local Engine / ~12% LLM`)
+
+Every mechanical, mathematical, DSP, CV, validation, rendering, and QA step executes **100% locally in Python, NumPy, SciPy, Pillow, Kokoro-82M, Faster-Whisper, Tesseract OCR, and FFmpeg**, while the LLM focuses strictly on creative narrative ideation, factual accuracy, and scene prompts:
 
 ```mermaid
 flowchart LR
-    A["💡 Intake / Topic<br/>(5 Questions)"] --> B["📝 Script & 6-Act Curve<br/>(narrative_intelligence.py)"]
-    B --> C["🎨 Google Flow Visuals<br/>(flow-auto + key.py)"]
-    B --> D["🎙️ Neural Voiceover<br/>(Kokoro / Parler-TTS)"]
-    C & D --> E["🎵 Storytelling Audio Mix<br/>(-17 dB Bed, -14 LUFS, mix.py)"]
-    E --> F["🎬 Timeline Rendering<br/>(render_pro.py + VFX)"]
-    F --> G["🔍 RL Quality Audit<br/>(Rules 1-45, evaluate_rl.py)"]
-    G --> H["🚀 Viral SEO & Thumbnails<br/>(3-Element Mobile Test)"]
+    A["💡 LLM Narrative Blueprint<br/>(~12% Creative Direction)"] --> B["📝 Conjunction & Script Compiler<br/>(script_architect.py)"]
+    B --> C["🎙️ Kokoro-82M List Prosody + VO<br/>(kokoro_vo.py + vo_join.py)"]
+    C --> D["⏱️ Faster-Whisper Word Sync<br/>(align.py -> WORDS.tsv)"]
+    A & D --> E["🎬 Director Supervisor & Era Gate<br/>(director_supervisor.py)"]
+    E --> F["🎨 Vault Reuse + Flow Cutout<br/>(asset_registry.py + key.py)"]
+    E & D --> G["🔊 SFX & -14 LUFS Mastering<br/>(sfx_smart_designer.py + mix.py)"]
+    F & G --> H["🛡️ 6-Gate Pre-Render Shield<br/>(validate_pipeline.py)"]
+    H --> I["🎥 Staged Motion Renderer<br/>(render_pro.py)"]
+    I --> J["📊 Full-MP4 Signal QA & RL Memory<br/>(studio.py sheets + evaluate_rl.py)"]
 ```
+
+| Stage | Owner | Modules & Deterministic Capabilities |
+| :--- | :--- | :--- |
+| **Story, 6-Act Retention & Prompts** | **LLM** + Local Audit | Authored blueprint audited locally by `narrative_intelligence.py`, `curiosity_engine.py`, `viral_hook_engine.py`, and `viral_seo_intelligence.py`. |
+| **Text Normalization & Gaps** | **100% Local** | `script_architect.py` normalizes telegraphic comma lists (`"sugar, coffee, soda"` $\to$ `"sugar, coffee, and soda"`) and sets twist/punctuation pauses. |
+| **TTS & Enumerated List Prosody** | **100% Local** | `kokoro_vo.py` (`Kokoro-82M`) synthesizes multi-item lists with natural `0.28s–0.42s` breathing rhythm, DC removal, and `12ms` fades; `vo_join.py` levels to `-16 LUFS`. |
+| **Forced Word Alignment** | **100% Local** | `align.py` (`Faster-Whisper int8`) locks word timestamps (`WORDS.tsv`) for subtitles, sticker onsets, and `F_RUSHED_LIST` cadence checks. |
+| **Asset Search & Flow Keying** | **100% Local** (+ Flow) | `asset_registry.py` + `index_stickers.py` search `316` alpha-verified props with strict **`ban_modern` Era Filtering**; `key.py` + `cutout.py` key magenta backgrounds. |
+| **Director Choreography** | **100% Local** | `director_supervisor.py` enforces **Literal + Era-Safe Sticker Logic** (`REJECTED_ERA_MISMATCH`, `REJECTED_NONLITERAL`), shot-size alternation, and `DIRECTOR_PLAN.json` staging. |
+| **VFX & Audio Mastering** | **100% Local** | `vfx_smart_designer.py`, `sfx_smart_designer.py`, and `mix.py` apply `zoom_dissolve` / `slide_push` / `paper_crossfade`, trim silent music intros, duck beds, and master to `-14.0 LUFS`. |
+| **Validation, Render & Signal QA** | **100% Local** | `validate_pipeline.py` runs 6 Pre-Render Gates (OCR leak `conf >= 65.0`, banned SFX block, Fact-Number Parity, `F_RUSHED_LIST`); `render_pro.py` & `evaluate_rl.py` verify MP4 signals. |
 
 ---
 
-## ⚡ Key Capabilities
+## 🔄 Old Version vs. `v4.0` Comparison
 
-### 0. Unified Master Control Plane (`studio.py`)
-Run the entire production studio with a single command from the project root:
-```bash
-python3 studio.py doctor                                                  # System hardware & engine diagnostics
-python3 studio.py trends --niche ancient_engineering                      # High-RPM topic researcher & tag clusters
-python3 studio.py hook "Ancient Human Night" --archetype modern_inversion # 3-second viral video hook
-python3 studio.py heading "Chapter 1: The Void" --subtitle "50,000 Years" # Animated chapter title card
-python3 studio.py page "50,000 MILES OF STONE" --pose think               # Signature plain paper palate cleanser page
-python3 studio.py vfx input.mp4 --effect shake_impact                     # High-impact screen shake
-python3 studio.py gate short/ --format 9:16                               # 6-Gate Pre-Render Quality Shield
-python3 studio.py stickers --search "bronze sword"                        # Search Tier-1 Flow Vault & CC0 Sticker Library
-python3 studio.py qc example/boat_hi                                      # 61-Rule RL Quality Audit
-python3 studio.py create "The French Revolution" --look oversimplified    # Full automated pipeline
-```
-
-### 1. Dual-Pipeline Decoupling (Rule 22)
-* **Master Long Documentary (16:9 Widescreen - 1920x1080):** Deep historical narrative, dedicated 16:9 Flow art, chapter slugs, and YouTube End Screen interactive outro slates.
-* **Viral Short (9:16 Vertical - 1080x1920):** Calm clause-locked pacing (`2.5–4.0s`), 0–3s viral hook, dedicated 9:16 vertical Flow art, and channel subscribe handoff CTA.
-* **Zero Cross-Crop:** No pillarboxing, black bars, or cropped visuals. Both pipelines are completely independent.
-* **4 Curated Fonts & 9 Editorial Looks:** Dynamic typographic hierarchy (`PermanentMarker`, `Bangers`, `Caveat`, `SedgwickAve`, `PatrickHand`) across 9 looks (`bright`, `warm`, `night`, `ink`, `oversimplified`, `cgp_grey`, `casually_explained`, `minute_physics`, `painted`).
-* **6 Full-Bleed Editorial Visual Archetypes:** `card_stat`, `split_compare` (Top-vs-Bottom on 9:16 / Left-vs-Right on 16:9), `bar_timeline`, `stat_pie`, calm Flow drift (`1.00 -> 1.045`), and hand-drawn verdict accents (`stamp_x`/`stamp_check`) with 2x Lanczos Supersampling.
-* **Multi-Slot Collision-Free Stickers & Permanent Vault (`skills/stickman-stickers/`):** Unlimited simultaneous multi-stickers (1–4+ props) with `>= 32px` padding and locked spawn-time anchors, resolving across Tier 1 `flow_vault/` and Tier 2 `cc0_library/`.
-* **Automated Packaging (`UPLOAD_PACK/`):** Generates 16:9 landscape & 9:16 vertical thumbnails, `METADATA.json` (auto-chapters, SEO tags), and `POSTING_GUIDE.md` on every render.
-
-### 2. Google Flow Chrome Connector Integration
-* Generate **unlimited 2D stickman scenes and transparent prop cutouts** directly from Google Flow using the `flow-auto` CLI bridge.
-* Built-in chromatic `#FF00FF` magenta background keying (`key.py` + `cutout.py`) with inward alpha rim erosion (`alpha.min() == 0`).
-* Automated clean watermark removal via Samsung LaMa (`delama.py`).
-
-### 3. Audio Storytelling Balance & Kurzgesagt Highlighters
-* **Vocal Pocket Notch EQ:** Dips the music bed by $-3.2\text{ dB}$ at 1.8 kHz and $-2.2\text{ dB}$ at 3.2 kHz to carve a clear frequency pocket for spoken dialogue.
-* **Warm Audible Bed:** Background music starts cleanly at `0.0s` calibrated between **-11.0 dB and -13.0 dB** relative to Voice RMS (`mix.py`), ducking smoothly (1.9:1 ratio, 450ms release) to avoid silent or buried openings.
-* **Kurzgesagt Auditory Highlighter Pens:** Dates, years, statistics, and paradigm shifts automatically receive tactile micro-SFX (`-22 dB`) to anchor cognitive attention.
-* **Stereo Haas Widening:** Music bed expanded across the stereo field (`extrastereo=m=1.12`) while narrator speech remains locked dead-center mono.
-* **Broadcast Standard:** Mastered to **-14.0 LUFS** ($\pm 1.0$) with true peak $\le -1.0\text{ dBTP}$.
-
-### 4. Autonomous Zero-Setup Self-Bootstrapper (`auto_bootstrap.py`)
-* **Clone & Run Anywhere:** When a user clones this repository onto a fresh machine (Linux, macOS, Windows) with zero setup, running any video generation command automatically triggers self-bootstrapping.
-* **Auto-Installs Missing Packages:** Audits and auto-installs `kokoro`, `faster-whisper`, `scipy`, `soundfile`, `pillow`, and dependencies on the fly.
-* **Model Pre-Fetcher & Verifier:** Pre-warms local Kokoro-82M and Faster-Whisper int8 models.
-* **Resource Self-Healing:** Validates vendored bold fonts (`Montserrat-Black`, `LuckiestGuy`, `Kalam`) and CC0 foley sound effects.
-
-### 5. Psychoacoustic Sound Design & Editing Psychology (Rules 47, 55, 59)
-* **Tactile Synesthesia (Foley for Abstract Concepts):** Assigns organic physical foley (wood clacks, typewriter taps, paper rustles, bubble pops) to abstract 2D graphics so data feels physically heavy.
-* **J-Cut Audio Pre-Lapping:** Entrance foley leads the visual graphic appearance by **90ms to 120ms** (the ear prepares the eye).
-* **The "Scare and Release" Micro-Silence Vacuum:** Cuts all music and room ambience to complete digital silence for 0.4s to 0.8s immediately before a pivotal revelation (*The Vox Drop-Out*).
-* **Infrasonic & Low-End Tension (40–60 Hz Sub-Drones):** Visceral sub-rumble activating the primal threat/curiosity response during mysteries or twists.
-* **Spectral Anti-Masking:** Clean frequency slotting (Voiceover 120Hz–4.5kHz, Highlighters 2.5kHz–8kHz, Sub-bass 40Hz–65Hz, Bed -17 dB).
-* Read the full [Psychoacoustic Editing Guide](skills/stickman-hybrid/references/PSYCHOACOUSTIC_EDITING_GUIDE.md).
-
-### 6. 12 Psychological Hook Archetypes (Rules 46, 49, 51-54)
-Benchmarked against top 100M+ view YouTube channels:
-1. `modern_inversion`: Hypnotic Modern Comfort $\to$ Evolutionary Void Inversion (**Ink Explainer 19.3M & Zenn 8.1M**).
-2. `oversimplified_folly`: Grand Historical Crisis vs Petty Human Absurdity (**OverSimplified 51.9M**).
-3. `deadpan_quiz`: Clinical Multiple-Choice Decision-Tree Quiz (**Casually Explained 22.8M**).
-4. `keys_of_power`: Cold Game-Theoretic Mechanical Incentives (**CGP Grey 26.1M**).
-5. `everyday_axiom`: Shattering Everyday Intuition with 2D Geometry (**MinutePhysics 9.5M**).
-6. `perspective_inversion`: Animal / Alien Observer Flip (**Quark 1.97M**).
-7. `barnum`: Self-Relevance Mirror (*"Your brain is doing something only 1% notice"*).
-8. `counter_intuitive`: Immediate Disruption of Common Wisdom.
-9. `paradox`: The Impossible Historical Contradiction.
-10. `transformation`: 30-Second Permanent Mindset Shift.
-11. `forbidden`: Reactance Theory Secret Reveal.
-12. `warning`: Threat Detection & Loss Aversion Anchor.
-
-### 7. 6 Visual Style Presets (`looks/`)
-* `oversimplified`: Bold 7-9px comic ink, period costumes (wigs, crowns, muskets), exaggerated bug-eyed reactions.
-* `casually_explained`: Ultra-minimal 3px clean black lines, stark white canvas, static deadpan dot eyes, flowcharts.
-* `cgp_grey`: Slate gray architecture (`#2A2E39`), signature rectangular spectacles, sovereign keys, network trees.
-* `minute_physics`: Hand-drawn whiteboard paper texture (`#FAF8F2`), dynamic vector velocity arrows, marker foley.
-* `ink`: Warm vintage parchment (`#F7E8C0` to `#ECD6B4`), felt-pen lines, archival cutout props.
-* `warm`: Golden ochre daylight to Midnight Indigo (`#181A2A`) with Campfire Amber (`#FFAE33`) safety island.
-
-### 8. High-CTR 3-Element Thumbnails (Rule 45)
-* Strictly adheres to the **Three-Element Rule**:
-  1. *Hero Subject (50% frame):* Expressive stickman face/silhouette.
-  2. *Context Prop (25% frame):* Glowing 3D hero artifact with radial bloom.
-  3. *Text Hook ($\le 3$ words):* Bold -3.5° tilted text with dark outline.
-* Passed through a **140px mobile downsample test** to ensure instant readability in YouTube feeds.
+| Pillar | Previous Release (`origin/main` `9eb7ac0`) | `v4.0` Machine-First Documentary Engine |
+| :--- | :--- | :--- |
+| **Architecture Balance** | Monolithic scripts with manual per-scene debugging | **~88% Local Deterministic Engine / ~12% LLM**, unified under `studio.py` & `DIRECTOR_PLAN.json` |
+| **Editorial Cards & Motion** | Fast snap-in cards (`~0.25s`), opaque block checklists, single `crossfade` / abrupt wipes | Staged **`easeOutQuart` / `easeInOutCubic`** cards (`draw_scale_compare`, `draw_strike_replace_card`, `card_stat`, `split_compare`, `bar_timeline`, `stat_pie`), **seamless translucent frosted `checklist_build`**, head-clear **`inset_shelf`**, silky **`slide_push` / `zoom_dissolve` / `paper_crossfade`** |
+| **Sticker & Visual Vault** | `134` static PNG stickers, `0` curated backgrounds/VFX catalogs, raw filename tag bleed | **`316` alpha-verified cutouts** (`113` Owned-Flow + `203` CC0/MIT + **`5` animated `.webp`**), **`8` CC0 backgrounds**, **`12` VFX overlays** (`3` animated `.webp`), zero category/homograph tag pollution |
+| **Sticker Intelligence** | Generic semantic guesses (`lightbulb` / `clock` on prehistoric scenes, occasional face overlap) | **Strict Literal + Era Compatibility Gate** (`REJECTED_ERA_MISMATCH`, `REJECTED_NONLITERAL`), white-head salience clearance, `0` random fill |
+| **Audio & Voiceover** | Static SFX/music picks, occasional dead-air music intros (`1.0s–2.2s`), rushed comma lists | **`1,654` audio assets** (`1,582` SFX + `72` music beds), auto-trimmed music onsets (`_detect_music_onset_sec()`), **`twink/bell/chime/scratch` SFX blacklist**, **Kokoro Enumerated List-Prosody pacing**, `-14.0 LUFS` master, standalone `16:9` music-only Outro |
+| **Quality Gates & Signal QA** | Basic file existence checks & text RL report | **6-Gate Pre-Render Shield**, Confidence-gated OCR leak check, **Fact-Number Parity**, **`F_RUSHED_LIST`** cadence audit, post-render `hook_sheet` / `phone_sheet` / `beats_sheet`, `F_STUTTER` / `F_FLASH_FRAME` / `ebur128` scan |
 
 ---
 
-## 🛠️ System Requirements & Prerequisites
+## 📦 Verified Asset Vault & 9 Synced Skills
 
-* **Operating System:** Linux (Ubuntu/Debian/Arch), macOS (Apple Silicon or Intel), or Windows 10/11.
-* **FFmpeg:** Full build with `libass` support (crucial for subtitle shaping and audio mixing).
-* **Python:** Version 3.11, 3.12, or 3.13.
-* **Node.js:** Version 20.0+ LTS with `npm`.
-* **Browser:** Google Chrome (for the Google Flow Connector extension).
+All asset manifests are 100% reconciled (`0` missing files, `0` orphan files) and all **9 skills** are mirror-synced (`0 diff` across `skills/`, `~/.gemini/config/skills/`, and `~/.claude/skills/`):
+
+* **Stickers ([stickman-stickers/CATALOG.tsv](skills/stickman-stickers/CATALOG.tsv)):** **`316`** transparent cutouts (`113` `flow_vault` + `203` `cc0_library`, `316/316 alpha_ok=True`, static `.png` + animated `.webp`).
+* **SFX & Music ([vox-doc-sound/CATALOG.tsv](skills/vox-doc-sound/CATALOG.tsv)):** **`1,654`** tracks (`1,582` CC0 Foley/Impacts/Tactile UI SFX + `72` music beds with non-silent `0.00s` onsets).
+* **Backgrounds ([backgrounds/CATALOG.tsv](skills/stickman-hybrid/backgrounds/CATALOG.tsv)):** **`8`** editorial parchment, vintage grain, kraft, blueprint, and dark-outro textures.
+* **VFX Overlays ([vfx_assets/CATALOG.tsv](skills/stickman-hybrid/vfx_assets/CATALOG.tsv)):** **`12`** CC0/MIT lighting, ink-arrow, ban-stamp, and animated paper-grain / sunlit-dust `.webp` layers.
+* **Look Presets (`skills/stickman-hybrid/looks/`):** `bright` (canonical warm parchment), `warm`, `night`, `ink`, `oversimplified`, `cgp_grey`, `casually_explained`, `minute_physics`, `painted`.
+* **9 Modular Skills (`skills/`):** `stickman-hybrid`, `stickman-stickers`, `vox-doc-sound`, `data-storytelling`, `emotional-arc-designer`, `headline-psychologist`, `loss-aversion-designer`, `visual-emotion-engineer`, `youtube-seo-optimizer`.
 
 ---
 
-## 🚀 Installation & Setup Guide
+## 🚀 Quickstart & CLI Reference (`studio.py`)
 
-### Step 1: Clone the Repository
+### 1. Prerequisites & Setup
 ```bash
-git clone https://github.com/YOUR_USERNAME/stickman-animation.git
-cd stickman-animation
-```
+# Ubuntu / Debian FFmpeg (with libass + VA-API support)
+sudo apt update && sudo apt install -y ffmpeg tesseract-ocr
 
-### Step 2: Install FFmpeg (with libass)
-* **Ubuntu / Debian:**
-  ```bash
-  sudo apt update && sudo apt install -y ffmpeg
-  ```
-* **macOS (Homebrew):**
-  ```bash
-  brew install ffmpeg
-  ```
-* **Windows (winget):**
-  ```powershell
-  winget install Gyan.FFmpeg
-  ```
-* *Verify:* Run `ffmpeg -hide_banner -filters | grep ass`. It must display `ass` and `subtitles`.
-
-### Step 3: Install Python Dependencies
-```bash
-python3 -m pip install --upgrade pip
+# Python dependencies (Python 3.11+)
 python3 -m pip install -r requirements.txt
+
+# Verify zero-setup environment & catalogs
+python3 studio.py doctor
 ```
 
-*(Optional LaMa Watermark Remover)*:
-```bash
-python3 -m pip install torch
-# Download the 206 MB LaMa weights to ~/.cache/lama/big-lama.pt
-mkdir -p ~/.cache/lama
-curl -L -o ~/.cache/lama/big-lama.pt https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt
-```
-
-### Step 4: Google Flow Connector Chrome Extension & CLI Setup
-
-The **Flow Connector** links your local terminal directly to Google Flow (Google Labs) running in Chrome, allowing free image generation via CLI commands.
-
-1. **Verify Node.js (version 20+):**
-   ```bash
-   node --version
-   npm --version
-   ```
-2. **Install `flow-connector-cli` globally:**
-   ```bash
-   npm install -g flow-connector-cli@latest
-   ```
-3. **Install the Flow Connector Chrome Extension:**
-   - Open Google Chrome.
-   - Install the Flow Connector extension from your Chrome Web Store or unpacked developer directory.
-   - Open [Google Flow](https://labs.google/flow) in a Chrome tab and sign into your Google account.
-   - Click the extension icon in Chrome and ensure the side panel is active.
-4. **Run the Diagnostic Bridge Checker:**
-   ```bash
-   python3 skills/stickman-hybrid/scripts/flow_bridge_checker.py
-   ```
-   *If all checks pass, you are ready to generate art directly from your terminal!*
-
-### Step 5: Low-Resource Hardware Acceleration & Open-Source Engines
-
-Specifically optimized for standard consumer hardware (e.g. 8 GB RAM, Intel Core i5 laptops, Intel Iris Xe graphics):
-
-1. **Check System Resource & GPU Profile:**
-   ```bash
-   python3 skills/stickman-hybrid/scripts/low_resource_engine.py --profile
-   ```
-   *Auto-detects `/dev/dri/renderD128` (Intel VA-API) to unlock near-zero CPU, 5x realtime 1080p hardware-accelerated video rendering.*
-2. **Run int8 Quantized Whisper on CPU (17x Real-Time):**
-   ```bash
-   python3 skills/stickman-hybrid/scripts/low_resource_whisper.py <audio.wav> --model tiny.en --out-tsv WORDS.tsv --out-srt captions.srt
-   ```
-   *Transcribes audio and aligns word timestamps in < 3 seconds using < 200MB RAM.*
-3. **HyperFrames Open-Source Deterministic Video Suite:**
-   - Render HTML/CSS/GSAP animations to MP4 using HeyGen's open-source framework:
-   ```bash
-   npx hyperframes preview   # Live browser preview
-   npx hyperframes render    # Frame-by-frame deterministic MP4 compilation
-   ```
-
----
-
-## 📖 How to Use
-
-### Starting in Claude Code / Antigravity
-Open this workspace in your agent terminal and simply type:
-```text
-start
-```
-or
-```text
-stickman hybrid start
-```
-
-The system will interactively ask you the **5 Intake Questions**:
-1. **Topic:** Provide your topic or ask for 10 high-RPM viral suggestions.
-2. **Language:** English (`Kokoro` CPU) or Urdu / Roman Urdu (`Indic Parler-TTS` GPU).
-3. **Length:** e.g., 1 minute, 2 minutes, 5 minutes.
-4. **Format:**
-   - `1) Long (16:9 Landscape)`
-   - `2) Shorts (9:16 Vertical)`
-   - `3) Both (Dedicated 16:9 + Dedicated 9:16)`
-5. **Captions:** Yes (Hormozi kinetic single-word pop) or No (Clean cinematic).
-
-### Core CLI Tool Reference
+### 2. `studio.py` Control Plane Commands
 
 | Command | Purpose |
-|---|---|
-| `python3 auto_bootstrap.py` | Autonomous zero-setup audit: auto-installs missing dependencies & pre-warms models. |
-| `python3 skills/stickman-hybrid/scripts/viral_hook_engine.py --topic <topic> --archetype <type>` | Generates complete 3-Second A-E-T viral hook video with procedural audio & kinetic text. |
-| `python3 skills/stickman-hybrid/scripts/low_resource_engine.py --profile` | Detects hardware acceleration (Intel VA-API / QSV) & memory limits. |
-| `python3 skills/stickman-hybrid/scripts/low_resource_whisper.py <audio.wav>` | Transcribes & aligns word timestamps at 17x speed on CPU (<200MB RAM). |
-| `python3 skills/stickman-hybrid/scripts/flow_bridge_checker.py` | Diagnoses Flow Connector extension and CLI connection. |
-| `python3 skills/stickman-hybrid/scripts/curiosity_engine.py <project>` | Audits retention curve, macro-loop, and micro-bridges. |
-| `python3 skills/stickman-hybrid/scripts/sfx_smart_designer.py <project>` | Generates multi-layered sound design with auditory highlighters. |
-| `python3 skills/stickman-hybrid/scripts/viral_seo_intelligence.py <project>` | Generates 5 high-CTR titles, chapters, description, and tags. |
-| `python3 skills/stickman-hybrid/scripts/flow_thumbnail_generator.py <project>` | Generates 16:9 and 9:16 3-element thumbnails with mobile CV audit. |
-| `python3 skills/stickman-hybrid/scripts/video_editor_studio.py` | Color grading, kinetic subtitle generator, and outro stitching. |
-| `python3 skills/stickman-hybrid/scripts/evaluate_rl.py <project>` | Runs 46-rule Reinforcement Learning quality audit. |
+| :--- | :--- |
+| `python3 studio.py doctor` | Audits Python packages, FFmpeg/VA-API, Kokoro, Whisper, fonts, catalogs, RL policy, and 6-Gate shield. |
+| `python3 studio.py create "<Topic>" --look bright` | Runs dual-pipeline project generation (`9:16` Short + `16:9` Master Documentary) in `~/StickmanHybrid/`. |
+| `python3 studio.py director <project_dir>` | Runs Gate 0 choreography, literal/era sticker filtering, and outputs `DIRECTOR_PLAN.json`. |
+| `python3 studio.py gate <project_dir> --format 9:16` | Enforces all 6 Pre-Render Quality Gates (`--format` accepts `9:16` or `16:9`). |
+| `python3 studio.py stickers --search "bronze sword"` | Searches the 316-asset transparent sticker vault (or rebuilds `CATALOG.tsv` cleanly). |
+| `python3 studio.py hook "<Topic>" --archetype modern_inversion` | Generates a standalone 3-second high-retention A-E-T hook test. |
+| `python3 studio.py heading "Chapter 1" --subtitle "14,000 BP"` | Renders an animated chapter title card with Ken Burns drift. |
+| `python3 studio.py page "50,000 MILES OF STONE" --pose think` | Generates a signature Ink Explainer plain-paper palate cleanser page. |
+| `python3 studio.py sheets <video.mp4> --out qa/` | Extracts `hook_sheet.jpg`, `phone_sheet.jpg`, `beats_sheet.jpg` & signal scan (`blank_frame0`, `flash`, `freeze_2.5s`). |
+| `python3 studio.py qc <project_dir>` | Runs post-render multi-rule Quality & RL Memory evaluation (`evaluate_rl.py`). |
+| `python3 studio.py trends --niche ancient_engineering` | Researches high-RPM YouTube documentary topics and SEO clusters. |
+| `python3 studio.py vfx input.mp4 --effect shake_impact` | Applies standalone signal/camera VFX filters to rendered video. |
 
 ---
 
-## 🧩 Specialized Skills Ecosystem
+## 📝 `v4.0` Release Highlights
 
-The repository vendors 17 modular AI skills located in `skills/`:
+* **Machine-First Choreography:** Replaced erratic pop-ins and rapid snap-cards with staged `easeOutQuart` / `easeInOutCubic` motion (`draw_scale_compare`, `draw_strike_replace_card`, `card_stat`, `split_compare`, `bar_timeline`, `stat_pie`) and smooth `slide_push` (`0.34s`), `zoom_dissolve` (`0.32s`), and `paper_crossfade` (`0.28s`) transitions.
+* **Literal + Era-Safe Sticker Intelligence:** Killed hallucinated/illogical stickers (e.g., electric lightbulbs over prehistoric scenes) across `director_supervisor.py` and `asset_registry.py`, and cleaned all cross-category tag leaks in `stickman-stickers/CATALOG.tsv`.
+* **Breathable Enumerated List Prosody:** `script_architect.py` + `kokoro_vo.py` rewrite telegraphic comma lists into natural English (`A, B, and C`) spaced cleanly across `WORDS.tsv`, enforced by the new `F_RUSHED_LIST` check in `validate_pipeline.py` and `evaluate_rl.py`.
+* **Fact-Number Parity & Confidence-Gated OCR:** Pre-Render Gates automatically verify displayed card stats match spoken `LINES.tsv` numbers and run Tesseract TSV at `conf >= 65.0` so illustrated crosshatching never triggers false header-leak blocks.
+* **Broadcast Audio Purity:** Added 6 verified OpenGameArt `CC0-1.0` beds, trimmed dead-air lead-ins across `CC0_PublicDomain` tracks, added `_detect_music_onset_sec()` in `mix.py`, and blocked blacklisted `twink/bell/chime/scratch` SFX inside both selection and Gate 3 validation.
 
-```
-skills/
-├── stickman-hybrid/            # Core 2D stickman pipeline, rules & rendering engine
-├── vox-doc-sound/              # Vox-style sound design, VO alignment & mixing
-├── hyperframes/                # HeyGen open-source deterministic HTML/CSS/GSAP video
-├── hyperframes-cli/            # HyperFrames CLI automation & live studio preview
-├── remotion/                   # Programmatic React video composition & walkthroughs
-├── remotion-best-practices/    # Remotion animation curves, transitions & charts
-├── remotion-to-hyperframes/    # Bridge converting Remotion projects to HyperFrames
-├── slideshow/                  # HyperFrames automated photo & document slideshows
-├── magic-animator/             # Motion graphics, animated vectors & UI elements
-├── animejs-animation/          # Advanced timeline choreography & SVG springs
-├── youtube-seo-optimizer/      # Search keyword discovery, tags & chapters
-├── emotional-arc-designer/     # 6-Act narrative affective tension sequencing
-├── visual-emotion-engineer/    # Arousal-valence visual psychology & contrast
-├── headline-psychologist/      # Loewenstein prediction-error headline formulas
-├── loss-aversion-designer/     # Downside framing & stakes amplification
-├── data-storytelling/          # Data/Narrative/Visual 3-pillar structure
-└── viral-generator-builder/    # Screenshot-tested virality & identity moments
+---
+
+## 📁 Repository Layout (`48` Active Scripts)
+
+```text
+stickman-animation/
+├── studio.py                           # Unified CLI studio orchestrator & signal QA
+├── auto_bootstrap.py                   # Zero-setup package & model self-provisioner
+├── requirements.txt                    # Python dependency spec
+├── AGENT_START_GUIDE.md / CLAUDE.md    # Orchestration & quality-gate manuals
+└── skills/
+    ├── stickman-hybrid/                # Core rendering, Director, VFX/SFX, 6-Gate shield & RL engine
+    │   ├── looks/                      # 9 editorial look presets (bright.md canonical)
+    │   ├── backgrounds/                # 8 indexed CC0 parchment/canvas textures
+    │   ├── vfx_assets/                 # 12 indexed CC0/MIT overlays (.png + animated .webp)
+    │   └── scripts/                    # render_pro.py, director_supervisor.py, validate_pipeline.py, ...
+    ├── stickman-stickers/              # 316-asset transparent sticker vault (flow_vault + cc0_library)
+    ├── vox-doc-sound/                  # 1,654-track CC0 SFX/music library, Kokoro TTS, Whisper & -14 LUFS mix
+    └── [6 companion writing/SEO skills]# data-storytelling, emotional-arc-designer, headline-psychologist,
+                                        # loss-aversion-designer, visual-emotion-engineer, youtube-seo-optimizer
 ```
 
 ---
 
 ## 💰 YouTube Monetization & Copyright Purity Guarantee
 
-Every asset generated by Stickman Hybrid is **100% compliant with the YouTube Partner Program (YPP)** with zero copyright strike or Content ID matching risk:
-
-* **Visuals:** 100% original generative 2D stickman vector art produced via Google Flow prompts.
-* **Audio SFX & Foley:** Exclusively CC0 Public Domain (`Kenney_CC0`, `Wyzowl_CC0`) and licensed original recordings.
-* **Music:** 100% CC0 Public Domain instrumental tracks (`FreePD_CC0`) and royalty-free stems.
-* **Voice Models:** Permissive Apache 2.0 open-weights models (Kokoro-82M, Indic Parler-TTS). No celebrity voice clones.
-* **Typography:** Open-source Google Fonts (Patrick Hand, Kalam, Montserrat, Luckiest Guy) under the SIL Open Font License.
-
----
-
-## 📜 Production Rules (Rules 1 to 60)
-
-All productions automatically comply with the 60 rules codified in [`skills/stickman-hybrid/PLAYBOOK.md`](skills/stickman-hybrid/PLAYBOOK.md), verified continuously by `python3 studio.py qc`:
-- **Rule 20:** Pure 2D hand-drawn stickman aesthetic (no 3D or uncanny photorealism).
-- **Rule 21:** Zero-Crop native scaling (1536x2752 for 9:16, 2752x1536 for 16:9).
-- **Rule 22:** Dual-Pipeline independent Flow generation.
-- **Rule 24:** Strict spatial layout margins (anti-occlusion, right 220px margin, bottom 660px clearance).
-- **Rule 27 & 43:** Storytelling Golden Ratio (-17 dB bed, Kurzgesagt Auditory Highlighters).
-- **Rule 29:** Word-onset sticker synchronization with 1.8s/2.2s TTL and 0.28s smooth exit.
-- **Rule 40 & 44:** 6-Act Tension Curve, Vox Drop-Out Silence, and Loewenstein Information Gap.
-- **Rule 41 & 42:** 4–7s Pattern Interrupts and Visual Metaphor Entropy.
-- **Rule 45:** High-CTR 3-Element Thumbnails with Mobile 140px Readability.
-- **Rule 46:** 100% Working 3-Second A-E-T Viral Hook Architecture with Procedural Auditory Shock.
-- **Rule 47:** Psychoacoustic Sound Layering, J-Cuts (-120ms lead), and Tactile Synesthesia.
-- **Rule 48:** Autonomous Zero-Setup Self-Healing Guarantee (`auto_bootstrap.py`).
-- **Rule 49:** Hypnotic Modernity $\to$ Evolutionary Void Inversion (**Ink Explainer & Zenn Benchmark**).
-- **Rule 50:** Dual-Tone Canvas Harmony (Warm Parchment `#F7E8C0` + Midnight Indigo `#181A2A` with Campfire Amber).
-- **Rule 51:** OverSimplified Comic Contrast Law (Petty Human Folly vs Grand History).
-- **Rule 52:** Deadpan Flowchart Classification Standard (Casually Explained Clinical Irony).
-- **Rule 53:** Mechanical Incentive & Keyflow Principle (CGP Grey Keys of Power).
-- **Rule 54:** Kinetic Marker & Vector Drawing Standard (MinutePhysics Geometric Resolution).
-- **Rule 55:** Strategic Dead Air & Comedic Timing Law (0.4s-0.8s pre-punchline silence).
-- **Rule 56:** 5-Pillar Visual Effects Anatomy (Screen Shake, Flash Frames, Radial Speedlines, Bloom).
-- **Rule 57:** Dynamic Sticker Physics & Anti-Occlusion Staging (Elastic Spring Overshoot + Face Protection).
-- **Rule 58:** Kinetic Typography & Angled Chapter Headings (`studio.py heading`).
-- **Rule 59:** 5-Layer Broadcast Foley Mix (Sub-bass $\to$ Foley $\to$ Highlighters $\to$ Vox Vacuum $\to$ Ducked Bed).
-- **Rule 60:** Dynamic Camera Kinetics & Multi-Track Editing (Continuous Ken Burns $1.045\times$ Push-In).
-
----
-
-## 🤝 Contributing & License
-
-Contributions, feature requests, and bug reports are welcome! Please check out [`CLAUDE.md`](CLAUDE.md) for orchestrator protocols.
-
-* **Code License:** Apache 2.0 / MIT.
-* **Media Assets:** CC0 Public Domain / Open Access.
+* **Original Scene Art:** All primary 2D stickman scenes (`shots/`) and Tier-1 cutouts (`flow_vault/`) are original project-generated artwork.
+* **CC0 / MIT Prop & VFX Vault:** External icons, animated `.webp` props, music beds, and SFX are strictly verified **CC0-1.0 / Public Domain / MIT** and logged with source URLs across all `CATALOG.tsv` manifests.
+* **Open-Weights Voice & Fonts:** Uses Apache 2.0 `Kokoro-82M` (`Faster-Whisper` MIT) and SIL Open Font License fonts (`PermanentMarker`, `Bangers`, `Caveat`, `SedgwickAve`, `PatrickHand`, `Montserrat`, `LuckiestGuy`, `Kalam`).

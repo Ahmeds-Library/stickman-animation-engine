@@ -97,7 +97,7 @@ def analyze_and_enrich_scenes(project_dir="."):
     prev_cam_move = None
     cam_cycle = ("push_in", "pan_left", "pull_back", "pan_right")
     CAM_MOVE_TOKENS = {"static", "push_in", "pull_back", "pan_left", "pan_right", "zoom_in_tight"}
-    TRANSITION_TOKENS = {"crossfade", "cut", "flash", "fade", "cause_effect", "rapid_list"}
+    TRANSITION_TOKENS = {"crossfade", "zoom_dissolve", "paper_crossfade", "cut", "flash", "fade", "cause_effect", "rapid_list"}
     for r in rows:
         # Columns: cue, img, text, pos, extra, space
         while len(r) < 6:
@@ -132,32 +132,31 @@ def analyze_and_enrich_scenes(project_dir="."):
             if is_hook and "zoom_punch" not in vfx_tokens and "flash" not in vfx_tokens:
                 vfx_tokens.append("zoom_punch")
 
-            # Card / archetype scenes default cleanly to kinetic editorial transition
-            is_arch = img.startswith(("card", "split", "bar_", "timeline", "stat_"))
+            # Card / archetype scenes default cleanly to paper_crossfade or slide_push (~30% editorial shifts)
+            is_arch = img.startswith(("card", "split", "bar_", "timeline", "stat_", "chapter_", "breather", "scale_", "strike_"))
+            vfx_tokens = [t for t in vfx_tokens if t != "punch_settle"]
             if is_arch:
                 vfx_tokens = [t for t in vfx_tokens if t not in ("shake", "bw", "danger", "blood")]
-                if not any(t in vfx_tokens for t in ("slide_wipe", "punch_settle", "whip_blur")):
-                    vfx_tokens.append("slide_wipe" if "split" in img else "punch_settle")
+                if not any(t in vfx_tokens for t in ("slide_wipe", "slide_push", "paper_crossfade", "crossfade")):
+                    vfx_tokens.append("slide_push" if ("split" in img or "chapter_" in img) else "paper_crossfade")
             else:
                 spoken_tokens = set(re.findall(r"\b[a-z0-9_]+\b", line_txt))
+                if any(w in spoken_tokens for w in ("now", "today", "modern", "rewind", "instead", "until", "meanwhile", "centuries")):
+                    if "slide_wipe" not in vfx_tokens and "slide_push" not in vfx_tokens:
+                        vfx_tokens.append("slide_push")
+                elif any(w in spoken_tokens for w in ("actually", "turns", "truth", "however", "secret", "discover", "surprising")):
+                    if not any(t in vfx_tokens for t in ("slide_push", "zoom_dissolve", "cut")):
+                        vfx_tokens.append("zoom_dissolve")
                 if any(w in spoken_tokens for w in DANGER_KEYWORDS):
-                    # High-tension crisis: kinetic whip blur or micro punch settle instead of ugly red overlay
-                    if "whip_blur" not in vfx_tokens and "punch_settle" not in vfx_tokens:
-                        vfx_tokens.append("whip_blur")
                     if any(w in spoken_tokens for w in ("earthquake", "explosion", "crushed", "battle", "collapse")):
                         if "shake" not in vfx_tokens:
                             vfx_tokens.append("shake")
                 elif any(w in spoken_tokens for w in IMPACT_KEYWORDS):
-                    if "punch_settle" not in vfx_tokens:
-                        vfx_tokens.append("punch_settle")
                     if "shake" not in vfx_tokens:
                         vfx_tokens.append("shake")
-                elif any(phrase in line_txt for phrase in TRAGEDY_HISTORICAL_KEYWORDS):
-                    if "crossfade" not in vfx_tokens:
-                        vfx_tokens.append("crossfade")
 
-            # Clean editorial motion transitions (banned cheap color overlays)
-            active_vfx = {"zoom_punch", "punch_settle", "whip_blur", "slide_wipe", "shake", "flash"}
+            # Clean cinema transitions (~70% beat cut, ~30% silky zoom_dissolve / slide_push / paper_crossfade)
+            active_vfx = {"zoom_punch", "slide_push", "slide_wipe", "zoom_dissolve", "paper_crossfade", "shake", "flash"}
             if any(tok in active_vfx for tok in vfx_tokens) and "fade" in vfx_tokens:
                 vfx_tokens = [tok for tok in vfx_tokens if tok != "fade"]
 
@@ -184,7 +183,7 @@ def analyze_and_enrich_scenes(project_dir="."):
 
             vfx_tokens = other_toks + kept_fx
             if not any(tok in active_vfx or tok in TRANSITION_TOKENS for tok in vfx_tokens):
-                vfx_tokens.append("crossfade")
+                vfx_tokens.append("cut")
             if cam_move not in vfx_tokens:
                 vfx_tokens.append(cam_move)
 

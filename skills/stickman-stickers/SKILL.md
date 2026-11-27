@@ -41,7 +41,8 @@ When any project requests a sticker prop (`flow_smart_generator.py`, `validate_p
 
 ## Monetization & Quality Rules
 
-- **Strict License Purity:** Only `Owned-Flow` (`flow_vault/`) and `CC0-1.0` / `Public domain` (`cc0_library/`) assets are allowed. Never ingest `CC-BY-SA`, `NC`, or watermarked stock imagery.
+- **Strict License Purity (`CC0-1.0` / `Public Domain` / `MIT` / `Owned-Flow`):** Every row in `CATALOG.tsv` logs `source`, exact `license`, and `origin` URL/repo (`assets/flow_vault/` = `Owned-Flow`; `assets/cc0_library/` = Kenney CC0-1.0, Kenney Cartography CC0-1.0, Wikimedia CC0, MIT `oreo-design/doodle-icons`, MIT `guokaigdg/naive-icons`; `310` total indexed stickers). Never ingest `CC-BY-SA`, `NC`, unlicensed, or watermarked imagery.
+- **Pure-Python SVG -> 2D Editorial Style Harmonizer:** `fetch_cc0_stickers.py --online` rasterizes MIT/CC0 hand-drawn SVGs (`stroke`/`fill` mapped to dark editorial ink `#1C202C` & warm accent fills matching `look: bright`) to `512x512` halo-free RGBA (`alpha.min() == 0`).
 - **Alpha & Halo Requirement:** Every cataloged PNG must be `RGBA` with `alpha.min() == 0`, opaque coverage between `2%` and `90%`, and zero white/magenta background fringe.
 - **Multi-Sticker & Director Choreography Compatibility:** All cataloged stickers are normalized cleanly for Director-supervised motion (`director_supervisor.py` -> `DIRECTOR_PLAN.json`), supporting 6 context-aware physics entries (`drop_weight`, `peel_reveal`, `bloom_focus`, `swing_strike`, `slide_arc_left`/`right`), collision-free multi-sticker formations (`duo_converge`, `cause_effect` with animated arrows, `trio_cascade`, `quad_showcase`), and archetype cards (`card_stat`, `split_compare`, `bar_timeline`).
 

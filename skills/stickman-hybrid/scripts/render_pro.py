@@ -15,7 +15,7 @@ Features:
 """
 import argparse, csv, json, os, shutil, subprocess, sys, math, re
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageSequence
 
 # Autonomous Zero-Setup Bootstrapper
 try:
@@ -212,9 +212,96 @@ def text_layer(text, size, colour, font_role="default"):
     return _text_cache[key]
 
 
-def card_bg(w, h):
-    key = (w, h, ACTIVE_LOOK_NAME)
+_BG_CATALOG_CACHE = None
+
+
+def _resolve_cc0_background(variant="default"):
+    """Loads matching CC0/editorial background from skills/stickman-hybrid/backgrounds/CATALOG.tsv."""
+    global _BG_CATALOG_CACHE
+    bg_dir = os.path.join(SKILL_ROOT, "backgrounds")
+    if _BG_CATALOG_CACHE is None:
+        _BG_CATALOG_CACHE = {}
+        cat_p = os.path.join(bg_dir, "CATALOG.tsv")
+        if os.path.exists(cat_p):
+            try:
+                with open(cat_p, encoding="utf-8") as f:
+                    for row in csv.DictReader(f, delimiter="\t"):
+                        var_name = str(row.get("variant", "")).strip().lower()
+                        rel = str(row.get("path", "")).strip()
+                        looks_s = str(row.get("looks", "all")).strip().lower()
+                        usage_s = str(row.get("usage", "")).strip().lower()
+                        if not rel:
+                            continue
+                        full_p = os.path.join(bg_dir, rel)
+                        if var_name:
+                            _BG_CATALOG_CACHE[var_name] = full_p
+                        for tok in usage_s.split(","):
+                            tok = tok.strip()
+                            if tok:
+                                _BG_CATALOG_CACHE[tok] = full_p
+                        for lk in looks_s.split(","):
+                            lk = lk.strip()
+                            if lk and var_name:
+                                _BG_CATALOG_CACHE[f"{var_name}:{lk}"] = full_p
+            except Exception:
+                pass
+    var = (variant or "default").strip().lower()
+    look = ACTIVE_LOOK_NAME.strip().lower()
+    alias_map = {
+        "default": ("parchment_warm_bright", "parchment_warm_bright.png"),
+        "sketchbook": ("sketchbook_grain", "sketchbook_grain.png"),
+        "breather": ("breather_cream_editorial", "breather_cream_editorial.png"),
+        "split_warm": ("split_warm_paper", "split_warm_paper.png"),
+        "split_cool": ("split_cool_paper", "split_cool_paper.png"),
+        "blueprint": ("dotgrid_blueprint", "dotgrid_blueprint.png"),
+        "kraft": ("kraft_archive_paper", "kraft_archive_paper.png"),
+        "scale": ("dotgrid_blueprint", "dotgrid_blueprint.png"),
+        "outro_dark": ("dark_charcoal_matte", "dark_charcoal_matte.png"),
+    }
+    var_key, fallback_fn = alias_map.get(var, ("parchment_warm_bright", "parchment_warm_bright.png"))
+    for k in (f"{var_key}:{look}", var_key, var):
+        p = _BG_CATALOG_CACHE.get(k)
+        if p and os.path.exists(p):
+            return p
+    cand = os.path.join(bg_dir, fallback_fn)
+    return cand if os.path.exists(cand) else None
+
+
+def _apply_cc0_vfx_layer(im, kind="paper_grain", opacity=0.08):
+    """Applies subtle lightweight CC0 editorial VFX overlay from vfx_assets/ without muddying contrast."""
+    vfx_map = {
+        "paper_grain": os.path.join(SKILL_ROOT, "vfx_assets", "vfx_paper_grain_overlay.png"),
+        "vignette": os.path.join(SKILL_ROOT, "vfx_assets", "vfx_soft_editorial_vignette.png"),
+    }
+    vp = vfx_map.get(kind)
+    if not vp or not os.path.exists(vp) or opacity <= 0.0:
+        return im
+    try:
+        ov = Image.open(vp).convert("RGBA").resize(im.size, Image.BILINEAR)
+        if opacity < 0.99:
+            arr = np.array(ov, dtype=np.float32)
+            arr[:, :, 3] = np.clip(arr[:, :, 3] * opacity, 0, 255)
+            ov = Image.fromarray(arr.astype(np.uint8), mode="RGBA")
+        out = im.convert("RGBA")
+        out.alpha_composite(ov)
+        return out
+    except Exception:
+        return im
+
+
+def card_bg(w, h, variant="default"):
+    key = (w, h, ACTIVE_LOOK_NAME, variant)
     if key not in _card_cache:
+        var = (variant or "default").strip().lower()
+        bg_p = _resolve_cc0_background(var)
+        if var == "outro_dark" and bg_p:
+            try:
+                base_im = Image.open(bg_p).convert("RGBA").resize((w, h), Image.LANCZOS)
+                _card_cache[key] = _apply_cc0_vfx_layer(base_im, "vignette", opacity=0.35)
+                return _card_cache[key].copy()
+            except Exception:
+                pass
+
         y, x = np.mgrid[0:h, 0:w].astype(np.float32)
         r = np.clip(np.hypot((x - w / 2) / (w * 0.56), (y - h / 2) / (h * 0.56)), 0, 1) ** 1.25
         r = r[..., None]
@@ -226,6 +313,24 @@ def card_bg(w, h):
         edge_v = np.clip((np.hypot((x - w / 2) / (w * 0.72), (y - h / 2) / (h * 0.72)) - 0.55) * 0.16, 0, 0.12)[..., None]
         a = a * (1.0 - edge_v) + fiber[..., None]
         base_im = Image.fromarray(a.clip(0, 255).astype(np.uint8)).convert("RGBA")
+
+        # Composite curated CC0 paper/grain background harmonized with active --look palette
+        is_light_look = sum(CARD_IN) > 420
+        if bg_p and is_light_look:
+            try:
+                tex = Image.open(bg_p).convert("RGBA").resize((w, h), Image.BILINEAR)
+                blend_amt = 0.42 if var in ("breather", "blueprint", "kraft", "scale", "split_warm", "split_cool") else 0.28
+                base_im = Image.blend(base_im, tex, blend_amt)
+            except Exception:
+                pass
+        else:
+            tex_p = bg_p or os.path.abspath(os.path.join(SKILL_ROOT, "textures", "parchment_vintage.png"))
+            if os.path.exists(tex_p):
+                try:
+                    tex = Image.open(tex_p).convert("RGBA").resize((w, h), Image.BILINEAR)
+                    base_im = Image.blend(base_im, tex, 0.10)
+                except Exception:
+                    pass
 
         # Subtle handcrafted blueprint dot-grid & faint editorial rule lines (~6% ink opacity)
         grid_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -239,6 +344,7 @@ def card_bg(w, h):
             for gx in range(step // 2, w, step):
                 gd.ellipse((gx - 1, gy - 1, gx + 1, gy + 1), fill=dot_col)
         base_im.alpha_composite(grid_layer)
+        base_im = _apply_cc0_vfx_layer(base_im, "vignette", opacity=0.28 if var in ("breather", "scale") else 0.18)
         _card_cache[key] = base_im
     return _card_cache[key].copy()
 
@@ -260,15 +366,73 @@ def tag_image(text, size=70):
     return im
 
 
-def sticker(path, h):
-    key_k = (path, h)
+_sticker_anim_cache = {}
+
+
+def _load_sticker_frames(path):
+    """Loads single static frame or full animated WebP/GIF frame sequence with durations."""
+    ap = os.path.abspath(path)
+    if ap in _sticker_anim_cache:
+        return _sticker_anim_cache[ap]
+    if len(_sticker_anim_cache) > 48:
+        _sticker_anim_cache.clear()
+    with Image.open(ap) as im:
+        is_anim = bool(getattr(im, "is_animated", False) and getattr(im, "n_frames", 1) > 1)
+        if is_anim:
+            frames, durs = [], []
+            for f_raw in ImageSequence.Iterator(im):
+                frames.append(f_raw.convert("RGBA").copy())
+                dur_ms = f_raw.info.get("duration", im.info.get("duration", 60)) or 60
+                durs.append(max(0.02, float(dur_ms) / 1000.0))
+            tot = max(0.05, sum(durs))
+            entry = (frames, durs, tot)
+        else:
+            entry = ([im.convert("RGBA").copy()], [1.0], 1.0)
+    _sticker_anim_cache[ap] = entry
+    return entry
+
+
+def _get_sticker_frame_at(path, t_sec=0.0):
+    frames, durs, tot = _load_sticker_frames(path)
+    if len(frames) == 1:
+        return frames[0], 0
+    tt = max(0.0, float(t_sec)) % tot
+    acc = 0.0
+    for idx, (fr_im, d_s) in enumerate(zip(frames, durs)):
+        acc += d_s
+        if tt <= acc:
+            return fr_im, idx
+    return frames[-1], len(frames) - 1
+
+
+def _apply_animated_vfx_layer(im, kind="paper_grain_cycle", t_abs=0.0, opacity=0.22):
+    """Composites looping animated CC0/MIT VFX WebP overlay harmonized with active look."""
+    p = os.path.join(SKILL_ROOT, "vfx_assets", f"vfx_{kind}.webp")
+    if not os.path.exists(p):
+        p = os.path.join(SKILL_ROOT, "vfx_assets", kind)
+    if not os.path.exists(p):
+        return im
+    try:
+        v_fr, _ = _get_sticker_frame_at(p, t_sec=t_abs)
+        if v_fr.size != im.size:
+            v_fr = v_fr.resize(im.size, Image.BILINEAR)
+        if opacity < 0.999:
+            v_fr = _apply_alpha_to_image(v_fr, opacity)
+        out = im.convert("RGBA")
+        out.alpha_composite(v_fr)
+        return out
+    except Exception:
+        return im
+
+
+def sticker(path, h, t_sec=0.0):
+    raw_im, frame_idx = _get_sticker_frame_at(path, t_sec=t_sec)
+    key_k = (os.path.abspath(path), h, frame_idx)
     if key_k not in _sticker_cache:
-        if len(_sticker_cache) > 40:
+        if len(_sticker_cache) > 96:
             _sticker_cache.clear()
-        im = Image.open(path).convert("RGBA")
-        # Crisp 1px boundary feather so resized edges blend cleanly without white cutout halos
-        nw = max(1, round(im.width * h / im.height))
-        im = im.resize((nw, h), Image.LANCZOS)
+        nw = max(1, round(raw_im.width * h / max(1, raw_im.height)))
+        im = raw_im.resize((nw, h), Image.LANCZOS)
         pad = max(16, h // 20)
         shadow = Image.new("RGBA", (im.width + 2 * pad, im.height + 2 * pad), (0, 0, 0, 0))
         a_ch = im.getchannel("A")
@@ -391,6 +555,26 @@ def calculate_intelligent_sticker_anchor(
         except Exception:
             pass
 
+    # Unified subject / white stickman head salience mask (protects focal character & head across all cohort sizes)
+    def _subject_salience_penalty(bx0, by0, bx1, by1):
+        try:
+            x0, y0 = max(0, int(bx0)), max(0, int(by0))
+            x1, y1 = min(bg_im.width, int(bx1)), min(bg_im.height, int(by1))
+            if x1 <= x0 + 8 or y1 <= y0 + 8:
+                return 0.0
+            crop_rgb = np.array(bg_im.crop((x0, y0, x1, y1)).convert("RGB"), dtype=np.uint8)
+            white_head = ((crop_rgb[:, :, 0] > 232) & (crop_rgb[:, :, 1] > 228) & (crop_rgb[:, :, 2] > 218)).mean()
+            dark_ink = ((crop_rgb[:, :, 0] < 65) & (crop_rgb[:, :, 1] < 65) & (crop_rgb[:, :, 2] < 65)).mean()
+            cx_p, cy_p = (x0 + x1) * 0.5, (y0 + y1) * 0.5
+            in_center = (0.20 * W <= cx_p <= 0.80 * W) and (0.18 * H <= cy_p <= 0.78 * H)
+            if in_center and white_head > 0.035 and dark_ink > 0.015:
+                return 95.0
+            if dark_ink > 0.032:
+                return 38.0
+        except Exception:
+            pass
+        return 0.0
+
     # Build intentional formation targets by simultaneous cohort size
     candidates = []
     if cohort_size <= 1:
@@ -401,6 +585,8 @@ def calculate_intelligent_sticker_anchor(
         alt_y = int(min_safe_y + span_y * (0.14 if is_shorts else 0.22))
         l_score = compute_negative_space_score(bg_im, left_x - item_w // 2, eye_y - item_h // 2, left_x + item_w // 2, eye_y + item_h // 2)
         r_score = compute_negative_space_score(bg_im, right_x - item_w // 2, eye_y - item_h // 2, right_x + item_w // 2, eye_y + item_h // 2)
+        l_score += _subject_salience_penalty(left_x - item_w // 2, eye_y - item_h // 2, left_x + item_w // 2, eye_y + item_h // 2)
+        r_score += _subject_salience_penalty(right_x - item_w // 2, eye_y - item_h // 2, right_x + item_w // 2, eye_y + item_h // 2)
         if "left" in req:
             candidates = [("rule3_left", left_x, eye_y), ("rule3_left_hi", left_x, alt_y), ("rule3_right", right_x, eye_y)]
         elif "right" in req:
@@ -482,16 +668,17 @@ def calculate_intelligent_sticker_anchor(
             bx0, by0, bx1, by1 = cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2
             if not _collides(bx0, by0, bx1, by1):
                 sc = compute_negative_space_score(bg_im, bx0, by0, bx1, by1)
+                sc += _subject_salience_penalty(bx0, by0, bx1, by1)
                 # Penalize placing sticker on top of centered stickman / focal character head/food
-                if 0.38 < (cx / W) < 0.62 and 0.30 < (cy / H) < 0.65:
+                if 0.36 < (cx / W) < 0.64 and 0.28 < (cy / H) < 0.66:
                     sc += 160.0
                 if sc < best_cand_score:
                     best_cand_score = sc
                     best_cand = (cx, cy)
-        if best_cand and best_cand_score < 240.0:
+        if best_cand and best_cand_score < 260.0:
             return best_cand[0], best_cand[1], scale_try
 
-    # Last-resort clean slot search across safety net
+    # Last-resort clean slot search across safety net (still respects head/subject salience!)
     for scale_try in (0.85, 0.72, 0.60, 0.50):
         bw = max(32, int(item_w * scale_try))
         bh = max(32, int(item_h * scale_try))
@@ -504,7 +691,9 @@ def calculate_intelligent_sticker_anchor(
             bx0, by0, bx1, by1 = cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2
             if _collides(bx0, by0, bx1, by1):
                 continue
-            sc = compute_negative_space_score(bg_im, bx0, by0, bx1, by1)
+            sc = compute_negative_space_score(bg_im, bx0, by0, bx1, by1) + _subject_salience_penalty(bx0, by0, bx1, by1)
+            if 0.36 < (cx / W) < 0.64 and 0.28 < (cy / H) < 0.66:
+                sc += 120.0
             if sc < best_s:
                 best_s = sc
                 best_a = (cx, cy)
@@ -599,8 +788,8 @@ def draw_label(fr, text, pos, w, h, is_shorts):
         y += l.height + gap
 
 
-def resolve_sticker_path(o_img):
-    """Bulletproof multi-directory and semantic registry resolution."""
+def resolve_sticker_path(o_img, single_object_only=False):
+    """Bulletproof multi-directory and semantic registry resolution (.png/.webp/.gif)."""
     if not o_img or not isinstance(o_img, str):
         return None
     s = o_img.strip()
@@ -612,21 +801,25 @@ def resolve_sticker_path(o_img):
     name_no_ext = os.path.splitext(name_base)[0]
     cands = [
         s,
-        s + ".png" if not s.endswith(".png") else s,
+        s + ".png" if not s.lower().endswith((".png", ".webp", ".gif")) else s,
+        s + ".webp" if not s.lower().endswith((".png", ".webp", ".gif")) else s,
         os.path.join("elements", "cut", f"{name_no_ext}.png"),
+        os.path.join("elements", "cut", f"{name_no_ext}.webp"),
         os.path.join("elements", "cut", name_base),
         os.path.join("..", "elements", "cut", f"{name_no_ext}.png"),
+        os.path.join("..", "elements", "cut", f"{name_no_ext}.webp"),
         os.path.join("..", "elements", "cut", name_base),
         os.path.join("..", "short", "elements", "cut", f"{name_no_ext}.png"),
         os.path.join("..", "long", "elements", "cut", f"{name_no_ext}.png"),
     ]
     for cp in cands:
         if os.path.exists(cp) and os.path.getsize(cp) > 500:
-            return cp
+            if not (single_object_only and os.path.splitext(os.path.basename(cp))[0].lower() in {"skull_fossil", "scientific_field_researcher", "tribal_storytelling_pie", "campfire_circle"}):
+                return cp
     try:
         import asset_registry
         p_root = asset_registry.resolve_project_root(os.getcwd())
-        reg_m = asset_registry.find_reusable_sticker(name_no_ext, p_root)
+        reg_m = asset_registry.find_reusable_sticker(name_no_ext, p_root, single_object_only=single_object_only)
         if reg_m and os.path.exists(reg_m["path"]) and os.path.getsize(reg_m["path"]) > 500:
             return reg_m["path"]
     except Exception:
@@ -634,8 +827,8 @@ def resolve_sticker_path(o_img):
     return None
 
 
-def fit_sticker_in_box(path_or_im, max_w, max_h):
-    """Loads a sticker and scales it preserving aspect ratio so BOTH width <= max_w and height <= max_h."""
+def fit_sticker_in_box(path_or_im, max_w, max_h, t_sec=0.0):
+    """Loads a static or animated sticker and scales it preserving aspect ratio inside (max_w, max_h)."""
     if path_or_im is None or max_w <= 0 or max_h <= 0:
         return None
     if isinstance(path_or_im, Image.Image):
@@ -644,12 +837,10 @@ def fit_sticker_in_box(path_or_im, max_w, max_h):
         resolved = resolve_sticker_path(str(path_or_im))
         if not resolved or not os.path.exists(resolved):
             return None
-        if resolved not in _sticker_cache:
-            try:
-                _sticker_cache[resolved] = Image.open(resolved).convert("RGBA")
-            except Exception:
-                return None
-        raw = _sticker_cache[resolved]
+        try:
+            raw, _ = _get_sticker_frame_at(resolved, t_sec=t_sec)
+        except Exception:
+            return None
 
     scale = min(max_w / max(1, raw.width), max_h / max(1, raw.height))
     nw = max(1, int(raw.width * scale))
@@ -1187,31 +1378,31 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
     stat_txt = parts[0] if parts else "100%"
     sub_txt = " ".join(parts[1].split()[:6]) if len(parts) > 1 and parts[1].strip() else ""
 
-    # Live entrance dynamics:
-    p_ent = min(1.0, max(0.0, dt / 0.35))
-    ease_ent = 1.0 - (1.0 - p_ent) ** 3
+    # Staged slow cubic-bezier entrance dynamics (~0.00 -> 1.50s choreography)
+    p_ent = min(1.0, max(0.0, dt / 0.45))
+    ease_ent = 1.0 - (1.0 - p_ent) ** 4
     dy_ent = int(56 * (1.0 - ease_ent))
     alpha_ent = min(1.0, ease_ent * 1.35)
 
-    # Number roll settle over 0.45s
-    p_roll = min(1.0, max(0.0, dt / 0.45))
-    ease_roll = 1.0 - (1.0 - p_roll) ** 3
+    # Number roll settle over 0.15s -> 1.15s
+    p_roll = min(1.0, max(0.0, (dt - 0.10) / 1.05))
+    ease_roll = 1.0 - (1.0 - p_roll) ** 4
     disp_stat_txt = _interpolate_stat_numbers(stat_txt, ease_roll)
 
-    # Live brush highlighter sweep over 0.18s -> 0.52s
-    hl_prog = min(1.0, max(0.0, (dt - 0.18) / 0.34))
-    ease_hl = 1.0 - (1.0 - hl_prog) ** 2.2
+    # Live brush highlighter sweep over 0.40s -> 1.15s
+    hl_prog = min(1.0, max(0.0, (dt - 0.40) / 0.75))
+    ease_hl = 1.0 - (1.0 - hl_prog) ** 3
 
-    # Live ink underline sweep over 0.35s -> 0.65s
-    und_prog = min(1.0, max(0.0, (dt - 0.35) / 0.30))
-    ease_und = 1.0 - (1.0 - und_prog) ** 2.2
+    # Live ink underline sweep over 0.85s -> 1.45s
+    und_prog = min(1.0, max(0.0, (dt - 0.85) / 0.60))
+    ease_und = 1.0 - (1.0 - und_prog) ** 3
 
-    # Corner ticks pop over 0.30s -> 0.55s
-    tick_prog = min(1.0, max(0.0, (dt - 0.30) / 0.25))
+    # Corner ticks pop over 0.25s -> 0.85s
+    tick_prog = min(1.0, max(0.0, (dt - 0.25) / 0.60))
 
-    # Sub-label upward slide & fade over 0.35s -> 0.65s
-    sub_prog = min(1.0, max(0.0, (dt - 0.35) / 0.30))
-    ease_sub = 1.0 - (1.0 - sub_prog) ** 3
+    # Sub-label upward slide & fade over 0.90s -> 1.50s
+    sub_prog = min(1.0, max(0.0, (dt - 0.90) / 0.60))
+    ease_sub = 1.0 - (1.0 - sub_prog) ** 4
     dy_sub = int(32 * (1.0 - ease_sub))
     alpha_sub = min(1.0, ease_sub * 1.35)
 
@@ -1467,9 +1658,11 @@ def draw_split_compare(w, h, text, is_shorts=False, dt=0.0, left_sticker=None, r
         eff_left_stamp, left_accent_col = "stamp_x", (208, 48, 38)
         eff_right_stamp, right_accent_col = "stamp_check", (28, 152, 82)
 
-    left_alpha = min(1.0, max(0.0, dt / 0.25)) if dt < 0.25 else 1.0
-    reveal_t = max(0.7, min(1.4, duration * 0.38))
-    right_alpha = min(1.0, max(0.0, (dt - reveal_t) / 0.30)) if dt >= reveal_t else 0.10
+    left_p = min(1.0, max(0.0, dt / 0.55))
+    left_alpha = 1.0 - (1.0 - left_p) ** 4 if dt < 0.55 else 1.0
+    reveal_t = max(0.75, min(1.45, duration * 0.36))
+    right_p = min(1.0, max(0.0, (dt - reveal_t) / 0.55))
+    right_alpha = 1.0 - (1.0 - right_p) ** 4 if dt >= reveal_t else 0.08
 
     if is_shorts:
         # 9:16 Vertical Shorts: Exact 50/50 full-bleed top/bottom split (Y = 50% divider)
@@ -1659,7 +1852,8 @@ def draw_data_timeline(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None,
     n_blocks = max(1, min(5, len(parts)))
     parts = parts[:n_blocks]
 
-    prog = min(1.0, dt / max(1.2, duration * 0.72))
+    raw_prog = min(1.0, max(0.0, dt / max(1.4, duration * 0.72)))
+    prog = (4.0 * (raw_prog ** 3)) if raw_prog < 0.5 else (1.0 - ((-2.0 * raw_prog + 2.0) ** 3) / 2.0)
     visible_float = prog * n_blocks
     accent_cycle = [(58, 134, 212), (218, 140, 42), (96, 152, 86), ACCENT]
 
@@ -1811,7 +2005,7 @@ def draw_data_timeline(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None,
             overlay2.alpha_composite(node_layer)
 
     overlay = overlay2.resize((w, h), Image.LANCZOS)
-    fr = card_bg(w, h).convert("RGBA")
+    fr = card_bg(w, h, variant="kraft").convert("RGBA")
     fr.alpha_composite(overlay)
     if dt > 0.0:
         drift_scale = 1.00 + 0.035 * min(1.0, dt / 4.8)
@@ -1860,12 +2054,14 @@ def draw_stat_pie(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None):
     track_col = CARD_OUT + (220,) if sum(CARD_OUT) < 600 else (218, 212, 202, 255)
     d2.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), outline=track_col, width=ring_thick)
 
-    prog = spring_p(min(1.0, dt / 0.95))
+    p_ring = min(1.0, max(0.0, (dt - 0.15) / 1.20))
+    prog = 1.0 - (1.0 - p_ring) ** 4
     angle = int(360.0 * (pct / 100.0) * prog)
     if angle > 0:
         d2.arc((cx - radius, cy - radius, cx + radius, cy + radius), start=-90, end=-90 + angle, fill=ACCENT + (255,), width=ring_thick)
 
-    num_txt = text_layer(stat_val, 140 if is_shorts else 160, INK, font_role="hero")
+    disp_ring_val = _interpolate_stat_numbers(stat_val, prog)
+    num_txt = text_layer(disp_ring_val, 140 if is_shorts else 160, INK, font_role="hero")
     overlay2.alpha_composite(num_txt, (cx - num_txt.width // 2, cy - num_txt.height // 2))
 
     if stat_desc:
@@ -1883,6 +2079,902 @@ def draw_stat_pie(w, h, text, is_shorts=False, dt=0.0, accent_sticker=None):
         dh = int(h * drift_scale)
         fr = fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
     return fr
+
+
+def draw_circle_focus(fr, W, H, dt, cx_norm=0.5, cy_norm=0.45, rx_norm=0.18, ry_norm=0.14, color=None):
+    """Primitive 1: Live Hand-Drawn Focus Circle (multi-pass organic marker loop 0%->100% over 0.38s)."""
+    if dt < 0.0:
+        return
+    p = min(1.0, dt / 0.38)
+    ease = 1.0 - (1.0 - p) ** 2.4
+    cx, cy = int(W * cx_norm), int(H * cy_norm)
+    rx, ry = max(36, int(W * rx_norm)), max(36, int(H * ry_norm))
+    col = color or ((214, 52, 42, 238) if ACTIVE_LOOK_NAME == "bright" else ACCENT + (238,))
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    w_px = max(6, int(min(W, H) * 0.0075))
+    # Pass 1: primary loop with subtle organic wobble + slight overlap tail
+    n_pts = max(8, int(52 * ease))
+    pts1 = []
+    for i in range(n_pts + 1):
+        ang = -0.35 * math.pi + (2.14 * math.pi) * (i / 52.0)
+        wob = 1.0 + 0.038 * math.sin(i * 0.72) + 0.018 * math.cos(i * 1.45)
+        px = int(cx + rx * wob * math.cos(ang))
+        py = int(cy + ry * wob * math.sin(ang))
+        pts1.append((px, py))
+    if len(pts1) >= 2:
+        d.line(pts1, fill=col, width=w_px, joint="curve")
+    # Pass 2: subtle second marker pass for authentic hand-drawn weight
+    if ease > 0.45:
+        n2 = max(4, int(36 * min(1.0, (ease - 0.45) / 0.55)))
+        pts2 = []
+        for i in range(n2 + 1):
+            ang = -0.25 * math.pi + (1.75 * math.pi) * (i / 36.0)
+            wob = 1.03 + 0.025 * math.cos(i * 0.9)
+            pts2.append((int(cx + rx * wob * math.cos(ang)), int(cy + ry * wob * math.sin(ang))))
+        if len(pts2) >= 2:
+            d.line(pts2, fill=(col[0], col[1], col[2], 145), width=max(3, w_px // 2), joint="curve")
+    fr.alpha_composite(layer)
+
+
+_spotlight_mask_cache = {}
+
+
+def draw_spotlight_dim(fr, W, H, dt, duration=3.0, cx_norm=0.5, cy_norm=0.45, rx_norm=0.24, ry_norm=0.22):
+    """Primitive 2: Dim + Circular Spotlight (smooth 0->58% dim over 0.28s, soft feathered bright focus, smooth lift)."""
+    if dt < 0.0 or dt > duration:
+        return
+    in_p = min(1.0, dt / 0.28)
+    out_p = min(1.0, max(0.0, (duration - dt) / 0.28))
+    dim_alpha = 0.58 * (1.0 - (1.0 - in_p) ** 2.2) * (1.0 - (1.0 - out_p) ** 2.0)
+    if dim_alpha <= 0.02:
+        return
+    key = (W, H, round(cx_norm, 3), round(cy_norm, 3), round(rx_norm, 3), round(ry_norm, 3))
+    if key not in _spotlight_mask_cache:
+        if len(_spotlight_mask_cache) > 16:
+            _spotlight_mask_cache.clear()
+        yg, xg = np.ogrid[:H, :W]
+        dx = (xg - W * cx_norm) / max(24.0, W * rx_norm)
+        dy = (yg - H * cy_norm) / max(24.0, H * ry_norm)
+        dist = np.sqrt(dx * dx + dy * dy)
+        # Inside r<=0.78 is 0% dim (crystal bright); 0.78..1.25 feathers smoothly to 100% dim
+        mask_f = np.clip((dist - 0.78) / 0.47, 0.0, 1.0) ** 1.4
+        _spotlight_mask_cache[key] = mask_f.astype(np.float32)
+    mask_f = _spotlight_mask_cache[key]
+    dim_arr = np.zeros((H, W, 4), dtype=np.uint8)
+    dim_arr[:, :, 0] = 14
+    dim_arr[:, :, 1] = 18
+    dim_arr[:, :, 2] = 26
+    dim_arr[:, :, 3] = np.clip(mask_f * (255.0 * dim_alpha), 0, 255).astype(np.uint8)
+    fr.alpha_composite(Image.fromarray(dim_arr, mode="RGBA"))
+    # Subtle animated amber/ink halo ring around spotlight
+    halo = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(halo)
+    cx, cy = int(W * cx_norm), int(H * cy_norm)
+    rx, ry = int(W * rx_norm * 0.96), int(H * ry_norm * 0.96)
+    ring_a = int(175 * min(1.0, dim_alpha / 0.58))
+    hd.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), outline=SUB_ACCENT + (ring_a,), width=4)
+    fr.alpha_composite(halo)
+
+
+def _detect_head_top_and_salience(im, x0, y0, x1, y1):
+    """Inspects an RGB/RGBA image crop for white stickman head + dark ink outline salience."""
+    try:
+        W_i, H_i = im.size
+        cx0, cy0 = max(0, int(x0)), max(0, int(y0))
+        cx1, cy1 = min(W_i, int(x1)), min(H_i, int(y1))
+        if cx1 <= cx0 + 12 or cy1 <= cy0 + 12:
+            return None, 0.0
+        arr = np.array(im.crop((cx0, cy0, cx1, cy1)).convert("RGB"), dtype=np.uint8)
+        white_mask = (arr[:, :, 0] > 232) & (arr[:, :, 1] > 228) & (arr[:, :, 2] > 218)
+        ink_mask = (arr[:, :, 0] < 65) & (arr[:, :, 1] < 65) & (arr[:, :, 2] < 65)
+        white_mean = float(white_mask.mean())
+        ink_mean = float(ink_mask.mean())
+        score = white_mean * 220.0 + ink_mean * 180.0
+        # Estimate topmost foreground head/ink row inside crop
+        row_fg = (white_mask | ink_mask).mean(axis=1)
+        fg_rows = np.where(row_fg > 0.045)[0]
+        top_y = int(cy0 + fg_rows[0]) if len(fg_rows) > 0 else None
+        return top_y, score
+    except Exception:
+        return None, 0.0
+
+
+def _draw_vector_badge_glyph(draw_obj, cx, cy, marker, radius=13, col=(255, 255, 255, 255), width=5):
+    """Draws crisp resolution-independent vector ✓ / ✗ / → glyphs inside badge circles (zero missing-font boxes)."""
+    r = max(6, int(radius))
+    if marker == "✓":
+        draw_obj.line([(cx - r, cy + int(r * 0.08)), (cx - int(r * 0.22), cy + int(r * 0.72)), (cx + r, cy - int(r * 0.65))],
+                      fill=col, width=width, joint="curve")
+    elif marker == "✗":
+        d = int(r * 0.72)
+        draw_obj.line([(cx - d, cy - d), (cx + d, cy + d)], fill=col, width=width)
+        draw_obj.line([(cx + d, cy - d), (cx - d, cy + d)], fill=col, width=width)
+    else:
+        draw_obj.line([(cx - r, cy), (cx + r - 2, cy)], fill=col, width=width)
+        draw_obj.line([(cx + int(r * 0.2), cy - int(r * 0.6)), (cx + r, cy), (cx + int(r * 0.2), cy + int(r * 0.6))],
+                      fill=col, width=width, joint="curve")
+
+
+def draw_strike_replace_card(w, h, text, is_shorts=False, dt=0.0, duration=3.0):
+    """Full-Bleed Borderless Editorial Strike & Replace Card (commanding stat hierarchy + per-line highlighters)."""
+    W2, H2 = 2 * w, 2 * h
+    overlay2 = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
+    d2 = ImageDraw.Draw(overlay2)
+
+    if ";" in text:
+        _, _, body = text.partition(";")
+    else:
+        body = text
+    parts = [p.strip() for p in body.split("|") if p.strip()]
+    old_text = parts[0] if len(parts) > 0 else "THE MYTH"
+    new_text = parts[1] if len(parts) > 1 else "THE REALITY"
+
+    # Slowly choreographed editorial timing (0.00-0.35s myth entry -> 0.38-0.78s slash + dim -> 0.72-1.25s stat roll -> 1.05-1.45s sub-label)
+    p_ent = min(1.0, max(0.0, dt / 0.35))
+    ease_ent = 1.0 - (1.0 - p_ent) ** 4
+    p_slash = min(1.0, max(0.0, (dt - 0.38) / 0.40))
+    ease_slash = 1.0 - (1.0 - p_slash) ** 3
+    p_new = min(1.0, max(0.0, (dt - 0.72) / 0.53))
+    ease_new = 1.0 - (1.0 - p_new) ** 4
+    p_sub = min(1.0, max(0.0, (dt - 1.05) / 0.40))
+    ease_sub = 1.0 - (1.0 - p_sub) ** 3
+    myth_alpha = ease_ent * (1.0 - 0.45 * ease_slash)
+
+    _draw_editorial_corner_ticks(d2, int(W2 * 0.06), int(H2 * 0.08), int(W2 * 0.94), int(H2 * (0.72 if is_shorts else 0.90)),
+                                 INK + (78,), arm=64, width=7, progress=ease_ent)
+
+    # 1. Giant Myth Headline (+40% larger scale, boldly anchored in upper visual band)
+    old_im = render_wrapped_text_block(
+        old_text.upper(), "hero", start_size=268 if is_shorts else 284, min_size=132,
+        max_w=int(W2 * 0.88), max_h=int(H2 * 0.26), color=INK, max_lines=2
+    )
+    old_sh = _apply_alpha_to_image(_text_with_offset_shadow(old_im, dx=8, dy=10), myth_alpha)
+    ox = W2 // 2 - old_sh.width // 2
+    oy = int(H2 * (0.21 if is_shorts else 0.26)) - old_sh.height // 2 + int(22 * (1.0 - ease_ent))
+    overlay2.alpha_composite(old_sh, (ox, oy))
+
+    # Expressive organic tapered crimson marker slash (0% -> 100% eased across myth phrase)
+    if ease_slash > 0.01:
+        sx0, sy0 = max(int(W2 * 0.06), ox - 28), oy + int(old_sh.height * 0.68)
+        sx1, sy1 = min(int(W2 * 0.94), ox + old_sh.width + 28), oy + int(old_sh.height * 0.30)
+        steps_s = 16
+        pts_s = [
+            (sx0 + (sx1 - sx0) * ease_slash * (k / steps_s),
+             sy0 + (sy1 - sy0) * ease_slash * (k / steps_s) - 10 * math.sin(math.pi * (k / steps_s)))
+            for k in range(steps_s + 1)
+        ]
+        base_sw = 34 if is_shorts else 36
+        for k in range(len(pts_s) - 1):
+            u_s = (k + 0.5) / steps_s
+            sw_k = max(14, int(base_sw * (0.78 + 0.32 * math.sin(math.pi * u_s))))
+            d2.line([pts_s[k], pts_s[k + 1]], fill=(214, 46, 38, 246), width=sw_k)
+            r_nib = sw_k // 2
+            d2.ellipse((pts_s[k + 1][0] - r_nib, pts_s[k + 1][1] - r_nib,
+                        pts_s[k + 1][0] + r_nib, pts_s[k + 1][1] + r_nib), fill=(214, 46, 38, 246))
+
+    # 2. Commanding Hero Truth Reveal filling Y:18%-68% on 9:16 with per-line aligned highlighters
+    if ease_new > 0.02:
+        m_stat = re.match(r"^\s*([0-9]+(?:[.,][0-9]+)?[%×xX+]?)\s+(.+)$", new_text.strip())
+        if m_stat:
+            stat_s = _interpolate_stat_numbers(m_stat.group(1).upper(), ease_new)
+            sub_s = m_stat.group(2).upper()
+            stat_im = render_wrapped_text_block(
+                stat_s, "hero", start_size=420 if is_shorts else 410, min_size=260,
+                max_w=int(W2 * 0.88), max_h=int(H2 * 0.25), color=(18, 128, 62), max_lines=1
+            )
+            stat_sh = _apply_alpha_to_image(_text_with_offset_shadow(stat_im, dx=9, dy=11), ease_new)
+            sy_stat = oy + old_sh.height + (190 if is_shorts else 64) + int(28 * (1.0 - ease_new))
+            _draw_highlighter_swipe(overlay2, W2 // 2, sy_stat + stat_sh.height // 2 + 12,
+                                    int(stat_sh.width * 1.08), int(stat_sh.height * 0.56),
+                                    SUB_ACCENT + (135,), tilt=-1.6, progress=ease_new)
+            overlay2.alpha_composite(stat_sh, (W2 // 2 - stat_sh.width // 2, sy_stat))
+
+            if ease_sub > 0.02:
+                sub_im, line_boxes = render_wrapped_text_block(
+                    sub_s, "hero", start_size=148 if is_shorts else 142, min_size=92,
+                    max_w=int(W2 * 0.88), max_h=int(H2 * 0.16), color=INK, max_lines=2, return_line_boxes=True
+                )
+                sub_sh = _apply_alpha_to_image(_text_with_offset_shadow(sub_im, dx=5, dy=7), ease_sub)
+                sub_x = W2 // 2 - sub_sh.width // 2
+                sub_y = sy_stat + stat_sh.height + (64 if is_shorts else 26)
+                _draw_per_line_highlighters(overlay2, W2 // 2 - sub_im.width // 2, sub_y, line_boxes,
+                                            color=(142, 224, 172, 132), pad_x=44, progress=ease_sub)
+                overlay2.alpha_composite(sub_sh, (sub_x, sub_y))
+                last_lb = line_boxes[-1]
+                uw = min(int(W2 * 0.82), last_lb[2] + 54)
+                uy = sub_y + last_lb[1] + last_lb[3] + 12
+                _draw_live_ink_underline(d2, W2 // 2 - uw // 2, uy, W2 // 2 + uw // 2, uy - 4,
+                                         progress=ease_sub, color=(18, 128, 62, 240), width=14)
+        else:
+            new_im, line_boxes = render_wrapped_text_block(
+                new_text.upper(), "hero", start_size=236 if is_shorts else 256, min_size=118,
+                max_w=int(W2 * 0.88), max_h=int(H2 * 0.30), color=(18, 128, 62), max_lines=2, return_line_boxes=True
+            )
+            new_sh = _apply_alpha_to_image(_text_with_offset_shadow(new_im, dx=7, dy=9), ease_new)
+            nx = W2 // 2 - new_sh.width // 2
+            ny = oy + old_sh.height + (150 if is_shorts else 64) + int(28 * (1.0 - ease_new))
+            _draw_per_line_highlighters(overlay2, W2 // 2 - new_im.width // 2, ny, line_boxes,
+                                        color=SUB_ACCENT + (125,), pad_x=44, progress=ease_new)
+            overlay2.alpha_composite(new_sh, (nx, ny))
+            last_lb = line_boxes[-1]
+            rw = min(int(W2 * 0.82), last_lb[2] + 50)
+            uy = ny + last_lb[1] + last_lb[3] + 12
+            _draw_live_ink_underline(d2, W2 // 2 - rw // 2, uy, W2 // 2 + rw // 2, uy - 4,
+                                     progress=ease_new, color=(18, 128, 62, 240), width=14)
+
+    fr = card_bg(w, h, variant="default").convert("RGBA")
+    fr.alpha_composite(overlay2.resize((w, h), Image.LANCZOS))
+    p_drift = min(1.0, max(0.0, dt / max(0.5, duration)))
+    drift_scale = 1.00 + 0.025 * (0.55 * (1.0 - (1.0 - p_drift) ** 3) + 0.45 * p_drift)
+    dw, dh = int(w * drift_scale), int(h * drift_scale)
+    return fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
+
+
+def draw_strike_replace(fr, W, H, dt, old_text, new_text="", cx_norm=0.5, cy_norm=0.42, is_shorts=False, mode="replace", placement="below", exit_alpha=1.0):
+    """Primitive 3: Strike & Replace — uses clean upper sky when truly free, or auto-promotes to full-bleed card so faces are NEVER hidden."""
+    if dt < 0.0 or exit_alpha <= 0.02:
+        return
+    p_ent = min(1.0, dt / 0.20)
+    ease_ent = 1.0 - (1.0 - p_ent) ** 3
+    p_slash = min(1.0, max(0.0, (dt - 0.14) / 0.25))
+    ease_slash = 1.0 - (1.0 - p_slash) ** 2.4
+    p_new = min(1.0, max(0.0, (dt - 0.32) / 0.26))
+    ease_new = 1.0 - (1.0 - p_new) ** 3
+
+    cx, cy = int(W * cx_norm), int(H * cy_norm)
+    if mode == "strike_x":
+        # Animated 2-stroke red X stamp strictly faded with its target sticker (zero orphan X)
+        sz = 164 if is_shorts else 184
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        r = sz // 2
+        a_x = int(242 * max(0.0, min(1.0, exit_alpha)))
+        p1 = min(1.0, dt / 0.16)
+        p2 = min(1.0, max(0.0, (dt - 0.14) / 0.16))
+        if p1 > 0:
+            d.line((cx - r, cy - r, int(cx - r + 2 * r * p1), int(cy - r + 2 * r * p1)), fill=(214, 46, 38, a_x), width=15)
+        if p2 > 0:
+            d.line((cx + r, cy - r, int(cx + r - 2 * r * p2), int(cy - r + 2 * r * p2)), fill=(214, 46, 38, a_x), width=15)
+        fr.alpha_composite(layer)
+        return
+
+    # Inspect upper open sky bands ONLY (never cover center character heads!)
+    sky_cands = [(0.50, 0.16), (0.26, 0.18), (0.74, 0.18)] if is_shorts else [(0.24, 0.20), (0.76, 0.20), (0.50, 0.17)]
+    best_pt = None
+    best_sc = float("inf")
+    probe_w = int(W * (0.64 if is_shorts else 0.38))
+    probe_h = int(H * (0.16 if is_shorts else 0.22))
+    for px_n, py_n in sky_cands:
+        px, py = int(W * px_n), int(H * py_n)
+        _, sc_sal = _detect_head_top_and_salience(fr, px - probe_w // 2, py - probe_h // 2, px + probe_w // 2, py + probe_h // 2)
+        if sc_sal < best_sc:
+            best_sc = sc_sal
+            best_pt = (px, py)
+
+    # If no open upper zone exists free of head/artwork, auto-promote to crisp full-bleed card!
+    if best_pt is None or best_sc > 34.0:
+        card_fr = draw_strike_replace_card(W, H, f"{old_text}|{new_text}", is_shorts=is_shorts, dt=dt, duration=3.0)
+        fr.paste(card_fr, (0, 0))
+        return
+
+    cx, cy = best_pt
+    old_im = render_wrapped_text_block(
+        old_text.upper(), "hero", start_size=62 if is_shorts else 68, min_size=40,
+        max_w=int(W * (0.74 if is_shorts else 0.42)), max_h=110, color=INK, max_lines=1
+    )
+    pad_x, pad_y = 32, 16
+    pw, ph = old_im.width + pad_x * 2, old_im.height + pad_y * 2
+    box = Image.new("RGBA", (pw + 16, ph + 16), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(box)
+    bd.rounded_rectangle((10, 12, 10 + pw, 12 + ph), radius=18, fill=(0, 0, 0, int(52 * ease_ent)))
+    bd.rounded_rectangle((6, 6, 6 + pw, 6 + ph), radius=18, fill=PAPER + (int(248 * ease_ent),), outline=INK + (int(235 * ease_ent),), width=4)
+    box.alpha_composite(_apply_alpha_to_image(old_im, ease_ent), (6 + pad_x, 6 + pad_y))
+    if ease_slash > 0.01:
+        x0, y0 = 16, ph // 2 + 10
+        x1, y1 = pw - 6, ph // 2 - 4
+        bd.line((x0, y0, int(x0 + (x1 - x0) * ease_slash), int(y0 + (y1 - y0) * ease_slash)), fill=(214, 46, 38, 245), width=11)
+
+    dy_old = int(14 * (1.0 - ease_ent))
+    fr.alpha_composite(box, (cx - box.width // 2, cy - box.height // 2 + dy_old))
+
+    if new_text and ease_new > 0.02:
+        new_im = render_wrapped_text_block(
+            new_text.upper(), "hero", start_size=60 if is_shorts else 66, min_size=40,
+            max_w=int(W * (0.74 if is_shorts else 0.42)), max_h=110, color=(26, 138, 72), max_lines=1
+        )
+        npw, nph = new_im.width + pad_x * 2, new_im.height + pad_y * 2
+        nbox = Image.new("RGBA", (npw + 16, nph + 16), (0, 0, 0, 0))
+        nbd = ImageDraw.Draw(nbox)
+        nbd.rounded_rectangle((10, 12, 10 + npw, 12 + nph), radius=18, fill=(0, 0, 0, int(52 * ease_new)))
+        nbd.rounded_rectangle((6, 6, 6 + npw, 6 + nph), radius=18, fill=(238, 250, 242, int(250 * ease_new)), outline=(26, 138, 72, int(240 * ease_new)), width=4)
+        nbox.alpha_composite(_apply_alpha_to_image(new_im, ease_new), (6 + pad_x, 6 + pad_y))
+        _draw_live_ink_underline(nbd, 20, 6 + nph - 8, 6 + npw - 20, 6 + nph - 10, progress=ease_new, color=(26, 138, 72, 235), width=5)
+        ny = cy + box.height // 2 + 12 + int(16 * (1.0 - ease_new))
+        fr.alpha_composite(nbox, (cx - nbox.width // 2, ny))
+
+
+_checklist_frost_cache = {}
+
+
+def _get_checklist_frost_overlay(w, h, mode):
+    """Creates cached smooth feathered translucent frosted parchment scrim (alpha peaks ~0.72 -> 0.0 seamlessly, ZERO hard lines)."""
+    key = (w, h, mode)
+    if key in _checklist_frost_cache:
+        return _checklist_frost_cache[key]
+
+    arr = np.zeros((h, w, 4), dtype=np.uint8)
+    arr[:, :, 0] = 248
+    arr[:, :, 1] = 243
+    arr[:, :, 2] = 232
+
+    if mode == "short_mid":
+        y_n = (np.arange(h, dtype=np.float32) / max(1, h - 1))[:, None]
+        a = np.zeros_like(y_n)
+        # Smooth cubic fade-in Y: 0.38 -> 0.49
+        m_in = (y_n >= 0.38) & (y_n < 0.49)
+        t_in = (y_n[m_in] - 0.38) / 0.11
+        a[m_in] = 0.74 * (3.0 * t_in ** 2 - 2.0 * t_in ** 3)
+        # Soft translucent core Y: 0.49 -> 0.74 (above 81% subtitle pill)
+        a[(y_n >= 0.49) & (y_n <= 0.74)] = 0.74
+        # Smooth cubic fade-out Y: 0.74 -> 0.805
+        m_out = (y_n > 0.74) & (y_n <= 0.805)
+        t_out = (y_n[m_out] - 0.74) / 0.065
+        a[m_out] = 0.74 * (1.0 - (3.0 * t_out ** 2 - 2.0 * t_out ** 3))
+        arr[:, :, 3] = np.broadcast_to((a * 255.0).clip(0, 255).astype(np.uint8), (h, w))
+    else:
+        x_n = (np.arange(w, dtype=np.float32) / max(1, w - 1))[None, :]
+        if mode == "right":
+            x_n = 1.0 - x_n
+        a = np.zeros_like(x_n)
+        a[x_n <= 0.34] = 0.72
+        m_fall = (x_n > 0.34) & (x_n <= 0.54)
+        t_f = (x_n[m_fall] - 0.34) / 0.20
+        a[m_fall] = 0.72 * (1.0 - (3.0 * t_f ** 2 - 2.0 * t_f ** 3))
+        arr[:, :, 3] = np.broadcast_to((a * 255.0).clip(0, 255).astype(np.uint8), (h, w))
+
+    im = Image.fromarray(arr, mode="RGBA")
+    _checklist_frost_cache[key] = im
+    return im
+
+
+def draw_checklist_build(fr, W, H, dt, items, item_times=None, t_abs=0.0, is_shorts=False, side="auto", layout_cache=None, cache_key=None, title="", raw_scene_im=None, cam_u=0.0):
+    """Primitive 4: Seamless Translucent Frosted Checklist Over 100% Full-Bleed Artwork (ZERO opaque panels or hard divider lines)."""
+    if not items or dt < 0.0:
+        return
+    items = items[:4]
+    n = len(items)
+    p_panel = min(1.0, max(0.0, dt / 0.24))
+    ease_hdr = 1.0 - (1.0 - p_panel) ** 3
+    hdr_txt = str(title or "").strip().upper() or "KEY FACTORS"
+
+    def _halo_text_block(txt_str, font_role, start_sz, min_sz, max_w, max_h, max_lines=2):
+        core = render_wrapped_text_block(txt_str, font_role, start_size=start_sz, min_size=min_sz, max_w=max_w, max_h=max_h, color=INK, max_lines=max_lines)
+        # Subtle warm paper outer glow + crisp dark-ink soft shadow so letters pop seamlessly over illustrated details
+        pad = 10
+        canvas = Image.new("RGBA", (core.width + pad * 2, core.height + pad * 2), (0, 0, 0, 0))
+        a_ch = core.split()[3]
+        halo_rgb = Image.new("RGBA", core.size, (252, 248, 238, 0))
+        halo_rgb.putalpha(a_ch.filter(ImageFilter.MaxFilter(5)))
+        canvas.alpha_composite(_apply_alpha_to_image(halo_rgb, 0.78), (pad, pad))
+        sh = _text_with_offset_shadow(core, dx=3, dy=5, shadow_col=(18, 16, 14, 48))
+        canvas.alpha_composite(sh, (pad, pad))
+        return canvas, core.width, core.height
+
+    if is_shorts:
+        # Seamless soft translucent gradient in Y: 38% -> 80% over 100% full-bleed illustration
+        frost = _get_checklist_frost_overlay(W, H, "short_mid")
+        fr.alpha_composite(frost)
+
+        pad_x = 64
+        hy = int(H * 0.455)
+        hdr_halo, hdr_w, hdr_h = _halo_text_block(hdr_txt, "hero", 58, 42, W - pad_x * 2, 96, max_lines=1)
+        fr.alpha_composite(_apply_alpha_to_image(hdr_halo, min(1.0, ease_hdr * 1.4)), (pad_x - 10, hy - 10))
+        d_u = ImageDraw.Draw(fr)
+        _draw_live_ink_underline(d_u, pad_x, hy + hdr_h + 10, min(W - pad_x, pad_x + hdr_w + 42),
+                                 hy + hdr_h + 7, progress=max(0.4, ease_hdr), color=ACCENT + (235,), width=6)
+
+        list_top = hy + hdr_h + 34
+        list_bot = int(H * 0.765)  # strictly clear above Y >= 81% subtitles
+        avail_h = max(300, list_bot - list_top)
+        row_pitch = min(158, avail_h // max(1, n))
+        row_h = max(90, row_pitch - 14)
+        text_w = W - pad_x * 2 - 116
+        text_size = 56 if n <= 3 else 48
+        badge_r = 34 if n <= 3 else 30
+
+        for idx, raw_it in enumerate(items):
+            dt_it = (t_abs - float(item_times[idx])) if (item_times and idx < len(item_times)) else (dt - idx * 0.45)
+            if dt_it < 0.0:
+                continue
+            p_it = min(1.0, dt_it / 0.24)
+            ease_it = 1.0 - (1.0 - p_it) ** 3
+            dy_it = int(18 * (1.0 - ease_it))
+
+            txt_str = str(raw_it).strip()
+            marker, m_col = "✓", (24, 152, 76)
+            if txt_str.startswith(("✗", "X:", "x:")):
+                marker, m_col = "✗", (214, 52, 42)
+                txt_str = txt_str.lstrip("✗Xx:").strip()
+            elif txt_str.startswith(("->", "→")):
+                marker, m_col = "→", ACCENT
+                txt_str = txt_str.lstrip("-→>").strip()
+            elif txt_str.startswith("✓"):
+                txt_str = txt_str.lstrip("✓").strip()
+
+            ry = list_top + idx * row_pitch + dy_it
+            row2 = Image.new("RGBA", ((W - pad_x * 2) * 2, row_h * 2), (0, 0, 0, 0))
+            rd2 = ImageDraw.Draw(row2)
+            bcx, bcy, br2 = badge_r * 2 + 6, row2.height // 2, badge_r * 2
+            rd2.ellipse((bcx - br2 + 4, bcy - br2 + 6, bcx + br2 + 4, bcy + br2 + 6), fill=(0, 0, 0, int(48 * ease_it)))
+            rd2.ellipse((bcx - br2, bcy - br2, bcx + br2, bcy + br2), fill=m_col + (int(250 * ease_it),), outline=INK + (int(242 * ease_it),), width=6)
+            _draw_vector_badge_glyph(rd2, bcx, bcy, marker, radius=int(br2 * 0.50), col=(255, 255, 255, int(255 * ease_it)), width=12)
+
+            lbl_im, _, _ = _halo_text_block(txt_str.upper(), "hero", text_size * 2, 78, text_w * 2, row2.height - 12, max_lines=2)
+            row2.alpha_composite(_apply_alpha_to_image(lbl_im, ease_it), (bcx + br2 + 26, (row2.height - lbl_im.height) // 2))
+            fr.alpha_composite(row2.resize((W - pad_x * 2, row_h), Image.LANCZOS), (pad_x, ry))
+        return
+
+    # 16:9 Widescreen: Lock cleaner side ONCE per scene & composite smooth feathered horizontal frost (0% -> 54% alpha->0.0)
+    use_side = None
+    if layout_cache is not None and cache_key and cache_key in layout_cache:
+        use_side = layout_cache[cache_key]
+    if not use_side:
+        req_s = str(side).strip().lower()
+        if req_s in ("left", "right"):
+            use_side = req_s
+        else:
+            _, l_sc = _detect_head_top_and_salience(fr, 48, int(H * 0.14), int(W * 0.44), int(H * 0.84))
+            _, r_sc = _detect_head_top_and_salience(fr, int(W * 0.56), int(H * 0.14), W - 48, int(H * 0.84))
+            use_side = "left" if l_sc <= r_sc else "right"
+        if layout_cache is not None and cache_key:
+            layout_cache[cache_key] = use_side
+
+    frost = _get_checklist_frost_overlay(W, H, use_side)
+    fr.alpha_composite(frost)
+
+    col_w = int(W * 0.41)
+    pad_x = 64 if use_side == "left" else (W - col_w + 24)
+    hy = 96
+    hdr_halo, hdr_w, hdr_h = _halo_text_block(hdr_txt, "hero", 62, 42, col_w - 72, 110, max_lines=1)
+    fr.alpha_composite(_apply_alpha_to_image(hdr_halo, min(1.0, ease_hdr * 1.4)), (pad_x - 10, hy - 10))
+    d_u = ImageDraw.Draw(fr)
+    _draw_live_ink_underline(d_u, pad_x, hy + hdr_h + 10, min(pad_x + col_w - 64, pad_x + hdr_w + 42),
+                             hy + hdr_h + 6, progress=max(0.4, ease_hdr), color=ACCENT + (235,), width=6)
+
+    list_top = hy + hdr_h + 66
+    list_bot = H - 150
+    avail_h = max(420, list_bot - list_top)
+    row_pitch = min(194, avail_h // max(1, n))
+    row_h = max(124, row_pitch - 18)
+    panel_inner_w = col_w - 56
+    text_w = panel_inner_w - 110
+
+    for idx, raw_it in enumerate(items):
+        dt_it = (t_abs - float(item_times[idx])) if (item_times and idx < len(item_times)) else (dt - idx * 0.45)
+        if dt_it < 0.0:
+            continue
+        p_it = min(1.0, dt_it / 0.24)
+        ease_it = 1.0 - (1.0 - p_it) ** 3
+        dx_it = int((-22 if use_side == "left" else 22) * (1.0 - ease_it))
+
+        txt_str = str(raw_it).strip()
+        marker, m_col = "✓", (24, 152, 76)
+        if txt_str.startswith(("✗", "X:", "x:")):
+            marker, m_col = "✗", (214, 52, 42)
+            txt_str = txt_str.lstrip("✗Xx:").strip()
+        elif txt_str.startswith(("->", "→")):
+            marker, m_col = "→", ACCENT
+            txt_str = txt_str.lstrip("-→>").strip()
+        elif txt_str.startswith("✓"):
+            txt_str = txt_str.lstrip("✓").strip()
+
+        ry = list_top + idx * row_pitch
+        row2 = Image.new("RGBA", (panel_inner_w * 2, row_h * 2), (0, 0, 0, 0))
+        rd2 = ImageDraw.Draw(row2)
+        bcx, bcy, br2 = 72, row2.height // 2, 62
+        rd2.ellipse((bcx - br2 + 4, bcy - br2 + 6, bcx + br2 + 4, bcy + br2 + 6), fill=(0, 0, 0, int(48 * ease_it)))
+        rd2.ellipse((bcx - br2, bcy - br2, bcx + br2, bcy + br2), fill=m_col + (int(250 * ease_it),), outline=INK + (int(242 * ease_it),), width=6)
+        _draw_vector_badge_glyph(rd2, bcx, bcy, marker, radius=31, col=(255, 255, 255, int(255 * ease_it)), width=12)
+
+        lbl_im, _, _ = _halo_text_block(txt_str.upper(), "hero", 112, 76, text_w * 2, row2.height - 14, max_lines=2)
+        row2.alpha_composite(_apply_alpha_to_image(lbl_im, ease_it), (bcx + br2 + 26, (row2.height - lbl_im.height) // 2))
+        fr.alpha_composite(row2.resize((panel_inner_w, row_h), Image.LANCZOS), (pad_x + dx_it, ry))
+
+
+def draw_era_anchor(fr, W, H, dt, label, is_shorts=False):
+    """Primitive 5: Persistent Top-Left Era / Date Anchor (sleek editorial chronological pill)."""
+    if not label or dt < 0.0:
+        return
+    p = min(1.0, dt / 0.28)
+    ease = 1.0 - (1.0 - p) ** 3
+    dx = int(-28 * (1.0 - ease))
+    lbl_im = text_layer(str(label).strip().upper(), 28 if is_shorts else 26, (250, 248, 240), font_role="hero")
+    pw = lbl_im.width + 58
+    ph = lbl_im.height + 24
+    px = (34 if is_shorts else 42) + dx
+    py = 96 if is_shorts else 38
+    pill = Image.new("RGBA", (pw + 12, ph + 12), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(pill)
+    pd.rounded_rectangle((6, 8, 6 + pw, 8 + ph), radius=14, fill=(0, 0, 0, int(65 * ease)))
+    pd.rounded_rectangle((4, 4, 4 + pw, 4 + ph), radius=14, fill=(24, 28, 38, int(238 * ease)), outline=ACCENT + (int(220 * ease),), width=2)
+    pd.ellipse((18, 4 + ph // 2 - 5, 28, 4 + ph // 2 + 5), fill=ACCENT + (int(245 * ease),))
+    pill.alpha_composite(_apply_alpha_to_image(lbl_im, ease), (38, 4 + (ph - lbl_im.height) // 2))
+    fr.alpha_composite(pill, (px, py))
+
+
+def draw_inset_shelf(fr, W, H, dt, items, item_times=None, t_abs=0.0, is_shorts=False, resolve_fn=None, layout_cache=None, cache_key=None, scene_end_t=None):
+    """Primitive 6A: Circular/Flanking Evidence Insets — >=72px above character head OR borderless flanking props on left/right."""
+    if not items or dt < 0.0:
+        return
+    items = items[:3]
+    n = len(items)
+
+    spec_lay = None
+    if layout_cache is not None and cache_key and cache_key in layout_cache:
+        spec_lay = layout_cache[cache_key]
+
+    if spec_lay is None:
+        if is_shorts:
+            head_top, _ = _detect_head_top_and_salience(fr, int(W * 0.22), int(H * 0.12), int(W * 0.78), int(H * 0.62))
+            avail_above = (head_top - 72 - 108) if head_top is not None else 400
+            if avail_above >= 225:
+                diam = max(168, min(204, avail_above - 54))
+                cy = max(108 + diam // 2, head_top - 72 - 54 - diam // 2)
+                spec_lay = {"mode": "top_circles", "diam": diam, "gap": 30, "cy": cy}
+            else:
+                # Tight headroom: use high center crown slot ONLY if prop+tag stays >=24px above detected head_top
+                top_cy = int(H * 0.095)
+                top_d = 136
+                can_top_arc = (head_top is None) or (top_cy + top_d // 2 + 52 <= head_top - 24)
+                if can_top_arc:
+                    slots = [
+                        (int(W * 0.17), int(H * 0.21)),
+                        (int(W * 0.50), top_cy),
+                        (int(W * 0.83), int(H * 0.21)),
+                    ]
+                    spec_lay = {"mode": "flank_props", "diam": top_d, "slots": slots}
+                else:
+                    slots = [
+                        (int(W * 0.16), int(H * 0.21)),
+                        (int(W * 0.84), int(H * 0.21)),
+                        (int(W * 0.16), int(H * 0.43)),
+                    ]
+                    spec_lay = {"mode": "flank_props", "diam": 156, "slots": slots}
+        else:
+            _, top_sc = _detect_head_top_and_salience(fr, int(W * 0.20), int(H * 0.04), int(W * 0.80), int(H * 0.34))
+            _, bot_sc = _detect_head_top_and_salience(fr, int(W * 0.20), int(H * 0.56), int(W * 0.80), int(H * 0.86))
+            cy = int(H * 0.185) if top_sc <= bot_sc else int(H * 0.70)
+            spec_lay = {"mode": "top_circles", "diam": 234, "gap": 58, "cy": cy}
+        if layout_cache is not None and cache_key:
+            layout_cache[cache_key] = spec_lay
+
+    mode = spec_lay["mode"]
+    diam = spec_lay["diam"]
+
+    eff_times = [float(x) for x in item_times] if item_times else None
+    if eff_times and scene_end_t is not None:
+        max_end = float(scene_end_t) - 0.55
+        if eff_times[-1] > max_end:
+            eff_times[-1] = max_end
+            for j in range(len(eff_times) - 2, -1, -1):
+                if eff_times[j] > eff_times[j + 1] - 0.24:
+                    eff_times[j] = eff_times[j + 1] - 0.24
+
+    for idx, spec in enumerate(items):
+        if eff_times and idx < len(eff_times):
+            dt_it = t_abs - eff_times[idx]
+        else:
+            dt_it = dt - idx * 0.45
+        if dt_it < 0.0:
+            continue
+        p = min(1.0, dt_it / 0.26)
+        ease = 1.0 - (1.0 - p) ** 3
+        scale = 0.72 + 0.28 * ease
+        dy = int(26 * (1.0 - ease))
+
+        if isinstance(spec, dict):
+            stk_tok = spec.get("img", "")
+            lbl_txt = spec.get("label", "")
+        else:
+            stk_tok = str(spec)
+            lbl_txt = os.path.splitext(os.path.basename(stk_tok))[0].replace("cc0_", "").replace("_", " ")
+
+        stk_path = resolve_fn(stk_tok, single_object_only=True) if resolve_fn else (stk_tok if os.path.exists(stk_tok) else None)
+        cur_d = max(48, int(diam * scale))
+
+        if mode == "flank_props":
+            slots = spec_lay["slots"]
+            cx, cy = slots[idx % len(slots)]
+            if stk_path and os.path.exists(stk_path):
+                s_im = fit_sticker_in_box(stk_path, max_w=cur_d, max_h=cur_d, t_sec=dt_it)
+                if s_im:
+                    s_sh = add_sticker_drop_shadow(_apply_alpha_to_image(s_im, ease), offset=(6, 9), shadow_color=(0, 0, 0, 56), blur_radius=7)
+                    fr.alpha_composite(s_sh, (cx - s_sh.width // 2, cy - s_sh.height // 2 + dy))
+            if lbl_txt and ease > 0.35:
+                tag = tag_image(lbl_txt.upper()[:18], 24)
+                fr.alpha_composite(_apply_alpha_to_image(tag, ease), (cx - tag.width // 2, cy + cur_d // 2 + 8 + dy))
+        else:
+            gap = spec_lay["gap"]
+            total_w = n * diam + (n - 1) * gap
+            start_x = (W - total_w) // 2
+            cx = start_x + idx * (diam + gap) + diam // 2
+            cy = spec_lay["cy"]
+            plate = Image.new("RGBA", (cur_d + 20, cur_d + 20), (0, 0, 0, 0))
+            pd = ImageDraw.Draw(plate)
+            pd.ellipse((12, 14, 12 + cur_d, 14 + cur_d), fill=(0, 0, 0, int(62 * ease)))
+            pd.ellipse((8, 8, 8 + cur_d, 8 + cur_d), fill=PAPER + (int(250 * ease),), outline=INK + (int(240 * ease),), width=5)
+            pd.ellipse((16, 16, cur_d, cur_d), outline=ACCENT + (int(145 * ease),), width=2)
+            if stk_path and os.path.exists(stk_path):
+                s_im = fit_sticker_in_box(stk_path, max_w=int(cur_d * 0.72), max_h=int(cur_d * 0.72), t_sec=dt_it)
+                if s_im:
+                    plate.alpha_composite(_apply_alpha_to_image(s_im, ease), (8 + (cur_d - s_im.width) // 2, 8 + (cur_d - s_im.height) // 2))
+            fr.alpha_composite(plate, (cx - plate.width // 2, cy - plate.height // 2 + dy))
+            if lbl_txt and ease > 0.35:
+                tag = tag_image(lbl_txt.upper()[:22], 24 if is_shorts else 26)
+                fr.alpha_composite(_apply_alpha_to_image(tag, ease), (cx - tag.width // 2, cy + cur_d // 2 + 12 + dy))
+
+
+def draw_pip_inset(fr, W, H, dt, duration, src_img, label="EVIDENCE", is_shorts=False):
+    """Primitive 4B: Clean Ink-Bordered Picture-in-Picture Frame (slide-in ease + soft shadow) for evidence & callbacks."""
+    if src_img is None or dt < 0.0 or dt > duration:
+        return
+    p_in = min(1.0, dt / 0.30)
+    p_out = min(1.0, max(0.0, (duration - dt) / 0.25))
+    ease = (1.0 - (1.0 - p_in) ** 3) * (1.0 - (1.0 - p_out) ** 2)
+    if ease <= 0.02:
+        return
+    pip_w = int(W * (0.34 if is_shorts else 0.26))
+    pip_h = int(pip_w * (src_img.height / max(1, src_img.width)))
+    pip_h = min(pip_h, int(H * 0.28))
+    dx = int(42 * (1.0 - p_in) ** 3)
+    px = W - pip_w - (40 if is_shorts else 52) + dx
+    py = 165 if is_shorts else 52
+
+    thumb = src_img.convert("RGBA").resize((pip_w, pip_h), Image.LANCZOS)
+    frame = Image.new("RGBA", (pip_w + 28, pip_h + 28), (0, 0, 0, 0))
+    fd = ImageDraw.Draw(frame)
+    fd.rounded_rectangle((12, 14, 22 + pip_w, 24 + pip_h), radius=18, fill=(0, 0, 0, int(75 * ease)))
+    fd.rounded_rectangle((6, 6, 18 + pip_w, 18 + pip_h), radius=18, fill=PAPER + (int(252 * ease),), outline=INK + (int(240 * ease),), width=4)
+    frame.alpha_composite(_apply_alpha_to_image(thumb, ease), (12, 12))
+    fr.alpha_composite(frame, (px - 12, py - 12))
+    if label:
+        tag = text_layer(label.upper(), 20, (250, 248, 240), font_role="hero")
+        tw, th = tag.width + 24, tag.height + 12
+        tb = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+        tbd = ImageDraw.Draw(tb)
+        tbd.rounded_rectangle((0, 0, tw, th), radius=10, fill=ACCENT + (int(240 * ease),))
+        tb.alpha_composite(_apply_alpha_to_image(tag, ease), (12, 6))
+        fr.alpha_composite(tb, (px + 12, py + pip_h - th // 2 + 4))
+
+
+def draw_pip_flashback(fr, W, H, dt, duration, src_img, label="CALLBACK", is_shorts=False):
+    return draw_pip_inset(fr, W, H, dt, duration, src_img, label=label, is_shorts=is_shorts)
+
+
+def draw_chapter_breather(w, h, text, is_shorts=False, dt=0.0, duration=2.0):
+    """Primitive 4A: Clean 1.8s-2.4s Textured-Background Chapter Breather Card to reset visual fatigue."""
+    W2, H2 = 2 * w, 2 * h
+    overlay2 = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
+    d2 = ImageDraw.Draw(overlay2)
+
+    p_ent = min(1.0, max(0.0, dt / 0.32))
+    ease = 1.0 - (1.0 - p_ent) ** 3
+    dy = int(38 * (1.0 - ease))
+    rule_p = min(1.0, max(0.0, (dt - 0.14) / 0.35))
+    ease_r = 1.0 - (1.0 - rule_p) ** 2.2
+
+    parts = [p.strip() for p in text.split("|") if p.strip()] if "|" in text else [text.strip()]
+    title = parts[0] if parts else "CHAPTER"
+    sub = parts[1] if len(parts) > 1 else ""
+
+    max_w = int(W2 * (0.82 if is_shorts else 0.74))
+    _draw_editorial_corner_ticks(d2, int(W2 * 0.08), int(H2 * 0.12), int(W2 * 0.92), int(H2 * (0.68 if is_shorts else 0.88)),
+                                 INK + (64,), arm=52, width=6, progress=ease)
+    t_im = render_wrapped_text_block(
+        title.upper(), "hero", start_size=185 if is_shorts else 205, min_size=96,
+        max_w=max_w, max_h=int(H2 * 0.24), color=INK, max_lines=2
+    )
+    t_im = _apply_alpha_to_image(_text_with_offset_shadow(t_im, dx=7, dy=9), min(1.0, ease * 1.3))
+    cy = int(H2 * (0.40 if is_shorts else 0.47)) - t_im.height // 2 + dy
+    overlay2.alpha_composite(t_im, (W2 // 2 - t_im.width // 2, cy))
+
+    rw = min(int(max_w * 0.75), t_im.width + 60)
+    ry = cy + t_im.height + 28
+    _draw_live_ink_underline(d2, W2 // 2 - rw // 2, ry, W2 // 2 + rw // 2, ry - 4,
+                             progress=ease_r, color=ACCENT + (240,), width=12)
+    if sub:
+        s_im = render_wrapped_text_block(
+            sub.upper(), "annotation", start_size=76 if is_shorts else 82, min_size=48,
+            max_w=max_w, max_h=150, color=ACCENT, max_lines=2
+        )
+        overlay2.alpha_composite(_apply_alpha_to_image(s_im, ease), (W2 // 2 - s_im.width // 2, ry + 34))
+
+    fr = card_bg(w, h, variant="breather").convert("RGBA")
+    fr.alpha_composite(overlay2.resize((w, h), Image.LANCZOS))
+    drift_scale = 1.00 + 0.03 * min(1.0, dt / max(0.5, duration))
+    dw, dh = int(w * drift_scale), int(h * drift_scale)
+    return fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
+
+
+def draw_scale_compare(w, h, text, is_shorts=False, dt=0.0, duration=3.5):
+    """Primitive 7B: Custom Vox/Good-Enough Editorial Scale Chart (thick bars, gridlines, giant stats, 66x arrow badge, ZERO screen shake)."""
+    W2, H2 = 2 * w, 2 * h
+    overlay2 = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
+    d2 = ImageDraw.Draw(overlay2)
+
+    title = "SCALE COMPARISON"
+    body = text
+    if ";" in text:
+        title, _, body = text.partition(";")
+        title = title.strip().upper()
+    parts = [p.strip() for p in body.split("|") if p.strip()]
+    lbl_a = parts[0] if len(parts) > 0 else "BEFORE"
+    val_a_str = parts[1] if len(parts) > 1 else "5%"
+    lbl_b = parts[2] if len(parts) > 2 else "AFTER"
+    val_b_str = parts[3] if len(parts) > 3 else "90%"
+
+    def _num(s):
+        m = re.search(r"[\d,.]+", s)
+        try:
+            return float(m.group(0).replace(",", "")) if m else 10.0
+        except Exception:
+            return 10.0
+
+    na, nb = max(0.1, _num(val_a_str)), max(0.1, _num(val_b_str))
+    m_max = max(na, nb)
+    frac_a = max(0.06, na / m_max)
+    frac_b = max(0.06, nb / m_max)
+
+    # Staged slow cubic-bezier bar reveal (title 0->0.28s, Bar A 0.25->0.70s, Bar B 0.65->1.75s, arrow 1.55->2.05s, badge 1.90->2.30s)
+    p_a = min(1.0, max(0.0, (dt - 0.25) / 0.45))
+    ease_a = 1.0 - (1.0 - p_a) ** 4
+    p_b = min(1.0, max(0.0, (dt - 0.65) / 1.10))
+    ease_b = (4.0 * (p_b ** 3)) if p_b < 0.5 else (1.0 - ((-2.0 * p_b + 2.0) ** 3) / 2.0)
+
+    hdr = render_wrapped_text_block(title, "hero", 212 if is_shorts else 224, 128, int(W2 * 0.88), 260, INK, max_lines=1)
+    hdr_y = int(H2 * (0.085 if is_shorts else 0.09))
+    overlay2.alpha_composite(_text_with_offset_shadow(hdr, dx=7, dy=9), (W2 // 2 - hdr.width // 2, hdr_y))
+    _draw_live_ink_underline(d2, int(W2 * 0.12), hdr_y + hdr.height + 18, int(W2 * 0.88), hdr_y + hdr.height + 14,
+                             progress=min(1.0, dt / 0.28), color=ACCENT + (242,), width=14)
+
+    bx0 = int(W2 * 0.085)
+    max_bar_w = int(W2 * 0.83)
+    bar_h = 264 if is_shorts else 284
+    y_a = int(H2 * (0.26 if is_shorts else 0.30))
+    y_b = int(H2 * (0.50 if is_shorts else 0.58))
+
+    # Subtle vertical editorial gridlines & baseline ticks (0%, 25%, 50%, 75%, 100%)
+    grid_top = y_a - 24
+    grid_bot = y_b + bar_h + 24
+    for g_pct in (0, 25, 50, 75, 100):
+        gx = bx0 + int(max_bar_w * (g_pct / 100.0))
+        d2.line((gx, grid_top, gx, grid_bot), fill=INK + (44 if g_pct == 0 else 26,), width=4 if g_pct == 0 else 3)
+        tick_lbl = _apply_alpha_to_image(text_layer(f"{g_pct}%", 42 if is_shorts else 44, INK, font_role="annotation"), 0.50)
+        overlay2.alpha_composite(tick_lbl, (gx - tick_lbl.width // 2, grid_bot + 10))
+
+    bar_meta = []
+    for lbl_s, val_s, frac, ease, yy, col in (
+        (lbl_a, val_a_str, frac_a, ease_a, y_a, (54, 126, 198)),
+        (lbl_b, val_b_str, frac_b, ease_b, y_b, ACCENT),
+    ):
+        l_im = render_wrapped_text_block(lbl_s.upper(), "hero", 96 if is_shorts else 104, 64, max_bar_w, 130, INK, max_lines=1)
+        overlay2.alpha_composite(l_im, (bx0 + 6, yy - l_im.height - 20))
+
+        # Faint empty bar guide track + crisp drop shadow on fill
+        d2.rounded_rectangle((bx0, yy, bx0 + max_bar_w, yy + bar_h), radius=34, fill=(232, 226, 212, 135), outline=INK + (110,), width=4)
+        cur_w = max(68, int(max_bar_w * frac * ease)) if ease > 0.01 else 0
+        if cur_w > 0:
+            d2.rounded_rectangle((bx0 + 12, yy + 14, bx0 + cur_w + 12, yy + bar_h + 14), radius=34, fill=(0, 0, 0, 52))
+            # Render textured editorial fill bar inside rounded clip
+            bar_im = Image.new("RGBA", (cur_w, bar_h), (0, 0, 0, 0))
+            bd = ImageDraw.Draw(bar_im)
+            bd.rounded_rectangle((0, 0, cur_w - 1, bar_h - 1), radius=34, fill=col + (248,))
+            stripe_layer = Image.new("RGBA", (cur_w, bar_h), (0, 0, 0, 0))
+            sd = ImageDraw.Draw(stripe_layer)
+            for sx in range(-bar_h, cur_w + bar_h, 46):
+                sd.line((sx, bar_h, sx + bar_h, 0), fill=(255, 255, 255, 26), width=14)
+            mask_im = Image.new("L", (cur_w, bar_h), 0)
+            ImageDraw.Draw(mask_im).rounded_rectangle((0, 0, cur_w - 1, bar_h - 1), radius=34, fill=255)
+            bar_im.alpha_composite(Image.composite(stripe_layer, Image.new("RGBA", (cur_w, bar_h), (0, 0, 0, 0)), mask_im))
+            ImageDraw.Draw(bar_im).rounded_rectangle((0, 0, cur_w - 1, bar_h - 1), radius=34, outline=INK + (244,), width=8)
+            overlay2.alpha_composite(bar_im, (bx0, yy))
+
+        disp_v = _interpolate_stat_numbers(val_s.upper(), ease)
+        inside_bar = cur_w > 480
+        v_col = (255, 255, 255) if inside_bar else INK
+        v_im = text_layer(disp_v, 154 if inside_bar else 148, v_col, font_role="hero")
+        v_draw = _text_with_offset_shadow(v_im, dx=5, dy=6, shadow_col=(0, 0, 0, 95)) if inside_bar else _text_with_offset_shadow(v_im, dx=4, dy=5)
+        vx = (bx0 + cur_w - v_draw.width - 36) if cur_w > (v_draw.width + 86) else (bx0 + cur_w + 34)
+        overlay2.alpha_composite(v_draw, (vx, yy + (bar_h - v_draw.height) // 2))
+        bar_meta.append((bx0 + cur_w, yy, vx + v_draw.width))
+
+    # Giant "66× HIGHER" hand-drawn badge + slow curved ink arrow pointing from Bar A to Bar B
+    ratio = round(max(na, nb) / max(0.1, min(na, nb)))
+    if ratio >= 2 and dt >= 1.55:
+        p_arr = min(1.0, max(0.0, (dt - 1.55) / 0.50))
+        e_arr = 1.0 - (1.0 - p_arr) ** 4
+        p_badge = min(1.0, max(0.0, (dt - 1.90) / 0.40))
+        e_badge = 1.0 - (1.0 - p_badge) ** 4
+
+        # Curved ink arrow sweeping from right of 1.4% bar directly into Bar B surge area
+        ax0 = min(int(bx0 + max_bar_w * 0.42), bar_meta[0][2] + 36) if bar_meta else int(bx0 + max_bar_w * 0.34)
+        ay0 = y_a + bar_h // 2 + 12
+        ax1 = int(bx0 + max_bar_w * 0.76)
+        ay1 = y_b - 28
+        ctrl_x = int(bx0 + max_bar_w * 0.72)
+        ctrl_y = y_a + int(bar_h * 0.45)
+        _draw_curved_ink_arrow(d2, ax0, ay0, ax1, ay1, ACCENT + (int(242 * min(1.0, e_arr * 1.4)),),
+                               width=16 if is_shorts else 18, ctrl_pt=(ctrl_x, ctrl_y), draw_progress=e_arr)
+
+        if e_badge > 0.02:
+            # Tilted bold "66× HIGHER" editorial callout badge in right upper open space beside Row A
+            b_lbl = f"{ratio}× HIGHER"
+            b_txt = text_layer(b_lbl, 94 if is_shorts else 104, (255, 255, 255), font_role="hero")
+            bw_r, bh_r = b_txt.width + 82, b_txt.height + 44
+            badge2 = Image.new("RGBA", (bw_r + 24, bh_r + 24), (0, 0, 0, 0))
+            bd2 = ImageDraw.Draw(badge2)
+            bd2.rounded_rectangle((14, 16, 14 + bw_r, 16 + bh_r), radius=30, fill=(0, 0, 0, int(72 * e_badge)))
+            bd2.rounded_rectangle((6, 6, 6 + bw_r, 6 + bh_r), radius=30, fill=ACCENT + (int(250 * e_badge),), outline=INK + (int(245 * e_badge),), width=8)
+            badge2.alpha_composite(_apply_alpha_to_image(b_txt, e_badge), (6 + 41, 6 + 22))
+            sc_b = 0.84 + 0.16 * e_badge
+            if sc_b < 0.999:
+                badge2 = badge2.resize((max(1, int(badge2.width * sc_b)), max(1, int(badge2.height * sc_b))), Image.BILINEAR)
+            badge2 = badge2.rotate(2.4, resample=Image.BILINEAR, expand=True)
+            bcx_f = bx0 + int(max_bar_w * 0.72)
+            bcy_f = y_a + int(bar_h * 0.22)
+            overlay2.alpha_composite(badge2, (bcx_f - badge2.width // 2, bcy_f - badge2.height // 2))
+
+    fr = card_bg(w, h, variant="blueprint").convert("RGBA")
+    fr.alpha_composite(overlay2.resize((w, h), Image.LANCZOS))
+    p_drift = min(1.0, max(0.0, dt / max(0.5, duration)))
+    drift_scale = 1.00 + 0.025 * (0.55 * (1.0 - (1.0 - p_drift) ** 3) + 0.45 * p_drift)
+    dw, dh = int(w * drift_scale), int(h * drift_scale)
+    return fr.resize((dw, dh), Image.BILINEAR).crop(((dw - w) // 2, (dh - h) // 2, (dw - w) // 2 + w, (dh - h) // 2 + h))
+
+
+def draw_micro_accent(fr, W, H, dt, kind="burst", cx_norm=0.5, cy_norm=0.35, is_shorts=False):
+    """Lightweight comic editorial micro-accents (!, ?, curve_ticks, motion_ticks, burst, strike_x) synced to beats."""
+    if dt < 0.0 or dt > 1.05:
+        return
+    p = min(1.0, dt / 0.22)
+    ease = 1.0 - (1.0 - p) ** 3
+    fade = min(1.0, max(0.0, (1.05 - dt) / 0.28))
+    alpha = ease * fade
+    if alpha <= 0.05:
+        return
+    cx, cy = int(W * cx_norm), int(H * cy_norm)
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    if kind in ("!", "?"):
+        im = text_layer(kind, 96 if is_shorts else 108, ACCENT if kind == "!" else INK, font_role="hero")
+        layer.alpha_composite(_apply_alpha_to_image(im, alpha), (cx - im.width // 2, cy - im.height // 2 - int(18 * ease)))
+    elif kind in ("motion_ticks", "curve_ticks", "curved_ticks"):
+        for ang_d in (-32, 0, 32):
+            ang = math.radians(ang_d)
+            r0, r1 = int(42 + 22 * ease), int(84 + 26 * ease)
+            mid_ang = ang + 0.14
+            r_mid = int((r0 + r1) * 0.5)
+            d.line([
+                (cx + int(r0 * math.cos(ang)), cy + int(r0 * math.sin(ang))),
+                (cx + int(r_mid * math.cos(mid_ang)), cy + int(r_mid * math.sin(mid_ang))),
+                (cx + int(r1 * math.cos(ang + 0.08)), cy + int(r1 * math.sin(ang + 0.08))),
+            ], fill=INK + (int(220 * alpha),), width=6, joint="curve")
+    elif kind == "strike_x":
+        r = 68 if is_shorts else 76
+        p1 = min(1.0, dt / 0.16)
+        p2 = min(1.0, max(0.0, (dt - 0.12) / 0.16))
+        if p1 > 0:
+            d.line((cx - r, cy - r, int(cx - r + 2 * r * p1), int(cy - r + 2 * r * p1)), fill=(214, 46, 38, int(242 * fade)), width=14)
+        if p2 > 0:
+            d.line((cx + r, cy - r, int(cx + r - 2 * r * p2), int(cy - r + 2 * r * p2)), fill=(214, 46, 38, int(242 * fade)), width=14)
+    else:
+        for i in range(6):
+            ang = i * (math.pi / 3.0) + 0.2
+            r0, r1 = int(34 + 18 * ease), int(72 + 24 * ease)
+            d.line((cx + int(r0 * math.cos(ang)), cy + int(r0 * math.sin(ang)),
+                    cx + int(r1 * math.cos(ang)), cy + int(r1 * math.sin(ang))), fill=ACCENT + (int(225 * alpha),), width=6)
+    fr.alpha_composite(layer)
 
 
 def draw_myth_stamp(token, dt, target_size=280, compact=False):
@@ -2142,8 +3234,10 @@ def main():
     ap.add_argument("--frame-out", default="frame.png", help="Output path for single still frame")
     ap.add_argument("--outro-sec", type=float, default=None, help="Duration of standalone music-only outro (default: 8.0 for 16:9, 0.0 for 9:16)")
     args = ap.parse_args()
-    if args.outro_sec is None:
-        args.outro_sec = 8.0 if args.format == "16:9" else 0.0
+    if args.format == "9:16":
+        args.outro_sec = 0.0  # Strict mandate: NEVER attach 16:9 end-screen cards to 9:16 Shorts!
+    elif args.outro_sec is None:
+        args.outro_sec = 8.0
 
     try:
         from anti_pollution import validate_external_output_dir
@@ -2333,6 +3427,8 @@ def main():
                 if match_sc and abs(match_sc["t0"] - d_t0) < 0.25:
                     match_sc["_group_pattern"] = d_sc.get("group_pattern", "solo_focus")
                     match_sc["_camera_move"] = d_sc.get("camera_move", "")
+                    match_sc["_annotations"] = d_sc.get("annotations", [])
+                    match_sc["_era_anchor"] = d_sc.get("era_anchor", "")
                     filtered_ovs = []
                     for o_i, ov in enumerate(match_sc["ov"]):
                         d_ov = None
@@ -2341,8 +3437,9 @@ def main():
                                 d_ov = cand_do
                                 break
                         if d_ov:
-                            if d_ov.get("status") == "REJECTED_REDUNDANT":
-                                print(f"🎬 [Director Supervisor] Skipped redundant sticker '{ov['img']}' in scene {match_sc['cue']}: {d_ov.get('reason','')}")
+                            d_stat = str(d_ov.get("status", ""))
+                            if d_stat.startswith("REJECTED_"):
+                                print(f"🎬 [Director Supervisor] Skipped sticker '{ov['img']}' ({d_stat}) in scene {match_sc['cue']}: {d_ov.get('reason','')}")
                                 continue
                             ov["t"] = float(d_ov.get("sync_t", ov["t"]))
                             ov["_motion_archetype"] = d_ov.get("motion_archetype", "")
@@ -2406,30 +3503,61 @@ def main():
         sd.rounded_rectangle((4, 4, stage_w + 20, stage_h + 20), radius=24, fill=PAPER + (255,), outline=INK, width=6)
 
     def draw_youtube_outro_slate(fr, W, H, dt, standalone=False):
-        """Renders broadcast YouTube End Screen Slate with designated 16:9 video boxes and subscribe bubble."""
-        d = ImageDraw.Draw(fr)
+        """Renders broadcast YouTube End Screen Slate with textured dark charcoal CC0 matte & subscribe bubble."""
         if standalone:
-            d.rectangle((0, 0, W, H), fill=(16, 20, 28, 255))
+            bg_outro = card_bg(W, H, variant="outro_dark").convert("RGBA")
+            fr.paste(bg_outro, (0, 0))
+            d = ImageDraw.Draw(fr)
             _draw_editorial_corner_ticks(d, 80, 80, W - 80, H - 80, (65, 80, 105, 180), arm=44, width=4)
         else:
+            d = ImageDraw.Draw(fr)
             slate_dark = Image.new("RGBA", (W, H), (14, 18, 26, 235))
             fr.alpha_composite(slate_dark)
 
         # Header
-        header_im = text_layer("THANKS FOR WATCHING", 52, (255, 230, 80))
-        fr.alpha_composite(header_im, ((W - header_im.width) // 2, 85))
+        is_vert = (W < H)
+        header_im = text_layer("THANKS FOR WATCHING", 54 if is_vert else 52, (255, 230, 80))
+        fr.alpha_composite(header_im, ((W - header_im.width) // 2, 185 if is_vert else 85))
 
         sub_im = text_layer("WATCH NEXT & SUBSCRIBE", 30, (220, 230, 245))
-        fr.alpha_composite(sub_im, ((W - sub_im.width) // 2, 155))
+        fr.alpha_composite(sub_im, ((W - sub_im.width) // 2, 260 if is_vert else 155))
+
+        p_card = min(1.0, dt / 0.5)
+        q_card = spring_p(p_card)
+        card_alpha = int(min(1.0, dt / 0.3) * 255)
+
+        if is_vert:
+            box_w, box_h = 680, 320
+            cx_card = (W - box_w) // 2
+            top_y, bot_y = 385, 1025
+            # Top Card: Watch Next
+            d.rounded_rectangle((cx_card + 6, top_y + 6, cx_card + box_w + 6, top_y + box_h + 6), radius=24, fill=(0, 0, 0, 105))
+            d.rounded_rectangle((cx_card, top_y, cx_card + box_w, top_y + box_h), radius=24, fill=(28, 34, 46, 242), outline=(255, 215, 30, card_alpha), width=4)
+            lbl_left = text_layer("▶ WATCH NEXT", 38, (255, 215, 30))
+            fr.alpha_composite(lbl_left, (cx_card + (box_w - lbl_left.width) // 2, top_y + (box_h - lbl_left.height) // 2))
+
+            # Center Subscribe Circle cleanly between cards
+            cx_sub, cy_sub = W // 2, 865
+            r_sub = max(12, int(92 * q_card))
+            d.ellipse((cx_sub - r_sub + 4, cy_sub - r_sub + 4, cx_sub + r_sub + 4, cy_sub + r_sub + 4), fill=(0, 0, 0, 85))
+            d.ellipse((cx_sub - r_sub, cy_sub - r_sub, cx_sub + r_sub, cy_sub + r_sub), fill=(235, 45, 45, 245), outline=(255, 255, 255, 255), width=4)
+            sub_txt = text_layer("SUB", 34, (255, 255, 255))
+            fr.alpha_composite(sub_txt, (cx_sub - sub_txt.width // 2, cy_sub - sub_txt.height // 2))
+
+            # Bottom Card: Best For You
+            d.rounded_rectangle((cx_card + 6, bot_y + 6, cx_card + box_w + 6, bot_y + box_h + 6), radius=24, fill=(0, 0, 0, 105))
+            d.rounded_rectangle((cx_card, bot_y, cx_card + box_w, bot_y + box_h), radius=24, fill=(28, 34, 46, 242), outline=(75, 225, 255, card_alpha), width=4)
+            lbl_right = text_layer("★ BEST FOR YOU", 38, (75, 225, 255))
+            fr.alpha_composite(lbl_right, (cx_card + (box_w - lbl_right.width) // 2, bot_y + (box_h - lbl_right.height) // 2))
+
+            bot_im = text_layer("TAP THE CARDS TO CONTINUE THE STORY", 26, (180, 195, 215))
+            fr.alpha_composite(bot_im, ((W - bot_im.width) // 2, 1450))
+            return
 
         box_w, box_h = 610, 344
         box_y = 250
         left_x = 120
         right_x = W - box_w - 120
-
-        p_card = min(1.0, dt / 0.5)
-        q_card = spring_p(p_card)
-        card_alpha = int(min(1.0, dt / 0.3) * 255)
 
         # Left Box
         d.rounded_rectangle((left_x + 6, box_y + 6, left_x + box_w + 6, box_y + box_h + 6), radius=20, fill=(0, 0, 0, 100))
@@ -2481,7 +3609,193 @@ def main():
     rendered_unique_stickers = set()
     rendered_stickers_telemetry = []
     overlay_anchor_cache = {}
+    scene_layout_cache = {}
+    scene_end_cache = {}
     fact_badges = _extract_editorial_fact_badges(words_list)
+
+    def _smooth_shot_motion(src_im, out_w, out_h, t_flags, u_prog, cam_move=""):
+        """Single unified, strictly monotonic ease-out camera curve (zero bounce or scale reversal)."""
+        p = max(0.0, min(1.0, float(u_prog)))
+        ease = 0.55 * (1.0 - (1.0 - p) ** 3) + 0.45 * p
+        mv = (cam_move or "").strip().lower()
+        if not mv:
+            for tok_m in ("pan_left", "pan_right", "zoom_in_tight", "crop_focus", "pull_back", "push_in", "static"):
+                if tok_m in t_flags:
+                    mv = "zoom_in_tight" if tok_m == "crop_focus" else tok_m
+                    break
+        has_punch = ("zoom_punch" in t_flags)
+        if mv == "static":
+            scale = 1.00 + 0.025 * ease
+            dx_frac = 0.010 * (ease - 0.5)
+            dy_frac = 0.0
+        elif mv == "pan_left":
+            scale = 1.12
+            dx_frac = 0.42 - 0.84 * ease
+            dy_frac = 0.0
+        elif mv == "pan_right":
+            scale = 1.12
+            dx_frac = -0.42 + 0.84 * ease
+            dy_frac = 0.0
+        elif mv == "zoom_in_tight":
+            scale = 1.03 + 0.12 * ease
+            dx_frac = 0.0
+            dy_frac = -0.04 * ease
+        elif mv == "pull_back":
+            scale = 1.075 - 0.075 * ease
+            dx_frac = 0.025 * (0.5 - ease)
+            dy_frac = -0.015 * ease
+        elif mv == "push_in":
+            # Forward cubic punch-in cleanly folds into monotonic push without scale reversal
+            scale = 1.00 + (0.085 if has_punch else 0.070) * ease
+            dx_frac = 0.025 * (ease - 0.5)
+            dy_frac = -0.020 * ease
+        else:
+            scale = 1.00 + (0.085 if has_punch else 0.070) * ease
+            dx_frac = 0.025 * (ease - 0.5)
+            dy_frac = -0.018 * ease
+
+        cw = max(1, int(src_im.width / scale))
+        ch = max(1, int(src_im.height / scale))
+        avail_x = max(0, src_im.width - cw)
+        avail_y = max(0, src_im.height - ch)
+        cx = max(0, min(avail_x, int(avail_x * (0.5 + dx_frac))))
+        cy = max(0, min(avail_y, int(avail_y * (0.5 + dy_frac))))
+        return src_im.crop((cx, cy, cx + cw, cy + ch)).resize((out_w, out_h), Image.LANCZOS)
+
+    def _render_base_scene_at(si_idx, t_eval, count_telemetry=True):
+        sc_x = scenes[si_idx]
+        t0_x = sc_x["t0"]
+        t1_x = sc_x["t1"]
+        dt_x = max(0.0, t_eval - t0_x)
+        dur_x = max(0.1, t1_x - t0_x)
+        u_x = min(1.0, dt_x / dur_x)
+        img_x = sc_x["img"]
+        txt_x = sc_x["text"]
+        t_flags_x = f"{sc_x.get('extra', '')} {sc_x.get('pos', '')} {sc_x.get('space', '')}".strip().lower()
+
+        tok = os.path.basename(img_x)
+        tok_b = os.path.splitext(tok)[0]
+        tok_k = tok_b.split(":")[0].strip()
+
+        is_stat_c = (tok in ("card", "card_stat", "card_phrase") or tok_b in ("card", "card_stat", "card_phrase") or tok_k in ("card", "card_stat", "card_phrase") or tok.startswith("card_"))
+        is_split_c = (tok in ("split_compare", "split_contrast") or tok_b in ("split_compare", "split_contrast") or tok_k in ("split_compare", "split_contrast") or tok.startswith("split_"))
+        is_time_c = (tok in ("bar_timeline", "timeline") or tok_b in ("bar_timeline", "timeline") or tok_k in ("bar_timeline", "timeline") or tok.startswith(("timeline_", "bar_")))
+        is_pie_c = (tok in ("stat_pie", "stat_ring") or tok_b in ("stat_pie", "stat_ring") or tok_k in ("stat_pie", "stat_ring") or tok.startswith("stat_"))
+        is_breath_c = (tok in ("chapter_breather", "breather") or tok_b in ("chapter_breather", "breather") or tok_k in ("chapter_breather", "breather") or tok.startswith("chapter_"))
+        is_scale_c = (tok in ("scale_compare", "scale_bar") or tok_b in ("scale_compare", "scale_bar") or tok_k in ("scale_compare", "scale_bar") or tok.startswith("scale_"))
+        is_strike_c = (tok in ("card_strike_replace", "strike_replace") or tok_b in ("card_strike_replace", "strike_replace") or tok_k in ("card_strike_replace", "strike_replace") or tok.startswith("strike_"))
+        is_nat_arch = (is_stat_c or is_split_c or is_time_c or is_pie_c or is_breath_c or is_scale_c or is_strike_c)
+
+        paired_stk = left_stk = right_stk = left_stmp = right_stmp = None
+        nat_consumed = set()
+        if is_nat_arch:
+            for idx, o in enumerate(sc_x.get("ov", [])):
+                o_img = o.get("img", "").strip()
+                o_pos = str(o.get("pos", "")).lower()
+                if o_img in ("stamp_x", "stamp_false", "stamp_myth"):
+                    if "left" in o_pos or not left_stmp:
+                        left_stmp = o_img
+                    else:
+                        right_stmp = o_img
+                    nat_consumed.add(idx)
+                    if count_telemetry:
+                        rendered_stickers_counter[0] += 1
+                        rendered_unique_stickers.add(o_img)
+                elif o_img in ("stamp_check", "stamp_true"):
+                    if "right" in o_pos or not right_stmp:
+                        right_stmp = o_img
+                    else:
+                        left_stmp = o_img
+                    nat_consumed.add(idx)
+                    if count_telemetry:
+                        rendered_stickers_counter[0] += 1
+                        rendered_unique_stickers.add(o_img)
+                elif o_img not in ("tag", "count") and not o_img.startswith("bars:"):
+                    res_path = resolve_sticker_path(o_img)
+                    if res_path:
+                        if is_split_c:
+                            if "left" in o_pos and not left_stk:
+                                left_stk = res_path
+                            elif "right" in o_pos and not right_stk:
+                                right_stk = res_path
+                            elif not left_stk:
+                                left_stk = res_path
+                            elif not right_stk:
+                                right_stk = res_path
+                            else:
+                                continue
+                        elif not paired_stk:
+                            paired_stk = res_path
+                        else:
+                            continue
+                        nat_consumed.add(idx)
+                        if count_telemetry:
+                            rendered_stickers_counter[0] += 1
+                            rendered_unique_stickers.add(o_img)
+            if not paired_stk and sc_x.get("space"):
+                res_sp = resolve_sticker_path(sc_x["space"])
+                if res_sp:
+                    paired_stk = res_sp
+
+        # Draw 100% full-bleed base artwork FIRST, then overlay seamless frosted checklist if active in scene
+        if is_strike_c:
+            fr_out = draw_strike_replace_card(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, duration=dur_x)
+        elif tok in ("card", "card_stat", "card_phrase") or tok_b in ("card", "card_stat", "card_phrase") or tok_k in ("card", "card_stat", "card_phrase") or tok.startswith("card_") or tok_b.startswith("card_") or tok_k.startswith("card_"):
+            fr_out = draw_card_stat(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, sticker_im=paired_stk)
+        elif tok in ("split_compare", "split_contrast") or tok_b in ("split_compare", "split_contrast") or tok_k in ("split_compare", "split_contrast") or tok.startswith("split_") or tok_b.startswith("split_") or tok_k.startswith("split_"):
+            fr_out = draw_split_compare(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, left_sticker=left_stk, right_sticker=right_stk, left_stamp=left_stmp, right_stamp=right_stmp, duration=dur_x)
+        elif tok in ("bar_timeline", "timeline") or tok_b in ("bar_timeline", "timeline") or tok_k in ("bar_timeline", "timeline") or tok.startswith(("timeline_", "bar_")) or tok_b.startswith(("timeline_", "bar_")) or tok_k.startswith(("timeline_", "bar_")):
+            fr_out = draw_data_timeline(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, accent_sticker=paired_stk, duration=dur_x)
+        elif tok in ("stat_pie", "stat_ring") or tok_b in ("stat_pie", "stat_ring") or tok_k in ("stat_pie", "stat_ring") or tok.startswith("stat_") or tok_b.startswith("stat_") or tok_k.startswith("stat_"):
+            fr_out = draw_stat_pie(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, accent_sticker=paired_stk)
+        elif is_breath_c:
+            fr_out = draw_chapter_breather(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, duration=dur_x)
+        elif is_scale_c:
+            fr_out = draw_scale_compare(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, duration=dur_x)
+        elif img_x not in img_cache:
+            fr_out = draw_card_stat(W, H, txt_x, is_shorts=is_shorts, dt=dt_x, sticker_im=paired_stk)
+        else:
+            raw = img_cache[img_x]
+            is_vert = (raw.height >= raw.width * 1.15)
+            is_land = (raw.width >= raw.height * 1.15)
+            cam_m = sc_x.get("_camera_move", "")
+            if is_shorts:
+                if is_vert:
+                    fr_out = _smooth_shot_motion(raw, W, H, t_flags_x, u_x, cam_m)
+                elif raw.width == 1 and raw.height == 1:
+                    fr_out = card_bg(W, H).convert("RGBA")
+                else:
+                    cached_bg = bg_cache.get(img_x)
+                    fr_out = cached_bg.copy() if cached_bg else card_bg(W, H).convert("RGBA")
+                    stage_img = raw.resize((stage_w, stage_h), Image.LANCZOS)
+                    stage_img.putalpha(stage_mask)
+                    stage_card = stage_card_base.copy()
+                    stage_card.alpha_composite(stage_img, (12, 12))
+                    fr_out.alpha_composite(stage_card, ((W - stage_w - 24) // 2, 750))
+            else:
+                if is_land or not is_vert:
+                    fr_out = _smooth_shot_motion(raw, W, H, t_flags_x, u_x, cam_m)
+                else:
+                    cached_bg = bg_cache.get(img_x)
+                    fr_out = cached_bg.copy() if cached_bg else card_bg(W, H).convert("RGBA")
+                    pillar_h = H - 80
+                    pillar_w = int(pillar_h * (raw.width / raw.height))
+                    pillar_img = raw.resize((pillar_w, pillar_h), Image.LANCZOS)
+                    fr_out.alpha_composite(pillar_img, ((W - pillar_w) // 2, 40))
+
+        if fr_out.mode != "RGBA":
+            fr_out = fr_out.convert("RGBA")
+        chk_ann = next((a for a in sc_x.get("_annotations", []) if a.get("kind") == "checklist_build" and float(a.get("t0", t0_x)) <= t_eval <= float(a.get("t1", t1_x))), None)
+        if chk_ann:
+            draw_checklist_build(
+                fr_out, W, H, max(0.0, t_eval - float(chk_ann.get("t0", t0_x))),
+                items=chk_ann.get("items", []), item_times=chk_ann.get("item_times"),
+                t_abs=t_eval, is_shorts=is_shorts, side=chk_ann.get("side", "auto"),
+                layout_cache=scene_layout_cache, cache_key=f"chk_{si_idx}",
+                title=chk_ann.get("title", "")
+            )
+            return fr_out, is_nat_arch, is_breath_c, is_strike_c, is_scale_c, nat_consumed, t_flags_x, True
+        return fr_out, is_nat_arch, is_breath_c, is_strike_c, is_scale_c, nat_consumed, t_flags_x, False
 
     def compose_frame_at(t):
         if args.outro_sec > 0 and t >= story_dur:
@@ -2498,277 +3812,118 @@ def main():
         t1 = sc["t1"]
         dt = max(0.0, t - t0)
         dt_scene = dt
-        dur = max(0.1, t1 - t0)
-        u = min(1.0, dt / dur)
-
         img_path = sc["img"]
         text = sc["text"]
         pos = sc["pos"]
         extra = sc["extra"]
-        # Check extra, pos, and space columns for transition & VFX directives (Schema Robustness Gate)
-        trans_type = f"{sc.get('extra', '')} {sc.get('pos', '')} {sc.get('space', '')}".strip().lower()
 
-        is_vertical_img = is_shorts
-        is_landscape_img = not is_shorts
-
-        # Background composition: 6-Archetype Visual Variety Engine
-        token = os.path.basename(img_path)
-        token_base = os.path.splitext(token)[0]
-        token_key = token_base.split(":")[0].strip()
-
-        is_stat_card = (token in ("card", "card_stat", "card_phrase") or token_base in ("card", "card_stat", "card_phrase") or token_key in ("card", "card_stat", "card_phrase") or token.startswith("card_"))
-        is_split_card = (token in ("split_compare", "split_contrast") or token_base in ("split_compare", "split_contrast") or token_key in ("split_compare", "split_contrast") or token.startswith("split_"))
-        is_timeline_card = (token in ("bar_timeline", "timeline") or token_base in ("bar_timeline", "timeline") or token_key in ("bar_timeline", "timeline") or token.startswith(("timeline_", "bar_")))
-        is_pie_card = (token in ("stat_pie", "stat_ring") or token_base in ("stat_pie", "stat_ring") or token_key in ("stat_pie", "stat_ring") or token.startswith("stat_"))
-        is_native_archetype = (is_stat_card or is_split_card or is_timeline_card or is_pie_card)
+        fr, is_native_archetype, is_breather_card, is_strike_card, is_scale_card, natively_consumed_indices, trans_type, checklist_base_rendered = _render_base_scene_at(si, t, count_telemetry=True)
         is_archetype_card = (is_native_archetype or img_path == "card")
+        raw_cur = img_cache.get(img_path)
+        is_vertical_img = (raw_cur.height >= raw_cur.width * 1.15) if raw_cur is not None else is_shorts
+        is_landscape_img = (raw_cur.width >= raw_cur.height * 1.15) if raw_cur is not None else (not is_shorts)
 
-        # Collect stickers ONLY if current scene is an archetype card that actually embeds them natively
-        paired_stk = None
-        left_stk = None
-        right_stk = None
-        left_stmp = None
-        right_stmp = None
-        natively_consumed_indices = set()
-
-        if is_native_archetype:
-            for idx, o in enumerate(sc.get("ov", [])):
-                o_img = o.get("img", "").strip()
-                o_pos = str(o.get("pos", "")).lower()
-                if o_img in ("stamp_x", "stamp_false", "stamp_myth"):
-                    if "left" in o_pos or not left_stmp:
-                        left_stmp = o_img
-                    else:
-                        right_stmp = o_img
-                    natively_consumed_indices.add(idx)
-                    rendered_stickers_counter[0] += 1
-                    rendered_unique_stickers.add(o_img)
-                elif o_img in ("stamp_check", "stamp_true"):
-                    if "right" in o_pos or not right_stmp:
-                        right_stmp = o_img
-                    else:
-                        left_stmp = o_img
-                    natively_consumed_indices.add(idx)
-                    rendered_stickers_counter[0] += 1
-                    rendered_unique_stickers.add(o_img)
-                elif o_img not in ("tag", "count") and not o_img.startswith("bars:"):
-                    res_path = resolve_sticker_path(o_img)
-                    if res_path:
-                        if is_split_card:
-                            if "left" in o_pos and not left_stk:
-                                left_stk = res_path
-                                natively_consumed_indices.add(idx)
-                                rendered_stickers_counter[0] += 1
-                                rendered_unique_stickers.add(o_img)
-                            elif "right" in o_pos and not right_stk:
-                                right_stk = res_path
-                                natively_consumed_indices.add(idx)
-                                rendered_stickers_counter[0] += 1
-                                rendered_unique_stickers.add(o_img)
-                            elif not left_stk:
-                                left_stk = res_path
-                                natively_consumed_indices.add(idx)
-                                rendered_stickers_counter[0] += 1
-                                rendered_unique_stickers.add(o_img)
-                            elif not right_stk:
-                                right_stk = res_path
-                                natively_consumed_indices.add(idx)
-                                rendered_stickers_counter[0] += 1
-                                rendered_unique_stickers.add(o_img)
-                        elif not paired_stk:
-                            paired_stk = res_path
-                            natively_consumed_indices.add(idx)
-                            rendered_stickers_counter[0] += 1
-                            rendered_unique_stickers.add(o_img)
-
-            if not paired_stk and sc.get("space"):
-                res_sp = resolve_sticker_path(sc["space"])
-                if res_sp:
-                    paired_stk = res_sp
-        token_base = os.path.splitext(token)[0]
-        token_key = token_base.split(":")[0].strip()
-        if token in ("card", "card_stat", "card_phrase") or token_base in ("card", "card_stat", "card_phrase") or token_key in ("card", "card_stat", "card_phrase") or token.startswith("card_") or token_base.startswith("card_") or token_key.startswith("card_"):
-            fr = draw_card_stat(W, H, text, is_shorts=is_shorts, dt=dt_scene, sticker_im=paired_stk)
-        elif token in ("split_compare", "split_contrast") or token_base in ("split_compare", "split_contrast") or token_key in ("split_compare", "split_contrast") or token.startswith("split_") or token_base.startswith("split_") or token_key.startswith("split_"):
-            fr = draw_split_compare(W, H, text, is_shorts=is_shorts, dt=dt_scene,
-                                   left_sticker=left_stk, right_sticker=right_stk,
-                                   left_stamp=left_stmp, right_stamp=right_stmp, duration=dur)
-        elif token in ("bar_timeline", "timeline") or token_base in ("bar_timeline", "timeline") or token_key in ("bar_timeline", "timeline") or token.startswith(("timeline_", "bar_")) or token_base.startswith(("timeline_", "bar_")) or token_key.startswith(("timeline_", "bar_")):
-            fr = draw_data_timeline(W, H, text, is_shorts=is_shorts, dt=dt_scene, accent_sticker=paired_stk, duration=dur)
-        elif token in ("stat_pie", "stat_ring") or token_base in ("stat_pie", "stat_ring") or token_key in ("stat_pie", "stat_ring") or token.startswith("stat_") or token_base.startswith("stat_") or token_key.startswith("stat_"):
-            fr = draw_stat_pie(W, H, text, is_shorts=is_shorts, dt=dt_scene, accent_sticker=paired_stk)
-        elif img_path not in img_cache:
-            fr = draw_card_stat(W, H, text, is_shorts=is_shorts, dt=dt_scene, sticker_im=paired_stk)
-        else:
-            raw = img_cache[img_path]
-
-            is_vertical_img = (raw.height >= raw.width * 1.15)
-            is_landscape_img = (raw.width >= raw.height * 1.15)
-
-            # Explicit director-driven eased camera motion (zero stacked zoom crops or parity bounce)
-            def _smooth_shot_motion(src_im, out_w, out_h, t_flags, u_prog, cam_move=""):
-                ease = 0.5 - 0.5 * math.cos(math.pi * max(0.0, min(1.0, u_prog)))
-                mv = (cam_move or "").strip().lower()
-                if not mv:
-                    for tok_m in ("pan_left", "pan_right", "zoom_in_tight", "crop_focus", "pull_back", "push_in", "static"):
-                        if tok_m in t_flags:
-                            mv = "zoom_in_tight" if tok_m == "crop_focus" else tok_m
-                            break
-                if mv == "static":
-                    scale = 1.00 + 0.025 * ease
-                    dx_frac = 0.01 * (ease - 0.5)
-                    dy_frac = 0.0
-                elif mv == "pan_left":
-                    scale = 1.14
-                    dx_frac = 0.45 - 0.90 * ease
-                    dy_frac = 0.0
-                elif mv == "pan_right":
-                    scale = 1.14
-                    dx_frac = -0.45 + 0.90 * ease
-                    dy_frac = 0.0
-                elif mv == "zoom_in_tight":
-                    scale = 1.04 + 0.14 * ease
-                    dx_frac = 0.0
-                    dy_frac = -0.05 * ease
-                elif mv == "pull_back":
-                    scale = 1.085 - 0.085 * ease
-                    dx_frac = 0.035 * (0.5 - ease)
-                    dy_frac = -0.02 * ease
-                elif mv == "push_in":
-                    scale = 1.00 + 0.085 * ease
-                    dx_frac = 0.035 * (ease - 0.5)
-                    dy_frac = -0.025 * ease
-                else:
-                    scale = 1.00 + 0.085 * ease
-                    dx_frac = 0.035 * (ease - 0.5)
-                    dy_frac = -0.02 * ease
-
-                cw = max(1, int(src_im.width / scale))
-                ch = max(1, int(src_im.height / scale))
-                avail_x = max(0, src_im.width - cw)
-                avail_y = max(0, src_im.height - ch)
-                cx = max(0, min(avail_x, int(avail_x * (0.5 + dx_frac))))
-                cy = max(0, min(avail_y, int(avail_y * (0.5 + dy_frac))))
-                return src_im.crop((cx, cy, cx + cw, cy + ch)).resize((out_w, out_h), Image.LANCZOS)
-
-            cam_move_str = sc.get("_camera_move", "")
-            if is_shorts:
-                if is_vertical_img:
-                    fr = _smooth_shot_motion(raw, W, H, trans_type, u, cam_move_str)
-                elif raw.width == 1 and raw.height == 1:
-                    fr = card_bg(W, H).convert("RGBA")
-                else:
-                    cached_bg = bg_cache.get(img_path)
-                    fr = cached_bg.copy() if cached_bg else card_bg(W, H).convert("RGBA")
-                    stage_img = raw.resize((stage_w, stage_h), Image.LANCZOS)
-                    stage_img.putalpha(stage_mask)
-                    stage_card = stage_card_base.copy()
-                    stage_card.alpha_composite(stage_img, (12, 12))
-                    fr.alpha_composite(stage_card, ((W - stage_w - 24) // 2, 750))
-            else:
-                # 16:9 Widescreen Master Format
-                if is_landscape_img or not is_vertical_img:
-                    fr = _smooth_shot_motion(raw, W, H, trans_type, u, cam_move_str)
-                else:
-                    cached_bg = bg_cache.get(img_path)
-                    fr = cached_bg.copy() if cached_bg else card_bg(W, H).convert("RGBA")
-                    pillar_h = H - 80
-                    pillar_w = int(pillar_h * (raw.width / raw.height))
-                    pillar_img = raw.resize((pillar_w, pillar_h), Image.LANCZOS)
-                    fr.alpha_composite(pillar_img, ((W - pillar_w) // 2, 40))
-
-        # Subtle paper texture and vignette
-        if fr.mode != "RGBA":
-            fr = fr.convert("RGBA")
-
-        # Capture clean un-shaken frame for stable sticker spatial anchoring
+        # Capture clean frame for stable sticker spatial anchoring
         clean_base_fr = fr.copy()
 
-        # Rule 32: Dynamic Camera Shake & Physical Weight (High-Impact Broadcast Calibration)
+        # Dynamic Camera Shake (only on explicit earthquake/impact shake cues; NEVER backward zoom bounce!)
         shake_dx, shake_dy = 0, 0
-
-        # Explicit shake or rumble in scene extra
         if "shake" in trans_type and dt_scene < 0.40:
-            intensity = ((1.0 - dt_scene / 0.40) ** 1.8) * (26.0 if is_shorts else 32.0)
+            intensity = ((1.0 - dt_scene / 0.40) ** 1.8) * (24.0 if is_shorts else 28.0)
             shake_dx += int(np.sin(dt_scene * 65.0) * intensity)
             shake_dy += int(np.cos(dt_scene * 75.0) * intensity)
         elif "rumble" in trans_type:
             shake_dx += int(np.sin(t * 30.0) * 4.5)
             shake_dy += int(np.cos(t * 35.0) * 4.5)
 
-        # High-Impact Spoken Word hits
         for impact_t in impact_hit_times:
             dt_imp = t - impact_t
             if 0.0 <= dt_imp <= 0.28:
-                intensity = ((1.0 - dt_imp / 0.28) ** 1.8) * 18.0
+                intensity = ((1.0 - dt_imp / 0.28) ** 1.8) * 16.0
                 shake_dx += int(np.sin(dt_imp * 65.0) * intensity)
                 shake_dy += int(np.cos(dt_imp * 75.0) * intensity)
                 break
         if shake_dx != 0 or shake_dy != 0:
             fr = fr.transform(fr.size, Image.AFFINE, (1, 0, shake_dx, 0, 1, shake_dy))
 
-        # Kinetic Editorial Motion Transitions & Micro-Settle:
-        # Micro punch-scale settle (1.055 -> 1.00 over 0.18s) on rhythmic beats and default scene cuts
-        has_explicit_trans = any(k in trans_type for k in ("zoom_punch", "slide_wipe", "whip_blur", "flash", "crossfade", "fade"))
-        is_card_scene = (img_path == "card" or is_archetype_card)
-        if ("punch_settle" in trans_type or (si > 0 and not has_explicit_trans and not is_card_scene)) and dt_scene < 0.18:
-            scale_ps = 1.0 + 0.055 * ((1.0 - dt_scene / 0.18) ** 2)
-            cw = int(W / scale_ps)
-            ch = int(H / scale_ps)
-            fr = fr.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
+        # Helper to retrieve outgoing scene's exact end frame for silky slide-push / cross-dissolve
+        def _get_prev_end_frame():
+            if si <= 0:
+                return None
+            if (si - 1) not in scene_end_cache:
+                prev_t = max(scenes[si - 1]["t0"], scenes[si - 1]["t1"] - 0.02)
+                pfr, *_ = _render_base_scene_at(si - 1, prev_t, count_telemetry=False)
+                scene_end_cache[si - 1] = pfr
+            return scene_end_cache[si - 1]
 
-        # Zoom Punch (Cinematic 1.10x Snap to 1.00x over 0.24s)
-        elif "zoom_punch" in trans_type and dt_scene < 0.24:
-            scale_zp = 1.0 + (0.10 if is_shorts else 0.08) * ((1.0 - dt_scene / 0.24) ** 2)
-            cw = int(W / scale_zp)
-            ch = int(H / scale_zp)
-            fr = fr.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
+        prev_was_card = False
+        if si > 0:
+            pb = os.path.splitext(os.path.basename(scenes[si - 1]["img"]))[0].split(":")[0]
+            prev_was_card = (scenes[si - 1]["img"] == "card" or pb.startswith(("card", "split", "bar_", "timeline", "stat_", "chapter_", "breather", "scale_", "strike_")))
 
-        # Directional Paper/Ink Slide-Wipe (0.22s eased slide)
-        dt_scene = t - t0
-        if "slide_wipe" in trans_type and dt_scene < 0.22 and si > 0:
-            prev_img_path = scenes[si - 1]["img"]
-            if prev_img_path in img_cache:
-                prev_raw = img_cache[prev_img_path]
-                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw.copy()
-                p_slide = min(1.0, max(0.0, dt_scene / 0.22))
-                ease_s = 1.0 - (1.0 - p_slide) ** 3
-                slide_offset = int((1.0 - ease_s) * W)
-                comp_slide = Image.new("RGBA", (W, H))
-                comp_slide.paste(prev_fr, (-int(slide_offset * 0.35), 0))
-                comp_slide.paste(fr, (W - slide_offset, 0))
-                sd = ImageDraw.Draw(comp_slide)
-                div_x = W - slide_offset
-                sd.line([(div_x, 0), (div_x, H)], fill=(20, 24, 32, 220), width=4)
+        # Silky Cinema Transitions (~70% crisp beat cuts, ~30% smooth zoom_dissolve / slide_push / paper_crossfade)
+        wants_slide = ("slide_push" in trans_type or "slide_wipe" in trans_type)
+        wants_paper_cf = ("paper_crossfade" in trans_type or "fade" in trans_type or ((is_archetype_card != prev_was_card) and "cut" not in trans_type and not wants_slide))
+        wants_zoom_dis = ("zoom_dissolve" in trans_type or ("crossfade" in trans_type and not wants_paper_cf and not wants_slide))
+
+        if wants_slide and dt_scene < 0.34 and si > 0:
+            prev_fr = _get_prev_end_frame()
+            if prev_fr is not None:
+                p_slide = min(1.0, max(0.0, dt_scene / 0.34))
+                ease_s = (4.0 * (p_slide ** 3)) if p_slide < 0.5 else (1.0 - ((-2.0 * p_slide + 2.0) ** 3) / 2.0)
+                in_x = int(round((1.0 - ease_s) * W))
+                out_x = -int(round(ease_s * W * 0.45))
+                out_fr = prev_fr
+                if 0.15 < p_slide < 0.85:
+                    blur_px = 3.5 * math.sin(math.pi * p_slide)
+                    out_fr = prev_fr.resize((max(1, W // 2), max(1, H // 2)), Image.BILINEAR).filter(ImageFilter.GaussianBlur(blur_px)).resize((W, H), Image.BILINEAR)
+                comp_slide = Image.new("RGBA", (W, H), (244, 238, 224, 255))
+                comp_slide.paste(out_fr, (out_x, 0))
+                # Soft feathered 36px edge shadow instead of harsh black line
+                sh_strip = Image.new("RGBA", (36, H), (0, 0, 0, 0))
+                sd = ImageDraw.Draw(sh_strip)
+                for sx in range(36):
+                    a_sh = int(52 * ((sx / 35.0) ** 1.7))
+                    sd.line((sx, 0, sx, H), fill=(18, 16, 14, a_sh), width=1)
+                comp_slide.alpha_composite(sh_strip, (max(-36, in_x - 36), 0))
+                comp_slide.paste(fr, (in_x, 0))
                 fr = comp_slide
+        elif wants_zoom_dis and dt_scene < 0.32 and si > 0:
+            prev_fr = _get_prev_end_frame()
+            if prev_fr is not None:
+                p_zd = min(1.0, max(0.0, dt_scene / 0.32))
+                ease_zd = (4.0 * (p_zd ** 3)) if p_zd < 0.5 else (1.0 - ((-2.0 * p_zd + 2.0) ** 3) / 2.0)
+                # Outgoing gently pushes forward (1.00 -> 1.05); incoming glides smoothly in from (0.96 -> 1.00)
+                s_out = 1.00 + 0.05 * ease_zd
+                ow, oh = int(W * s_out), int(H * s_out)
+                p_scaled = prev_fr.resize((ow, oh), Image.BILINEAR).crop(((ow - W) // 2, (oh - H) // 2, (ow - W) // 2 + W, (oh - H) // 2 + H))
+                s_in = 0.96 + 0.04 * ease_zd
+                iw, ih = int(W * s_in), int(H * s_in)
+                if iw < W:
+                    in_canvas = fr.copy()
+                    in_inner = fr.resize((iw, ih), Image.BILINEAR)
+                    in_canvas.paste(in_inner, ((W - iw) // 2, (H - ih) // 2))
+                else:
+                    in_canvas = fr
+                fr = Image.blend(p_scaled, in_canvas, ease_zd)
+        elif wants_paper_cf and dt_scene < 0.28 and si > 0:
+            prev_fr = _get_prev_end_frame()
+            if prev_fr is not None:
+                p_cf = min(1.0, max(0.0, dt_scene / 0.28))
+                ease_cf = (4.0 * (p_cf ** 3)) if p_cf < 0.5 else (1.0 - ((-2.0 * p_cf + 2.0) ** 3) / 2.0)
+                fr = Image.blend(prev_fr, fr, ease_cf)
+                warm_bridge = int(28 * math.sin(math.pi * ease_cf))
+                if warm_bridge > 2:
+                    fr.alpha_composite(Image.new("RGBA", (W, H), PAPER + (warm_bridge,)))
+        elif "flash" in trans_type and dt_scene < 0.14 and si > 0:
+            flash_p = max(0.0, 1.0 - dt_scene / 0.14)
+            fr.alpha_composite(Image.new("RGBA", (W, H), (255, 252, 240, int(flash_p * 160))))
 
-        # Crisp Subtle Directional Whip-Blur (0.14s on energetic beat shifts)
-        elif "whip_blur" in trans_type and dt_scene < 0.14 and si > 0:
-            prev_img_path = scenes[si - 1]["img"]
-            p_whip = min(1.0, max(0.0, dt_scene / 0.14))
-            blur_shift = int(np.sin(p_whip * np.pi) * 36)
-            if p_whip < 0.5 and prev_img_path in img_cache:
-                prev_raw = img_cache[prev_img_path]
-                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw.copy()
-                prev_fr = prev_fr.transform((W, H), Image.AFFINE, (1, 0, blur_shift, 0, 1, 0))
-                fr = prev_fr
-            else:
-                fr = fr.transform((W, H), Image.AFFINE, (1, 0, -blur_shift, 0, 1, 0))
-
-        # Flash impact
-        elif "flash" in trans_type and dt_scene < 0.12 and si > 0:
-            flash_p = max(0.0, 1.0 - dt_scene / 0.12)
-            flash_layer = Image.new("RGBA", (W, H), (255, 252, 240, int(flash_p * 180)))
-            fr.alpha_composite(flash_layer)
-
-        # Calm Reflective Dissolves / Crossfades (0.18s)
-        elif ("crossfade" in trans_type or "fade" in trans_type) and dt_scene < 0.18 and si > 0:
-            prev_img_path = scenes[si - 1]["img"]
-            if prev_img_path in img_cache:
-                prev_raw = img_cache[prev_img_path]
-                prev_fr = prev_raw.resize((W, H), Image.LANCZOS) if prev_raw.size != (W, H) else prev_raw
-                blend_alpha = min(1.0, max(0.0, dt_scene / 0.18))
-                fr = Image.blend(prev_fr.convert("RGBA"), fr, blend_alpha)
+        # Subtle living 11fps paper grain boil + warm drifting sunlight dust motes on bright editorial shots
+        if not checklist_base_rendered:
+            fr = _apply_animated_vfx_layer(fr, "paper_grain_cycle", t_abs=t, opacity=0.14)
+            if not is_archetype_card and img_path != "card":
+                fr = _apply_animated_vfx_layer(fr, "dust_motes_drift", t_abs=t, opacity=0.20)
 
         # Label Deduplication & Clash Check:
         # Scene heading text label: Suppressed on standard scenes so stickers, art, and captions remain uncluttered.
@@ -2778,14 +3933,17 @@ def main():
         token_base = os.path.splitext(token)[0]
         token_key = token_base.split(":")[0].strip()
         is_archetype_card = (token in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast",
-                                       "bar_timeline", "timeline", "stat_pie", "stat_ring") or
+                                       "bar_timeline", "timeline", "stat_pie", "stat_ring", "scale_compare",
+                                       "card_strike_replace", "strike_replace", "chapter_breather", "breather") or
                              token_base in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast",
-                                            "bar_timeline", "timeline", "stat_pie", "stat_ring") or
+                                            "bar_timeline", "timeline", "stat_pie", "stat_ring", "scale_compare",
+                                            "card_strike_replace", "strike_replace", "chapter_breather", "breather") or
                              token_key in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast",
-                                           "bar_timeline", "timeline", "stat_pie", "stat_ring") or
-                             token.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                             token_base.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                             token_key.startswith(("card_", "split_", "timeline_", "stat_", "bar_")))
+                                           "bar_timeline", "timeline", "stat_pie", "stat_ring", "scale_compare",
+                                           "card_strike_replace", "strike_replace", "chapter_breather", "breather") or
+                             token.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "scale_", "strike_", "chapter_", "breather")) or
+                             token_base.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "scale_", "strike_", "chapter_", "breather")) or
+                             token_key.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "scale_", "strike_", "chapter_", "breather")))
         if text and (args.scene_labels and not is_archetype_card):
             scene_lbl = text.strip().upper()
             is_dup = False
@@ -2871,11 +4029,11 @@ def main():
             cohort_rank = cohort_members.index(o_idx) if o_idx in cohort_members else 0
             cohort_scale = 1.0 if peak_cohort <= 2 else (0.80 if peak_cohort == 3 else 0.72)
 
-            p_ent = min(1.0, dt / 0.36)
-            ease_c = 1.0 - (1.0 - p_ent) ** 3
+            p_ent = min(1.0, dt / 0.42)
+            ease_c = 1.0 - (1.0 - p_ent) ** 4
             p = p_ent
             q = spring_p(p_ent)
-            alpha = min(1.0, dt / 0.18)
+            alpha = min(1.0, dt / 0.22)
 
             # Clean 0.22s ease-out exit + subtle retract
             exit_window = min(0.22, max(0.05, dur * 0.45))
@@ -2962,40 +4120,13 @@ def main():
                 if o.get("text"):
                     lbl_im = tag_image(o["text"], 34 if is_shorts else 40)
             elif os.path.exists(o_img):
-                item_im = sticker(o_img, hh)
+                item_im = sticker(o_img, hh, t_sec=dt)
                 if o.get("text"):
                     lbl_im = tag_image(o["text"], 34 if is_shorts else 40)
             else:
-                # Bulletproof multi-directory and semantic registry resolution
-                resolved_p = None
-                name_base = os.path.basename(o_img)
-                name_no_ext = os.path.splitext(name_base)[0]
-                cands = [
-                    o_img,
-                    o_img + ".png" if not o_img.endswith(".png") else o_img,
-                    os.path.join("elements", "cut", f"{name_no_ext}.png"),
-                    os.path.join("elements", "cut", name_base),
-                    os.path.join("..", "elements", "cut", f"{name_no_ext}.png"),
-                    os.path.join("..", "elements", "cut", name_base),
-                    os.path.join("..", "short", "elements", "cut", f"{name_no_ext}.png"),
-                    os.path.join("..", "long", "elements", "cut", f"{name_no_ext}.png"),
-                ]
-                for cp in cands:
-                    if os.path.exists(cp) and os.path.getsize(cp) > 500:
-                        resolved_p = cp
-                        break
-                if not resolved_p:
-                    try:
-                        import asset_registry
-                        p_root = asset_registry.resolve_project_root(os.getcwd())
-                        reg_m = asset_registry.find_reusable_sticker(name_no_ext, p_root)
-                        if reg_m and os.path.exists(reg_m["path"]):
-                            resolved_p = reg_m["path"]
-                    except Exception:
-                        pass
-
+                resolved_p = resolve_sticker_path(o_img)
                 if resolved_p:
-                    item_im = sticker(resolved_p, hh)
+                    item_im = sticker(resolved_p, hh, t_sec=dt)
                     if o.get("text"):
                         lbl_im = tag_image(o["text"], 34 if is_shorts else 40)
 
@@ -3086,12 +4217,16 @@ def main():
                 entry_ang = (-8.5 if is_left_arc else 8.5) * (1.0 - ease_c)
                 scale_x_mult = scale_y_mult = 0.88 + 0.12 * ease_c
 
-            # Ultra-gentle continuous alive idle breathing (zero jitter)
+            # Ultra-gentle 0.55 Hz float + +-1.8 deg pendulum tilt + 11fps organic hand-drawn breath
             idle_dy, idle_ang = 0.0, 0.0
-            if dt > 0.36 and exit_e <= 0.01:
-                ramp_idle = min(1.0, (dt - 0.36) / 0.25)
-                idle_dy = 3.2 * ramp_idle * math.sin(2.0 * math.pi * 0.45 * (dt - 0.36) + o_idx * 1.1)
-                idle_ang = 0.45 * ramp_idle * math.sin(2.0 * math.pi * 0.35 * (dt - 0.36) + o_idx * 0.7)
+            boil_dx, boil_dy = 0.0, 0.0
+            if dt > 0.42 and exit_e <= 0.01:
+                ramp_idle = min(1.0, (dt - 0.42) / 0.30)
+                idle_dy = 4.2 * ramp_idle * math.sin(2.0 * math.pi * 0.55 * (dt - 0.42) + o_idx * 1.1)
+                idle_ang = 1.8 * ramp_idle * math.sin(2.0 * math.pi * 0.42 * (dt - 0.42) + o_idx * 0.7)
+                boil_tick = int(t * 11.0)
+                boil_dx = 0.8 * math.sin(boil_tick * 2.3 + o_idx)
+                boil_dy = 0.8 * math.cos(boil_tick * 1.7 + o_idx)
 
             # Smooth ease-out exit scale + directional retract
             if exit_e > 0.0:
@@ -3103,6 +4238,19 @@ def main():
             nh = max(1, int(item_im.height * auto_q * scale_y_mult))
             scaled_im = item_im.resize((nw, nh), Image.BILINEAR)
 
+            # Subtle diagonal specular sheen sweep on metallic / glass / focal props (~0.55s after spawn)
+            if 0.48 <= dt <= 1.25 and any(kw in o_img.lower() for kw in ("coin", "mug", "soda", "coffee", "sugar", "clock", "skull", "gold", "bronze", "thermometer", "bulb")):
+                sheen_u = (dt - 0.48) / 0.77
+                if 0.0 < sheen_u < 1.0:
+                    sh_lay = Image.new("RGBA", (nw, nh), (0, 0, 0, 0))
+                    sh_d = ImageDraw.Draw(sh_lay)
+                    sx_c = int(-nw * 0.3 + (nw * 1.6) * sheen_u)
+                    bw_s = max(16, nw // 7)
+                    sh_d.polygon([(sx_c, 0), (sx_c + bw_s, 0), (sx_c - bw_s, nh), (sx_c - bw_s * 2, nh)], fill=(255, 255, 255, 62))
+                    a_mask = scaled_im.getchannel("A")
+                    sh_clipped = Image.composite(sh_lay, Image.new("RGBA", (nw, nh), (0, 0, 0, 0)), a_mask)
+                    scaled_im.alpha_composite(sh_clipped)
+
             slot_tilts = (-2.2, 1.9, -1.6, 2.3, -1.8)
             base_tilt = o.get("_rest_tilt_deg", slot_tilts[o_idx % len(slot_tilts)]) if img_path != "card" else 0.0
             total_tilt = base_tilt + entry_ang + idle_ang
@@ -3110,8 +4258,8 @@ def main():
                 scaled_im = scaled_im.rotate(total_tilt, resample=Image.BICUBIC, expand=True)
                 nw, nh = scaled_im.size
 
-            cx = int(round(target_cx + dx_anim))
-            cy = int(round(target_cy + dy_anim + idle_dy))
+            cx = int(round(target_cx + dx_anim + boil_dx))
+            cy = int(round(target_cy + dy_anim + idle_dy + boil_dy))
 
             # Strict safe-margin clamp
             spatial_policy = ACTIVE_RL_POLICY.get("rule_24_spatial_hierarchy", {})
@@ -3271,6 +4419,121 @@ def main():
                 _draw_curved_ink_arrow(ad, ax0, ay0, ax1, ay1, ACCENT + (int(238 * arrow_alpha),), width=7 if is_shorts else 8, ctrl_pt=(ctrl_x, ctrl_y), draw_progress=arrow_prog)
                 fr.alpha_composite(arr_layer)
 
+        # Procedural Live Ink Annotation & Visual Storytelling Primitives (synced to DIRECTOR_PLAN.json / WORDS.tsv)
+        active_anns = sc.get("_annotations", [])
+        # First pass: spotlight_dim so focus subjects & annotations pop above the dimmed surroundings
+        for ann in active_anns:
+            if ann.get("kind") == "spotlight_dim":
+                a_t0 = float(ann.get("t0", t0))
+                a_t1 = float(ann.get("t1", t1))
+                if a_t0 <= t <= a_t1:
+                    draw_spotlight_dim(
+                        fr, W, H, t - a_t0, duration=max(0.4, a_t1 - a_t0),
+                        cx_norm=float(ann.get("cx", 0.5)), cy_norm=float(ann.get("cy", 0.45)),
+                        rx_norm=float(ann.get("rx", 0.24)), ry_norm=float(ann.get("ry", 0.22))
+                    )
+        # Second pass: circle_focus, strike_replace, checklist_build, inset_shelf, pip_flashback, micro_accent
+        for ann in active_anns:
+            akind = ann.get("kind", "")
+            if akind == "spotlight_dim":
+                continue
+            a_t0 = float(ann.get("t0", t0))
+            a_t1 = float(ann.get("t1", t1))
+            if not (a_t0 <= t <= a_t1):
+                continue
+            dt_a = t - a_t0
+            dur_a = max(0.3, a_t1 - a_t0)
+            cx_a = float(ann.get("cx", 0.5))
+            cy_a = float(ann.get("cy", 0.45))
+            targ_resolved = None  # (sx, sy, sw, sh, exit_e)
+            targ_idx = ann.get("target_ov_idx")
+            if targ_idx is not None:
+                try:
+                    t_i = int(targ_idx)
+                    if t_i in scene_drawn_stickers:
+                        sx_a, sy_a, im_a, _, exit_a = scene_drawn_stickers[t_i]
+                        cx_a, cy_a = sx_a / max(1, W), sy_a / max(1, H)
+                        targ_resolved = (sx_a, sy_a, im_a.width, im_a.height, exit_a)
+                except Exception:
+                    pass
+            elif ann.get("target_sticker") and scene_drawn_stickers:
+                targ_slug = str(ann.get("target_sticker", "")).lower()
+                for idx_s, ov_s in enumerate(sc.get("ov", [])):
+                    if idx_s in scene_drawn_stickers and targ_slug in str(ov_s.get("img", "")).lower():
+                        sx_a, sy_a, im_a, _, exit_a = scene_drawn_stickers[idx_s]
+                        cx_a, cy_a = sx_a / max(1, W), sy_a / max(1, H)
+                        targ_resolved = (sx_a, sy_a, im_a.width, im_a.height, exit_a)
+                        break
+
+            if akind == "circle_focus":
+                # Disabled for stickers/floating props; ONLY allowed on verified geographic map targets
+                if ann.get("verified_map_target"):
+                    draw_circle_focus(
+                        fr, W, H, dt_a,
+                        cx_norm=cx_a, cy_norm=cy_a,
+                        rx_norm=float(ann.get("rx", 0.14)), ry_norm=float(ann.get("ry", 0.11))
+                    )
+            elif akind == "strike_x":
+                if targ_resolved is not None and targ_resolved[4] < 0.96:
+                    draw_strike_replace(
+                        fr, W, H, dt_a, old_text="", new_text="", cx_norm=cx_a, cy_norm=cy_a,
+                        is_shorts=is_shorts, mode="strike_x", exit_alpha=(1.0 - targ_resolved[4])
+                    )
+            elif akind == "strike_replace":
+                draw_strike_replace(
+                    fr, W, H, dt_a,
+                    old_text=ann.get("old_text", ""), new_text=ann.get("new_text", ""),
+                    cx_norm=cx_a, cy_norm=cy_a,
+                    is_shorts=is_shorts, mode="replace",
+                    placement=ann.get("placement", "below")
+                )
+            elif akind == "checklist_build":
+                if not checklist_base_rendered:
+                    draw_checklist_build(
+                        fr, W, H, dt_a,
+                        items=ann.get("items", []), item_times=ann.get("item_times"),
+                        t_abs=t, is_shorts=is_shorts, side=ann.get("side", "left"),
+                        layout_cache=scene_layout_cache, cache_key=f"chk_{si}",
+                        title=ann.get("title", ""), raw_scene_im=img_cache.get(img_path)
+                    )
+            elif akind == "inset_shelf":
+                draw_inset_shelf(
+                    fr, W, H, dt_a,
+                    items=ann.get("items", []), item_times=ann.get("item_times"),
+                    t_abs=t, is_shorts=is_shorts, resolve_fn=resolve_sticker_path,
+                    layout_cache=scene_layout_cache, cache_key=f"shelf_{si}", scene_end_t=t1
+                )
+            elif akind in ("pip_inset", "pip_flashback"):
+                pip_tok = str(ann.get("src_img", "")).strip()
+                pip_im = img_cache.get(pip_tok)
+                if pip_im is None and pip_tok:
+                    for cp in (pip_tok, os.path.join("shots", pip_tok), os.path.join("shots", f"{pip_tok}.png"), os.path.join("..", pip_tok)):
+                        if os.path.exists(cp):
+                            try:
+                                pip_im = Image.open(cp).convert("RGBA")
+                                img_cache[pip_tok] = pip_im
+                            except Exception:
+                                pass
+                            break
+                if pip_im is None and scenes:
+                    pip_im = img_cache.get(scenes[0]["img"])
+                draw_pip_inset(fr, W, H, dt_a, dur_a, pip_im, label=ann.get("label", "CALLBACK" if akind == "pip_flashback" else "EVIDENCE"), is_shorts=is_shorts)
+            elif akind == "micro_accent":
+                # Never stamp !/? over illustrated character scenes; only allow on clean card/abstract backdrops
+                if is_archetype_card or img_path == "card":
+                    draw_micro_accent(
+                        fr, W, H, dt_a, kind=ann.get("symbol", "burst"),
+                        cx_norm=cx_a, cy_norm=cy_a,
+                        is_shorts=is_shorts
+                    )
+
+        # Persistent Top-Left Era / Date Anchor
+        era_lbl = sc.get("_era_anchor", "")
+        if not era_lbl and "era_anchor:" in extra:
+            era_lbl = extra.split("era_anchor:", 1)[1].split(",")[0].strip()
+        if era_lbl and not is_breather_card:
+            draw_era_anchor(fr, W, H, dt_scene, era_lbl, is_shorts=is_shorts)
+
         # Shorts Header & Progress Bar (14px with dark track & precise 0%->100% clamping)
         if is_shorts:
             d = ImageDraw.Draw(fr)
@@ -3302,13 +4565,13 @@ def main():
             dt_outro = t - t0
             draw_youtube_outro_slate(fr, W, H, dt_outro, standalone=True)
 
-        # Shorts Ending Follow Callout
-        # Only triggers during actual final CTA lines of a full Short
-        # Disabled when --clip-seconds preview mode cuts mid-story or t < story_dur - 4.5s
+        # Shorts Ending Follow Callout: ONLY on final CTA scene (never mid-story & never over archetype/data cards!)
         is_clip_preview = bool(args.clip_seconds and args.clip_seconds < (audio_dur - 2.0))
-        if is_shorts and not args.clip_seconds and not is_clip_preview and t >= (story_dur - 4.2):
-            dt_s_end = t - (story_dur - 4.2)
-            draw_shorts_subscribe_callout(fr, W, H, dt_s_end)
+        is_final_scene = (si == len(scenes) - 1)
+        scene_words_txt = " ".join(w.get("word", "").lower() for w in words_list if t0 <= w.get("start", 0.0) <= t1)
+        has_cta_cue = ("cta" in trans_type or any(k in scene_words_txt for k in ("subscribe", "full video", "channel", "watch the")))
+        if is_shorts and not args.clip_seconds and not is_clip_preview and is_final_scene and not is_archetype_card and has_cta_cue:
+            draw_shorts_subscribe_callout(fr, W, H, max(0.0, t - t0))
 
         return fr
 

@@ -129,6 +129,22 @@ def media_len(path):
     return float(out.strip())
 
 
+def _detect_music_onset_sec(path):
+    """Detects leading dead-air silence on music tracks so beds begin immediately at t=0."""
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-v", "info", "-t", "5.0", "-i", path, "-af", "silencedetect=noise=-42dB:d=0.08", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=6
+        )
+        starts = [float(x) for x in re.findall(r"silence_start:\s*([\d.]+)", r.stderr)]
+        ends = [float(x) for x in re.findall(r"silence_end:\s*([\d.]+)", r.stderr)]
+        if starts and ends and starts[0] <= 0.08 and ends[0] > 0.12:
+            return max(0.0, ends[0] - 0.02)
+    except Exception:
+        pass
+    return 0.0
+
+
 def build(cues, vo, out, dur, dip):
     cmd, parts, sfx = ["ffmpeg", "-y", "-loglevel", "error"], [], []
     labels = [c["label"] for c in cues]
@@ -148,8 +164,9 @@ def build(cues, vo, out, dur, dip):
 
         if c["kind"] == "loop":
             d = dur - c["t"] if c["dur"] in ("all", "") else float(c["dur"])
+            onset_s = _detect_music_onset_sec(path) if is_bed else 0.0
             cmd += ["-stream_loop", "-1", "-i", path]
-            f = [f"atrim=0:{d:.3f}", "asetpts=N/SR/TB"]
+            f = [f"atrim=start={onset_s:.3f}:duration={d:.3f}", "asetpts=N/SR/TB"]
             if fi:
                 f.append(f"afade=t=in:st=0:d={fi}")
             if fo:

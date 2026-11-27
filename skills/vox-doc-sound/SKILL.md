@@ -19,7 +19,7 @@ scripts/index_sfx.py      your sfx/ and music/ folders -> CATALOG.tsv (level, pe
 scripts/mix.py            cues.tsv + VO -> mix.wav (-14 LUFS, voice on top)
 scripts/eleven_sfx.py     make sounds with the user's ElevenLabs key (--batch sfx/STARTER.tsv)
 scripts/eleven_music.py   make an instrumental bed with ElevenLabs Music
-sfx/StableAudio/, sfx/Kenney_CC0/, sfx/Wyzowl_CC0/  the bundled free library (commercial use + sharing allowed, 100% CC0)
+sfx/StableAudio/, sfx/Kenney_CC0/, sfx/Wyzowl_CC0/  the bundled free library (`1,648` total cataloged sounds including `Kenney_CC0/TactileV7/` marker scratches, ticks, clicks, scrolls & paper flips, 100% CC0)
 music/CC0_PublicDomain/   23 high-production CC0 Public Domain instrumental tracks (FreePD & Duru, 100% monetizable)
 kaggle/make_sfx_job.py    free AI sound effects on Kaggle (Stable Audio, you own the output)
 sfx/STARTER.tsv           36 tested ElevenLabs prompts (optional, paid plan)

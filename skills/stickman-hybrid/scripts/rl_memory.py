@@ -135,6 +135,23 @@ DEFAULT_POLICY = {
             "enable_motion_archetypes": True,
             "animated_draw_on_arrows": True,
             "idle_breathing_enabled": True
+        },
+        "rule_47_v7_documentary_primitives": {
+            "primitives": [
+                "strike_replace",
+                "circle_focus",
+                "checklist_build",
+                "chapter_breather",
+                "pip_inset",
+                "inset_shelf",
+                "micro_accent",
+                "scale_compare"
+            ],
+            "checklist_dim_opacity": 0.52,
+            "salience_head_mask_enabled": True,
+            "opening_proof_beats_before_breather": True,
+            "full_circle_callback_plus_standalone_outro": True,
+            "enforce_cc0_mit_catalog_clearance": True
         }
     },
     "user_feedback_log": [

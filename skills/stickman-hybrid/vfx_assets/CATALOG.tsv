@@ -1,0 +1,13 @@
+path	category	source	license	url	dims	blend_mode	usage
+vfx_spotlight_soft.png	spotlight_mask	Kenney CC0	CC0-1.0	https://raw.githubusercontent.com/shorepine/kenney/master/2d/Light%20Masks/Transparent/circle_a.png	512x512	alpha_composite	soft radial spotlight glow mask
+vfx_spotlight_grain.png	spotlight_mask	Kenney CC0	CC0-1.0	https://raw.githubusercontent.com/shorepine/kenney/master/2d/Light%20Masks/Transparent/circle_a_noise.png	512x512	alpha_composite	textured radial spotlight glow mask
+vfx_dust_puff_a.png	dust_mote	Kenney CC0	CC0-1.0	https://raw.githubusercontent.com/shorepine/kenney/master/2d/Smoke%20Particles/White%20puff/whitePuff00.png	512x512	alpha_composite	soft editorial paper puff texture
+vfx_dust_puff_b.png	dust_mote	Kenney CC0	CC0-1.0	https://raw.githubusercontent.com/shorepine/kenney/master/2d/Smoke%20Particles/White%20puff/whitePuff04.png	512x512	alpha_composite	soft editorial puff transition
+vfx_paper_grain_overlay.png	paper_grain	AmbientCG Paper001	CC0-1.0	https://ambientcg.com/get?file=Paper001_1K-JPG.zip	1920x1080	alpha_composite	subtle organic paper grain overlay
+vfx_soft_editorial_vignette.png	vignette	Stickman Hybrid CC0	CC0-1.0	local	1920x1080	alpha_composite	soft edge vignette mask
+vfx_dust_motes_plate.png	dust_motes	Stickman Hybrid CC0	CC0-1.0	local	1920x1080	alpha_composite	subtle floating dust motes
+vfx_hand_arrow_red.png	hand_arrow	oreo-design/doodle-icons (MIT)	MIT	https://raw.githubusercontent.com/oreo-design/doodle-icons/main/icons/arrow-right.svg	512x512	alpha_composite	hand-drawn hand_arrow overlay
+vfx_hand_ban_red.png	hand_stamp	oreo-design/doodle-icons (MIT)	MIT	https://raw.githubusercontent.com/oreo-design/doodle-icons/main/icons/ban.svg	512x512	alpha_composite	hand-drawn hand_stamp overlay
+vfx_paper_grain_cycle.webp	paper_grain	Stickman Hybrid CC0	CC0-1.0	https://ambientcg.com/get?file=Paper001_1K-JPG.zip	960x540@6f	alpha_composite	animated 11fps paper grain boil cycle
+vfx_dust_motes_drift.webp	dust_motes	Stickman Hybrid CC0	CC0-1.0	https://kenney.nl/assets/particle-pack	960x540@24f	alpha_composite	animated slow drifting sunlit dust motes
+vfx_anim_check_stroke.webp	hand_stamp	cyberalien/line-md (MIT)	MIT	https://raw.githubusercontent.com/cyberalien/line-md/main/svg/confirm.svg	256x256@16f	alpha_composite	animated hand-drawn emerald confirm check

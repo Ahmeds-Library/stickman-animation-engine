@@ -264,7 +264,7 @@ def scan_and_rebuild_registry(project_root):
         if not os.path.exists(s_dir):
             continue
         for fname in os.listdir(s_dir):
-            if fname.lower().endswith((".png", ".webp")):
+            if fname.lower().endswith((".png", ".webp", ".gif")):
                 full_path = os.path.join(s_dir, fname)
                 if os.path.getsize(full_path) < 1000:
                     continue
@@ -335,11 +335,24 @@ def register_sticker_in_global_vault(src_png, slug_name, tags=""):
     return None
 
 
-def find_reusable_sticker(query_text, project_root, threshold=0.70):
+ALCOHOL_EXCLUDE_TOKENS = {"wine", "beer", "champagne", "ale", "liquor", "whiskey", "vodka"}
+SODA_SPECIFIC_TOKENS = {"soda", "cola", "fizzy", "softdrink", "sprite", "coke", "pepsi"}
+MINI_SCENE_SLUGS = {"skull_fossil", "scientific_field_researcher", "tribal_storytelling_pie", "campfire_circle"}
+MODERN_ONLY_PROPS = {
+    "lightbulb", "bulb", "electric", "lamp", "phone", "smartphone", "laptop",
+    "computer", "screen", "watch", "clock", "alarm", "soda", "candy", "car",
+    "tv", "television", "camera", "microphone", "headphones", "battery", "robot", "rocket",
+}
+ANCIENT_CONTEXT_CUES = ("caveman", "cave", "hunter", "prehistoric", "stone age", "ice age", "ancient", "fossil", "roman", "egypt", "persia", "long before")
+MODERN_CONTEXT_CUES = ("today", "now", "modern", "currently", "industrial", "supermarket", "grocery", "processed")
+
+
+def find_reusable_sticker(query_text, project_root, threshold=0.70, single_object_only=False, era_context=""):
     """Finds existing sticker in 3-tier order:
     Tier 0: Local project short/long elements/cut/
     Tier 1: Global skills/stickman-stickers/assets/flow_vault/ (Owned-Flow priority)
     Tier 2: Global skills/stickman-stickers/assets/cc0_library/ (CC0-1.0 fallback)
+    Enforces strict Era Compatibility when era_context describes prehistoric/ancient narration.
     Score = 0.40 * Concept_Ontology + 0.35 * Token_Jaccard + 0.25 * Trigram_Cosine (+ bonuses)
     """
     registry = load_registry(project_root)
@@ -352,7 +365,12 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70):
     
     if not query_raw and not query_domains:
         return None
-        
+
+    wants_alcohol = bool(query_raw & ALCOHOL_EXCLUDE_TOKENS)
+    wants_soda = bool(query_raw & SODA_SPECIFIC_TOKENS)
+    era_l = str(era_context or "").lower()
+    ban_modern = any(c in era_l for c in ANCIENT_CONTEXT_CUES) and not any(m in era_l for m in MODERN_CONTEXT_CUES)
+
     best_match = None
     best_score = 0.0
     
@@ -360,9 +378,18 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70):
         cand_path = item["path"]
         if not os.path.exists(cand_path) or os.path.getsize(cand_path) < 1000:
             continue
+        cand_slug = os.path.splitext(os.path.basename(cand_path))[0].lower()
+        if single_object_only and cand_slug in MINI_SCENE_SLUGS:
+            continue
             
         cand_raw = set(item.get("tokens", []))
         cand_exp = set(item.get("expanded_tokens", []))
+        if not wants_alcohol and ((cand_raw | cand_exp) & ALCOHOL_EXCLUDE_TOKENS):
+            continue
+        if wants_soda and not ((cand_raw | cand_exp) & (SODA_SPECIFIC_TOKENS | {"can", "beverage"})):
+            continue
+        if ban_modern and ((cand_raw & MODERN_ONLY_PROPS) or any(m in cand_slug for m in ("lightbulb", "bulb", "smartphone", "laptop", "soda_can", "clock"))):
+            continue
         cand_domains = set(item.get("domains", []))
         if not cand_domains:
             cand_domains = get_concept_domains_for_tokens(cand_raw | cand_exp)
@@ -401,7 +428,11 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70):
         for key_root in SYNONYMS.keys():
             if (key_root in query_exp) and (key_root in cand_exp):
                 combined_score += 0.15
-                
+
+        # Prioritize bold 2D Owned-Flow art over simple vector wireframes
+        if "flow_vault" in cand_path or item.get("scope") == "flow_vault":
+            combined_score += 0.22
+
         if combined_score > best_score:
             best_score = combined_score
             best_match = item
@@ -414,9 +445,17 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70):
     if idx_mod:
         try:
             subj = extract_core_subject(query_text) or query_text
-            vault_hits = idx_mod.search_stickers(subj, min_score=max(0.45, threshold - 0.15), require_alpha_ok=True)
-            if vault_hits:
-                top = vault_hits[0]
+            vault_hits = idx_mod.search_stickers(
+                subj, min_score=max(0.45, threshold - 0.15),
+                require_alpha_ok=True, single_object_only=single_object_only
+            )
+            for top in vault_hits:
+                top_slug = os.path.splitext(os.path.basename(top["path"]))[0].lower()
+                top_toks = set(clean_tokens(f"{top_slug} {top.get('tags','')}"))
+                if not wants_alcohol and (top_toks & ALCOHOL_EXCLUDE_TOKENS):
+                    continue
+                if ban_modern and ((top_toks & MODERN_ONLY_PROPS) or any(m in top_slug for m in ("lightbulb", "bulb", "smartphone", "laptop", "soda_can", "clock"))):
+                    continue
                 return {
                     "name": top["name"],
                     "filename": os.path.basename(top["path"]),

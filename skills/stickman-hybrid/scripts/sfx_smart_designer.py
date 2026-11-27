@@ -46,7 +46,8 @@ BANNED_SFX_KEYWORDS = (
     "celesta", "sparkle", "twinkle", "chime", "bell", "ding", "jingle",
     "boing", "squeak", "cartoon", "coin", "magic", "laser", "sci-fi",
     "shimmer", "threetone", "twotone", "pepsound", "notification_ping",
-    "ping", "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out"
+    "ping", "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out",
+    "scratch", "chalk", "scroll", "marker", "pencil"
 )
 
 def collect_audio_catalog(sfx_root):
@@ -250,40 +251,45 @@ def pick_sfx_for_text(text, catalog, default_cat="paper", cooldown=None):
     cat_list = catalog.get(default_cat.lower()) or catalog.get("pops") or catalog.get("all", [])
     return cd.pick(cat_list)
 
+def _collect_music_candidates(music_root):
+    if not music_root or not os.path.exists(music_root):
+        return []
+    raw_candidates = []
+    for ext in ("*.mp3", "*.ogg", "*.wav"):
+        raw_candidates.extend(glob.glob(f"{music_root}/**/{ext}", recursive=True))
+    raw_candidates = sorted(raw_candidates)
+    candidates = [p for p in raw_candidates if "ambient_" not in os.path.basename(p).lower() and "/ambient_" not in p.lower()]
+    return candidates or raw_candidates
+
+
 def select_music_track(music_root, script_text=""):
     """Intelligently match background music to script theme.
     Bans airy/windy ambient_* drones. Prioritizes rhythmic/melodic documentary beds."""
-    raw_candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
-    candidates = [p for p in raw_candidates if "ambient_" not in os.path.basename(p).lower() and "/ambient_" not in p.lower()]
-    if not candidates:
-        candidates = raw_candidates
+    candidates = _collect_music_candidates(music_root)
     if not candidates:
         return None
     
     txt = script_text.lower()
-    if any(w in txt for w in ["ancient", "persia", "rome", "egypt", "king", "history"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["explainer", "history_serious", "ancient", "attic"])]
+    if any(w in txt for w in ["ancient", "persia", "rome", "egypt", "king", "history", "teeth", "cavity", "cavities", "diet", "sugar"]):
+        matched = [p for p in candidates if any(m in p.lower() for m in ["explainer", "chilllofir", "adventuring", "history_serious", "ancient", "attic", "be chillin"])]
         if matched: return matched[0]
     elif any(w in txt for w in ["physics", "science", "space", "star", "data", "quantum"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["data", "explainer", "clock", "dimension"])]
+        matched = [p for p in candidates if any(m in p.lower() for m in ["crystal_cave", "data", "explainer", "clock", "dimension"])]
         if matched: return matched[0]
-    elif any(w in txt for w in ["danger", "war", "crisis", "blackout", "panic", "survival"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["tension", "reveal", "action", "after the end"])]
+    elif any(w in txt for w in ["danger", "war", "crisis", "blackout", "panic", "survival", "mystery", "secret"]):
+        matched = [p for p in candidates if any(m in p.lower() for m in ["espionage", "tension", "reveal", "action", "after the end"])]
         if matched: return matched[0]
-    elif any(w in txt for w in ["curious", "mystery", "why", "secret", "discover"]):
-        matched = [p for p in candidates if any(m in p.lower() for m in ["explainer", "question", "asking", "attic"])]
+    elif any(w in txt for w in ["curious", "why", "discover", "happy", "growth"]):
+        matched = [p for p in candidates if any(m in p.lower() for m in ["feel_good_island", "explainer", "question", "asking", "attic"])]
         if matched: return matched[0]
     
-    chill = [p for p in candidates if any(m in p.lower() for m in ["explainer_lofi", "explainer", "chillin", "lofi", "roomscene"])]
+    chill = [p for p in candidates if any(m in p.lower() for m in ["chilllofir", "explainer_lofi", "explainer", "chillin", "lofi", "roomscene"])]
     return chill[0] if chill else candidates[0]
 
 def select_multi_act_music(music_root, script_text=""):
     """Returns a list of 4 melodic documentary tracks for Long-form progression.
     Bans airy ambient drones. Ensures continuous musical melody and rhythm."""
-    raw_candidates = glob.glob(f"{music_root}/**/*.mp3", recursive=True) if music_root else []
-    candidates = [p for p in raw_candidates if "ambient_" not in os.path.basename(p).lower() and "/ambient_" not in p.lower()]
-    if not candidates:
-        candidates = raw_candidates
+    candidates = _collect_music_candidates(music_root)
     if not candidates:
         return []
     
@@ -296,10 +302,10 @@ def select_multi_act_music(music_root, script_text=""):
             if m: return random.choice(m)
         return random.choice(candidates)
 
-    act1 = find_match(["explainer_01", "explainer", "asking questions", "question_01", "attic secrets"], ["explainer", "asking"])
-    act2 = find_match(["data_01", "history_serious", "ancient rite", "explainer_02", "data"], ["data", "history"])
-    act3 = find_match(["tension_01", "reveal_01", "tension", "reveal", "alternative clock dimension"], ["tension", "reveal"])
-    act4 = find_match(["reflective_01", "hopeful_01", "be chillin", "duru-roomscene-lofi", "a waltz for naseem"], ["reflective", "hopeful", "chillin"])
+    act1 = find_match(["chilllofir", "explainer_01", "explainer", "asking questions", "question_01", "attic secrets"], ["explainer", "asking", "chill"])
+    act2 = find_match(["data_01", "adventuring", "history_serious", "ancient rite", "explainer_02", "data"], ["data", "history", "adventuring"])
+    act3 = find_match(["espionage", "crystal_cave", "tension_01", "reveal_01", "tension", "reveal"], ["tension", "reveal", "espionage"])
+    act4 = find_match(["victory_theme_rpg", "feel_good_island", "reflective_01", "hopeful_01", "be chillin", "a waltz for naseem"], ["reflective", "hopeful", "chillin", "victory"])
     return [act1, act2, act3, act4]
 
 def compute_inputs_signature(project_dir="."):
@@ -455,6 +461,7 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
     # Load optional DIRECTOR_PLAN.json for physics-matched motion SFX & arrow draw-on sounds
     director_ov_map = {}
     director_arrows = []
+    director_annotations = []
     dp_path = os.path.join(project_dir, "DIRECTOR_PLAN.json")
     if os.path.exists(dp_path):
         try:
@@ -470,6 +477,8 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                         tB_s = float(d_ovs[oi + 1].get("sync_t", tA_s + 0.5)) if oi + 1 < len(d_ovs) else (tA_s + 0.5)
                         arr_t_s = max(tA_s + 0.18, tB_s - 0.36) if tB_s > tA_s + 0.30 else (tA_s + 0.18)
                         director_arrows.append((arr_t_s, dsc.get("cue", "")))
+                for ann in dsc.get("annotations", []):
+                    director_annotations.append((dsc.get("cue", ""), ann))
         except Exception:
             pass
 
@@ -486,13 +495,27 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                     token = os.path.basename(img_raw)
                     token_base = os.path.splitext(token)[0]
                     token_key = token_base.split(":")[0].strip()
-                    is_card = (img_raw in ("card", "card_stat", "card_phrase") or token in ("card", "card_stat", "card_phrase") or token_base in ("card", "card_stat", "card_phrase") or token_key in ("card", "card_stat", "card_phrase") or img_raw.startswith("card_") or token.startswith("card_"))
+                    is_card = (img_raw in ("card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace") or token in ("card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace") or token_base in ("card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace") or token_key in ("card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace") or img_raw.startswith(("card_", "strike_")) or token.startswith(("card_", "strike_")))
                     is_split = (img_raw in ("split_compare", "split_contrast") or token in ("split_compare", "split_contrast") or token_base in ("split_compare", "split_contrast") or token_key in ("split_compare", "split_contrast") or img_raw.startswith("split_") or token.startswith("split_"))
-                    is_data = (img_raw in ("bar_timeline", "stat_pie", "grid_week") or token in ("bar_timeline", "stat_pie", "grid_week") or token_base in ("bar_timeline", "stat_pie", "grid_week") or token_key in ("bar_timeline", "stat_pie", "grid_week") or img_raw.startswith(("timeline_", "bar_")) or token.startswith(("timeline_", "bar_")))
+                    is_breather = (img_raw in ("chapter_breather", "breather") or token_key in ("chapter_breather", "breather") or img_raw.startswith(("chapter_", "breather")) or token.startswith(("chapter_", "breather")))
+                    is_data = (img_raw in ("bar_timeline", "stat_pie", "grid_week", "scale_compare", "scale_bar") or token in ("bar_timeline", "stat_pie", "grid_week", "scale_compare", "scale_bar") or token_base in ("bar_timeline", "stat_pie", "grid_week", "scale_compare", "scale_bar") or token_key in ("bar_timeline", "stat_pie", "grid_week", "scale_compare", "scale_bar") or img_raw.startswith(("timeline_", "bar_", "scale_")) or token.startswith(("timeline_", "bar_", "scale_")))
 
-                    if is_card:
-                        card_slams = [p for p in catalog.get("paper-and-office", []) if "card" in p.lower() or "paper" in p.lower()] or \
-                                     [p for p in catalog.get("emphasis", []) if "paper_slam" in p.lower()] or \
+                    if is_breather:
+                        breather_sfx = [p for p in catalog.get("all", []) if "b3_swipe_paper" in p.lower() or "whoosh-soft" in p.lower() or "b2_map_unfold" in p.lower()]
+                        sf = COOLDOWN.pick(breather_sfx, fallback_pool=whooshes)
+                        if sf:
+                            cues.append({
+                                "label": f"breather_{cue.replace('@', '').replace('.', '_')}",
+                                "kind": "one",
+                                "file": sf,
+                                "at": f"{cur_scene_t0:.2f}",
+                                "dur": "-",
+                                "gain_db": "-11.0",
+                                "fade_in": "0",
+                                "fade_out": "0"
+                            })
+                    elif is_card:
+                        card_slams = [p for p in catalog.get("emphasis", []) if "b2_boom_soft" in p.lower() or "impactwood_light" in p.lower()] or \
                                      [p for p in catalog.get("paper", []) if "card-place-2" in p.lower()]
                         sf = COOLDOWN.pick(card_slams)
                         if sf:
@@ -502,13 +525,12 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                                 "file": sf,
                                 "at": f"{cur_scene_t0:.2f}",
                                 "dur": "-",
-                                "gain_db": "-4.5",
+                                "gain_db": "-9.0",
                                 "fade_in": "0",
                                 "fade_out": "0"
                             })
                     elif is_split:
-                        swishes = [p for p in catalog.get("paper-and-office", []) if "slide" in p.lower() or "paper" in p.lower()] or \
-                                  [p for p in catalog.get("swishes-and-zips", []) if "swish" in p.lower()] or whooshes
+                        swishes = [p for p in catalog.get("all", []) if "b3_swipe_paper" in p.lower() or "whoosh-soft" in p.lower()] or whooshes
                         sf = COOLDOWN.pick(swishes)
                         if sf:
                             cues.append({
@@ -517,23 +539,24 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                                 "file": sf,
                                 "at": f"{max(0.0, cur_scene_t0 - 0.08):.2f}",
                                 "dur": "-",
-                                "gain_db": "-5.0",
+                                "gain_db": "-10.5",
                                 "fade_in": "0",
                                 "fade_out": "0"
                             })
                     elif is_data:
-                        drawing_sfx = [p for p in catalog.get("writing-and-drawing", []) if "draw" in p.lower() or "tick" in p.lower() or "write" in p.lower()] or \
-                                      [p for p in catalog.get("interface", []) if "click" in p.lower()] or \
-                                      [p for p in catalog.get("all", []) if HIGHLIGHT_DATE_SFX in p.lower()]
-                        sf = COOLDOWN.pick(drawing_sfx, fallback_pool=whooshes)
+                        # Clean muted documentary sub-thud synced to surge/bar impact (zero scratchy/whistle noises!)
+                        sub_thuds = [p for p in catalog.get("all", []) if "b2_boom_soft" in p.lower() or "impactwood_light" in p.lower() or "boom-hit-soft" in p.lower()]
+                        sf = COOLDOWN.pick(sub_thuds)
+                        is_scale_s = (token.startswith("scale_") or img_raw.startswith("scale_"))
+                        hit_t = cur_scene_t0 + (0.96 if is_scale_s else 0.12)
                         if sf:
                             cues.append({
-                                "label": f"data_ping_{cue.replace('@', '').replace('.', '_')}",
+                                "label": f"data_thud_{cue.replace('@', '').replace('.', '_')}",
                                 "kind": "one",
                                 "file": sf,
-                                "at": f"{cur_scene_t0:.2f}",
+                                "at": f"{hit_t:.2f}",
                                 "dur": "-",
-                                "gain_db": "-4.5",
+                                "gain_db": "-8.5",
                                 "fade_in": "0",
                                 "fade_out": "0"
                             })
@@ -670,10 +693,58 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
         "legion": ("emphasis/b2_boom_soft_a.mp3", "-4.0")
     }
     
-    # Tactile Auditory Highlighter Pens: Subtly punctuate metrics, dates & statistical shifts (Zero chime/bell/sparkle)
+    # Tactile Auditory Highlighter Pens & Procedural Annotation SFX (Zero chime/bell/sparkle)
     HIGHLIGHT_DATE_SFX = "interface/click-mouse-soft.wav"
     HIGHLIGHT_METRIC_SFX = "emphasis/impactWood_light_000.ogg"
     HIGHLIGHT_CURIOSITY_SFX = "interface/click-button-medium.wav"
+    ANNOTATION_SFX_MAP = {
+        "strike_replace": (["emphasis/b2_boom_soft_a", "emphasis/impactwood_light_000"], "-10.5"),
+        "strike_x": (["emphasis/impactwood_light_000", "tactilev7/drop_"], "-11.0"),
+        "checklist_build": (["tactilev7/click_002", "tactilev7/click_004", "tactilev7/tick_001", "click-mouse-soft.wav"], "-11.5"),
+        "inset_shelf": (["tactilev7/click_003", "tactilev7/tick_002", "tactilev7/drop_001"], "-11.5"),
+        "spotlight_dim": (["swishes-and-zips/whoosh-soft-1", "b3_swipe_paper_e"], "-12.0"),
+        "pip_inset": (["paper/card-place-2", "tactilev7/click_005"], "-11.0"),
+        "pip_flashback": (["paper/card-place-2", "tactilev7/click_005"], "-11.0"),
+    }
+    for acue, ann in director_annotations:
+        akind = ann.get("kind", "")
+        if akind not in ANNOTATION_SFX_MAP:
+            continue
+        pats, gdb = ANNOTATION_SFX_MAP[akind]
+        pool = []
+        for pat in pats:
+            pool.extend([p for p in catalog.get("all", []) if pat in p.lower() and not any(bk in p.lower() for bk in BANNED_SFX_KEYWORDS)])
+        # Deduplicate preserving order
+        pool = list(dict.fromkeys(pool))
+        if not pool:
+            continue
+        # For checklist_build and inset_shelf, emit cleanly timed cues per revealed bullet/cutout
+        item_times = ann.get("item_times") if akind in ("checklist_build", "inset_shelf") else None
+        if item_times:
+            for it_i, it_t in enumerate(item_times):
+                sf_ann = COOLDOWN.pick(pool) or pool[it_i % len(pool)]
+                cues.append({
+                    "label": f"ann_{akind}_{it_i}_{str(acue).replace('@','').replace('.','_')}",
+                    "kind": "one",
+                    "file": sf_ann,
+                    "at": f"{float(it_t):.2f}",
+                    "dur": "-",
+                    "gain_db": gdb,
+                    "fade_in": "0",
+                    "fade_out": "0"
+                })
+        else:
+            sf_ann = COOLDOWN.pick(pool) or pool[0]
+            cues.append({
+                "label": f"ann_{akind}_{str(acue).replace('@','').replace('.','_')}",
+                "kind": "one",
+                "file": sf_ann,
+                "at": f"{float(ann.get('t0', 0.0)):.2f}",
+                "dur": "-",
+                "gain_db": gdb,
+                "fade_in": "0",
+                "fade_out": "0"
+            })
 
     if words_list:
         placed_times = set()
@@ -752,6 +823,37 @@ def generate_smart_cues(project_dir=".", out_tsv="cues_pro.tsv", is_shorts=False
                             "fade_out": "0"
                         })
 
+    # Enforce strict >= 0.30s minimum spacing cooldown across short UI ticks/pops/flips/scratches (zero mechanical rattle)
+    ui_prefixes = ("ann_checklist", "ann_inset", "ann_micro", "pop_", "highlighter_")
+    ui_indexed = []
+    other_cues = []
+    for c in cues:
+        if c.get("kind") == "one" and str(c.get("label", "")).startswith(ui_prefixes):
+            ui_indexed.append(c)
+        else:
+            other_cues.append(c)
+
+    def _safe_float_at(val):
+        try:
+            return float(val)
+        except Exception:
+            return None
+
+    ui_indexed.sort(key=lambda x: _safe_float_at(x.get("at")) or 0.0)
+    spaced_ui = []
+    last_ui_t = -9.9
+    for c in ui_indexed:
+        t_v = _safe_float_at(c.get("at"))
+        if t_v is None:
+            spaced_ui.append(c)
+            continue
+        if t_v - last_ui_t < 0.30:
+            t_v = round(last_ui_t + 0.30, 2)
+            c["at"] = f"{t_v:.2f}"
+        last_ui_t = t_v
+        spaced_ui.append(c)
+    cues = other_cues + spaced_ui
+
     # Write cues_pro.tsv with cryptographic signature
     target_out = os.path.join(project_dir, out_tsv)
     sig = compute_inputs_signature(project_dir)
@@ -775,11 +877,11 @@ if __name__ == "__main__":
     p_dir = sys.argv[1] if (len(sys.argv) > 1 and not sys.argv[1].startswith("-")) else "."
     is_s = "--short" in sys.argv or "--shorts" in sys.argv or "short" in p_dir.lower()
     force_gen = "--force" in sys.argv or "-f" in sys.argv
-    outro_s = 0.0
+    outro_s = 0.0 if is_s else 0.0
     for idx_arg, arg_v in enumerate(sys.argv):
         if arg_v == "--outro-sec" and idx_arg + 1 < len(sys.argv):
             try:
-                outro_s = float(sys.argv[idx_arg + 1])
+                outro_s = 0.0 if is_s else float(sys.argv[idx_arg + 1])
             except ValueError:
                 pass
     if outro_s == 0.0 and not is_s:

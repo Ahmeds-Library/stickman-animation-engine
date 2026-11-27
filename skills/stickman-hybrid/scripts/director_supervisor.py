@@ -34,10 +34,46 @@ SEMANTIC_ROOTS = {
     "metal": {"tin", "copper", "bronze", "ingot", "metal", "alloy", "weapon", "weapons", "sword", "spear", "blade", "armor"},
     "document": {"tablet", "clay", "cuneiform", "scroll", "letter", "letters", "archive", "record", "records", "book", "map"},
     "money": {"coin", "gold", "trade", "economy", "wealth", "price", "cost", "merchant", "market"},
-    "science": {"dna", "atom", "planet", "thermometer", "cold", "freeze", "ice", "volcano", "brain", "lightbulb"},
+    "science": {"dna", "atom", "planet", "thermometer", "cold", "freeze", "ice", "volcano", "brain"},
     "time": {"clock", "alarm", "year", "years", "century", "bc", "timeline", "ancient"},
     "warrior": {"warrior", "soldier", "helmet", "shield", "sword", "army", "invader", "invasion", "battle"},
+    "fossil": {"skull", "jaw", "jawbone", "fossil", "fossils", "bone", "skeleton", "enamel", "tooth", "teeth"},
 }
+
+PREHISTORIC_ANCIENT_CUES = {
+    "caveman", "cave", "hunter", "hunters", "gatherer", "gatherers", "prehistoric",
+    "stone age", "ice age", "ancient", "fossil", "fossils", "paleolithic", "neolithic",
+    "bronze age", "rome", "roman", "egypt", "persia", "mesopotamia", "before brushes",
+    "long before", "antiquity", "tribes", "tribal", "ancestors", "forager", "foragers",
+}
+MODERN_CONTRAST_CUES = {
+    "today", "now", "modern", "currently", "20th", "21st", "industrial",
+    "supermarket", "grocery", "processed", "factory", "nowadays", "recent",
+}
+MODERN_ELECTRIC_DIGITAL_PROPS = {
+    "lightbulb", "bulb", "electric", "lamp", "phone", "smartphone", "laptop",
+    "computer", "screen", "watch", "clock", "alarm", "soda", "soda_can", "cola",
+    "candy", "car", "tv", "television", "camera", "microphone", "headphones",
+    "battery", "robot", "rocket", "airplane", "fridge", "briefcase",
+}
+GENERIC_METAPHOR_PROPS = {"mit_anim_lightbulb_glow", "cc0_anim_sparkle_burst", "mit_anim_clock_tick"}
+
+
+def is_era_compatible(sticker_toks, context_corpus):
+    """Prevents modern electric/digital/industrial props on prehistoric/ancient scenes unless explicitly contrasted."""
+    stk_low = {str(t).lower() for t in sticker_toks}
+    is_modern_prop = bool(stk_low & MODERN_ELECTRIC_DIGITAL_PROPS) or any(
+        any(m in t for m in ("lightbulb", "bulb", "smartphone", "laptop", "soda_can", "alarm_clock", "tv_")) for t in stk_low
+    )
+    if not is_modern_prop:
+        return True
+    ctx_l = str(context_corpus or "").lower()
+    ctx_toks = set(re.findall(r"\b[a-z0-9_]+\b", ctx_l))
+    has_ancient = any(c in ctx_l for c in PREHISTORIC_ANCIENT_CUES)
+    has_modern_contrast = bool(ctx_toks & MODERN_CONTRAST_CUES)
+    if has_ancient and not has_modern_contrast:
+        return False
+    return True
 
 DROP_WEIGHT_KWS = {"ingot", "tin", "ruin", "stone", "basalt", "skull", "fossil", "helmet", "anchor", "hammer", "milestone", "trench"}
 PEEL_REVEAL_KWS = {"tablet", "scroll", "book", "notebook", "clipboard", "map", "paper", "journal", "tag", "badge", "channel"}
@@ -312,6 +348,199 @@ def _find_best_word_in_window(words_list, t0, t1, sticker_img, sticker_desc, use
     return None, None
 
 
+def _extract_era_from_text(txt):
+    """Extracts concise chronological era/date anchor from spoken text."""
+    t = str(txt or "")
+    m_ago = re.search(r"\b(\d[\d,]*|fourteen\s+thousand|three\s+hundred\s+thousand|ten\s+thousand)\s+(years?|centuries)\s+ago\b", t, re.I)
+    if m_ago:
+        num = m_ago.group(1).upper()
+        if "FOURTEEN" in num:
+            num = "14,000"
+        elif "THREE HUNDRED" in num:
+            num = "300,000"
+        elif "TEN" in num:
+            num = "10,000"
+        return f"{num} {m_ago.group(2).upper()} AGO"
+    m_bc = re.search(r"\b(\d{3,4})\s*(BC|BCE|AD|CE)\b", t, re.I)
+    if m_bc:
+        return f"{m_bc.group(1)} {m_bc.group(2).upper()}"
+    m_yr = re.search(r"\b(1[4-9]\d{2}|20[0-2]\d)\b", t)
+    if m_yr:
+        return m_yr.group(1)
+    return ""
+
+
+def _match_items_to_words(items, words_in_win, t0, dur, min_tail=0.30):
+    """Aligns checklist or inset_shelf items strictly to matching spoken words in WORDS.tsv."""
+    n = max(1, len(items))
+    max_last_t = max(t0 + 0.05, t0 + dur - float(min_tail))
+    if not words_in_win:
+        step = min(0.85, max(0.18, (max_last_t - (t0 + 0.12)) / max(1, n - 1))) if n > 1 else 0.0
+        return [round(min(max_last_t, t0 + 0.12 + i * step), 3) for i in range(n)]
+    times = []
+    search_idx = 0
+    for i, item in enumerate(items):
+        lbl = item.get("label", "") if isinstance(item, dict) else str(item)
+        toks = set(re.findall(r"[a-z0-9]+", re.sub(r"^[✓✗→\-x:]+", "", lbl.lower())))
+        hit_t = None
+        for wi in range(search_idx, len(words_in_win)):
+            wt = re.sub(r"[^a-z0-9]", "", words_in_win[wi].get("word", "").lower())
+            if wt and (wt in toks or any(len(tk) >= 4 and (tk in wt or wt in tk) for tk in toks)):
+                hit_t = float(words_in_win[wi].get("start", t0))
+                search_idx = wi + 1
+                break
+        if hit_t is None:
+            fallback_frac = min(0.88, 0.08 + i * (0.76 / n))
+            hit_t = t0 + dur * fallback_frac
+        if times and hit_t <= times[-1] + 0.14:
+            hit_t = min(max_last_t, times[-1] + 0.26)
+        times.append(round(max(t0, hit_t), 3))
+    if times:
+        times[-1] = round(max(t0 + 0.04, min(times[-1], max_last_t)), 3)
+        for j in range(len(times) - 2, -1, -1):
+            if times[j] > times[j + 1] - 0.24:
+                times[j] = round(max(t0 + 0.04, times[j + 1] - 0.24), 3)
+    return times
+
+
+def _plan_scene_annotations(sc, spoken_text, words_in_win, scene_idx, total_scenes, is_card_or_split, current_era, directed_ovs=None):
+    """Plans restrained, non-overlapping procedural ink annotations (strict MAX 1 primary graphic per scene) synced to WORDS.tsv."""
+    t0 = sc["t0"]
+    t1 = sc["t1"]
+    dur = max(0.5, t1 - t0)
+    anns = []
+    new_era = _extract_era_from_text(spoken_text)
+    if new_era:
+        current_era = new_era
+
+    if is_card_or_split or dur < 1.1:
+        return anns, current_era
+
+    approved_ovs = [d for d in (directed_ovs or []) if d.get("status") != "REJECTED_REDUNDANT"]
+    extra_raw = str(sc.get("extra", "") or "")
+    extra_parts = [p.strip() for p in extra_raw.split(",") if p.strip()]
+    sp_low = spoken_text.lower()
+
+    # Track overlay lifetimes so strike_x never outlives its target sticker
+    ov_spans = {}
+    for d in (directed_ovs or []):
+        oi = d.get("idx", 0)
+        st = float(d.get("sync_t", t0))
+        en = min(t1, st + 2.8)
+        ov_spans[oi] = (st, en)
+
+    # 1. Explicit director directives in SCENES_HYBRID.tsv extra column
+    primary_placed = False
+    for ep in extra_parts:
+        epl = ep.lower()
+        if epl.startswith("strike_replace:") and not primary_placed:
+            spec = ep.split(":", 1)[1].strip()
+            parts = [x.strip() for x in spec.split("|")]
+            old_t = parts[0] if len(parts) > 0 else "MYTH"
+            new_t = parts[1] if len(parts) > 1 else "FACT"
+            place = parts[2].lower() if len(parts) > 2 else "below"
+            s_t = float(words_in_win[min(len(words_in_win) - 1, max(0, len(words_in_win) // 4))]["start"]) if words_in_win else (t0 + 0.25)
+            anns.append({
+                "kind": "strike_replace", "old_text": old_t, "new_text": new_t,
+                "placement": place, "t0": round(max(t0, s_t), 3), "t1": round(t1, 3), "cx": 0.50, "cy": 0.18
+            })
+            primary_placed = True
+        elif (epl.startswith("checklist:") or epl.startswith("checklist_build:")) and not primary_placed:
+            spec = ep.split(":", 1)[1].strip()
+            chk_title = ""
+            if ";" in spec:
+                chk_title, _, spec = spec.partition(";")
+                chk_title = chk_title.strip()
+            items = [x.strip() for x in spec.split("|") if x.strip()][:4]
+            if items:
+                it_times = _match_items_to_words(items, words_in_win, t0, dur)
+                anns.append({
+                    "kind": "checklist_build", "title": chk_title, "items": items, "item_times": it_times,
+                    "t0": round(t0, 3), "t1": round(t1, 3), "side": "auto"
+                })
+                primary_placed = True
+        elif epl.startswith("inset_shelf:") and not primary_placed:
+            spec = ep.split(":", 1)[1].strip()
+            raw_items = [x.strip() for x in spec.split("|") if x.strip()][:3]
+            items = []
+            for ri in raw_items:
+                if "=" in ri:
+                    img_k, _, lbl_k = ri.partition("=")
+                    items.append({"img": img_k.strip(), "label": lbl_k.strip()})
+                else:
+                    items.append({"img": ri, "label": ri.replace("_", " ").upper()})
+            if items:
+                it_times = _match_items_to_words(items, words_in_win, t0, dur, min_tail=0.55)
+                anns.append({
+                    "kind": "inset_shelf", "items": items, "item_times": it_times,
+                    "t0": round(t0, 3), "t1": round(t1, 3)
+                })
+                primary_placed = True
+        elif epl.startswith("circle_focus") and not primary_placed:
+            # Strict Mandate: NEVER auto-generate red circles over characters or around stickers!
+            # Only dormant support for explicit map coordinates on geographic map shots.
+            coords = re.findall(r"0?\.\d+", ep) if ":" in ep else []
+            sc_img_l = str(sc.get("img", "")).lower()
+            is_map_target = ("map" in sc_img_l or "map" in str(sc.get("space", "")).lower())
+            c_t = float(words_in_win[len(words_in_win) // 4]["start"]) if words_in_win else (t0 + 0.25)
+            if is_map_target and len(coords) >= 4:
+                anns.append({
+                    "kind": "circle_focus", "verified_map_target": True,
+                    "t0": round(max(t0, c_t), 3), "t1": round(min(t1, max(t0, c_t) + min(2.4, dur)), 3),
+                    "cx": float(coords[0]), "cy": float(coords[1]), "rx": float(coords[2]), "ry": float(coords[3])
+                })
+                primary_placed = True
+        elif epl.startswith(("pip_inset", "pip_flashback")) and not primary_placed and not approved_ovs:
+            src_tok = ""
+            lbl = "EVIDENCE" if epl.startswith("pip_inset") else "CALLBACK"
+            if ":" in ep:
+                arg = ep.split(":", 1)[1].strip()
+                if "|" in arg:
+                    src_tok, _, lbl = arg.partition("|")
+                else:
+                    src_tok = arg
+            p_t = t0 + 0.20
+            anns.append({
+                "kind": "pip_inset", "src_img": src_tok.strip(), "label": lbl.strip() or "EVIDENCE",
+                "t0": round(p_t, 3), "t1": round(t1, 3)
+            })
+            primary_placed = True
+        elif epl.startswith("strike_x:") and approved_ovs:
+            targ = ep.split(":", 1)[1].strip()
+            sx_t = float(words_in_win[len(words_in_win) // 2]["start"]) if words_in_win else (t0 + 0.35)
+            anns.append({
+                "kind": "strike_x", "target_sticker": targ,
+                "t0": round(max(t0, sx_t), 3), "t1": round(t1, 3), "cx": 0.50, "cy": 0.42
+            })
+
+    # Attach strike_x ONLY onto an existing sticker, locked strictly to that sticker's active span (zero orphan X!)
+    for ov_i, ov in enumerate(sc.get("overlays", [])):
+        o_ex = str(ov.get("extra", "")).lower()
+        if "strike_x" in o_ex or "dismiss" in o_ex:
+            st_s, en_s = ov_spans.get(ov_i, (float(ov.get("raw_t", t0)), t1))
+            anns.append({
+                "kind": "strike_x", "target_ov_idx": ov_i,
+                "t0": round(min(en_s - 0.15, max(t0 + 0.25, st_s + 0.28)), 3),
+                "t1": round(en_s, 3), "cx": 0.50, "cy": 0.42
+            })
+
+    if anns or primary_placed or approved_ovs:
+        return anns[:2], current_era
+
+    # 2. Target 55-70% purposeful visual accents across illustrated shots (including Scene 0 opening hook!)
+    # Never stamp red !/? over characters — use kinetic upper-edge emphasis or callback PiP cleanly clear of heads.
+    if scene_idx == 0 and dur >= 1.5:
+        h_toks = [w.get("word", "").strip(",.!?").upper() for w in words_in_win[:3] if len(w.get("word", "").strip(",.!?")) >= 3]
+        hook_lbl = f"PROOF: {' '.join(h_toks[:2])}" if h_toks else "REAL EVIDENCE"
+        if not current_era and not re.search(r"\b(?:19|18|14|15|20)\d{2}\b", spoken_text):
+            current_era = hook_lbl
+    elif scene_idx >= max(2, total_scenes - 1) and total_scenes >= 4 and dur >= 2.4:
+        p_t = t0 + 0.25
+        anns.append({"kind": "pip_inset", "t0": round(p_t, 3), "t1": round(min(t1, p_t + min(2.6, dur - 0.3)), 3), "label": "CALLBACK"})
+
+    return anns[:1], current_era
+
+
 def _infer_shot_function(idx, total_scenes, spoken_text, img_tok):
     norm = idx / max(1, total_scenes - 1)
     txt = spoken_text.lower()
@@ -321,7 +550,7 @@ def _infer_shot_function(idx, total_scenes, spoken_text, img_tok):
         return "cta"
     if 0.65 <= norm <= 0.88 and any(k in txt for k in ("turns out", "actually", "truth", "real reason", "surprise", "discovered")):
         return "twist"
-    if str(img_tok).startswith(("card", "split", "bar_", "stat_", "timeline")):
+    if str(img_tok).startswith(("card", "split", "bar_", "stat_", "timeline", "chapter_", "breather", "scale_", "strike_")):
         return "evidence"
     if norm >= 0.80:
         return "payoff"
@@ -452,6 +681,7 @@ def supervise_project(project_dir=".", pre_spend=False):
     scale_sequence = []
     director_scenes = []
     prev_cam_move = None
+    current_era = ""
 
     thesis, key_terms, facts_list = _extract_thesis_terms_facts(lines_rows, scene_rows, project_dir)
     cast_anchors = _build_cast_anchors(shots_rows)
@@ -461,7 +691,7 @@ def supervise_project(project_dir=".", pre_spend=False):
         hold_sec = round(max(0.1, t1 - t0), 3)
         shot_base = os.path.splitext(os.path.basename(sc["img"]))[0].split(":")[0]
         shot_prompt = shots_prompt_map.get(shot_base, shots_prompt_map.get(sc["img"], ""))
-        is_editorial_card = shot_base.startswith(("card", "split", "bar_", "stat_", "timeline"))
+        is_editorial_card = shot_base.startswith(("card", "split", "bar_", "stat_", "timeline", "chapter_", "scale_", "strike_"))
 
         # Collect spoken words & matching line text in [t0-0.5, t1+0.5]
         spoken_words = [w for w in words_rows if (t0 - 0.5) <= float(w.get("start", 0.0)) <= (t1 + 0.5)]
@@ -520,7 +750,9 @@ def supervise_project(project_dir=".", pre_spend=False):
         directed_ovs = []
         scene_approved_stk = set()
         shot_primary_toks = _tok(shot_prompt)
-        spoken_exp = _expand(_tok(f"{spoken_text} {sc['text']}"))
+        spoken_raw_toks = _tok(f"{spoken_text} {sc['text']}")
+        spoken_exp = _expand(spoken_raw_toks)
+        scene_corpus = f"{spoken_text} {shot_prompt} {sc['text']}"
 
         for k_idx, ov in enumerate(sc["overlays"]):
             stk_base = os.path.splitext(os.path.basename(ov["img"]))[0]
@@ -528,14 +760,17 @@ def supervise_project(project_dir=".", pre_spend=False):
             stk_raw_toks = _tok(f"{stk_base} {stk_desc}")
             stk_exp_toks = _expand(stk_raw_toks)
 
-            # 1. Logical Relevance Audit
+            # 1. Strict Literal + Era Logical Relevance Audit
             status = "APPROVED"
-            reason = "Aligned with spoken concept and distinct from background shot"
+            reason = "Literal spoken proof and era-compatible distinct from background shot"
             is_special = stk_base in ("stamp_x", "stamp_check", "stamp_false", "stamp_true", "stamp_myth", "count", "tag") or ov["img"].startswith("bars:")
 
             if not is_special and stk_base in scene_approved_stk:
                 status = "REJECTED_REDUNDANT"
                 reason = f"Duplicate identical sticker '{stk_base}' already active in scene {sc['cue']}"
+            elif not is_special and not is_era_compatible(stk_raw_toks | stk_exp_toks, scene_corpus):
+                status = "REJECTED_ERA_MISMATCH"
+                reason = f"Modern/electric prop '{stk_base}' incompatible with prehistoric/ancient scene '{spoken_text[:60].strip()}'"
             elif not is_special and not is_editorial_card and shot_primary_toks:
                 # Auto-reject redundant sticker if background shot's focal prompt already centers the identical prop
                 direct_dup = len(stk_raw_toks & shot_primary_toks)
@@ -543,17 +778,28 @@ def supervise_project(project_dir=".", pre_spend=False):
                     status = "REJECTED_REDUNDANT"
                     reason = f"Redundant with scene shot '{sc['img']}': shot already illustrates {sorted(stk_raw_toks & shot_primary_toks)}"
 
-            if status == "APPROVED" and not is_special and spoken_exp:
+            if status == "APPROVED" and not is_special and (spoken_raw_toks or spoken_exp):
+                literal_hits = len(stk_raw_toks & spoken_raw_toks)
                 rel_hits = len(stk_exp_toks & spoken_exp)
-                if rel_hits == 0 and not is_editorial_card:
+                is_generic_meta = stk_base.lower() in GENERIC_METAPHOR_PROPS
+                if (is_generic_meta and literal_hits == 0) or (literal_hits == 0 and rel_hits == 0 and not is_editorial_card):
+                    status = "FLAGGED_OFFTOPIC" if rel_hits == 0 and not is_generic_meta else "REJECTED_NONLITERAL"
+                    reason = f"Non-literal or off-topic prop '{stk_base}' for spoken clause '{spoken_text[:70].strip()}'"
+                elif not is_editorial_card and stk_base in {"skull_fossil", "scientific_field_researcher", "tribal_storytelling_pie", "campfire_circle"}:
+                    continuity_warnings.append(f"Mini-scene prop '{stk_base}' on overlay {ov['cue']}; prefer single isolated object prop")
+                elif ("wine" in stk_raw_toks or "beer" in stk_raw_toks) and ({"soda", "cola", "pop", "coffee", "juice"} & spoken_exp) and not ({"wine", "beer", "alcohol"} & spoken_exp):
                     status = "FLAGGED_OFFTOPIC"
-                    reason = f"No keyword/semantic overlap with spoken clause '{spoken_text[:70].strip()}'"
+                    reason = f"Alcohol prop '{stk_base}' conflicts with non-alcoholic spoken beverage"
 
             if status == "APPROVED":
                 approved_count += 1
                 scene_approved_stk.add(stk_base)
             elif status == "REJECTED_REDUNDANT":
                 rejected_count += 1
+            elif status == "REJECTED_ERA_MISMATCH":
+                audit_flags.append({"code": "ERA_MISMATCH", "cue": ov["cue"], "penalty": 12, "msg": reason})
+            elif status == "REJECTED_NONLITERAL":
+                audit_flags.append({"code": "NONLITERAL_STICKER", "cue": ov["cue"], "penalty": 8, "msg": reason})
             else:
                 flagged_count += 1
 
@@ -607,6 +853,12 @@ def supervise_project(project_dir=".", pre_spend=False):
                 "exit_ease_sec": 0.22,
             })
 
+        words_in_win = [w for w in words_rows if t0 - 0.05 <= float(w.get("start", 0.0)) < t1]
+        scene_anns, current_era = _plan_scene_annotations(
+            sc, spoken_text, words_in_win, sc["scene_idx"], len(scenes), is_editorial_card, current_era,
+            directed_ovs=directed_ovs
+        )
+
         director_scenes.append({
             "scene_idx": sc["scene_idx"],
             "cue": sc["cue"],
@@ -622,6 +874,8 @@ def supervise_project(project_dir=".", pre_spend=False):
             "fg_mg_bg": fg_mg_bg,
             "camera_move": cam_move,
             "group_pattern": group_pattern,
+            "era_anchor": current_era,
+            "annotations": scene_anns,
             "spoken_preview": spoken_text[:120].strip(),
             "overlays": directed_ovs,
         })
@@ -658,6 +912,13 @@ def supervise_project(project_dir=".", pre_spend=False):
             audit_flags.append({"code": "ADJECTIVE_SOUP", "cue": sid, "penalty": 6, "msg": msg})
             soup_hits.append(sid)
 
+    # 4. Ban Back-to-Back Blank/Editorial Cards (75-80%+ illustrated shots required!)
+    for i in range(1, len(scale_sequence)):
+        if scale_sequence[i - 1]["is_card"] and scale_sequence[i]["is_card"]:
+            msg = f"F_CONSECUTIVE_CARDS: {scale_sequence[i - 1]['cue']} -> {scale_sequence[i]['cue']} back-to-back blank/card scenes banned."
+            continuity_warnings.append(msg)
+            audit_flags.append({"code": "F_CONSECUTIVE_CARDS", "cue": scale_sequence[i]["cue"], "penalty": 18, "msg": msg})
+
     if rejected_count > 0:
         audit_flags.append({"code": "REDUNDANT_STICKER", "cue": "-", "penalty": min(24, rejected_count * 6),
                             "msg": f"{rejected_count} REJECTED_REDUNDANT sticker(s)"})
@@ -668,6 +929,8 @@ def supervise_project(project_dir=".", pre_spend=False):
         + min(15, sum(f["penalty"] for f in audit_flags if f["code"] == "F_METRONOME"))
         + min(24, sum(f["penalty"] for f in audit_flags if f["code"] == "ADJECTIVE_SOUP"))
         + sum(f["penalty"] for f in audit_flags if f["code"] == "REDUNDANT_STICKER")
+        + min(24, sum(f["penalty"] for f in audit_flags if f["code"] in ("ERA_MISMATCH", "NONLITERAL_STICKER")))
+        + min(25, sum(f["penalty"] for f in audit_flags if f["code"] == "F_CONSECUTIVE_CARDS"))
     )
     audit_score = max(0, 100 - total_penalty)
 

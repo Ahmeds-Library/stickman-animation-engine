@@ -498,6 +498,39 @@ sfx/Kenney_CC0/Emphasis/impactWood_light_000.ogg	Kenney_CC0	Emphasis	one	0.26	0.
 sfx/Kenney_CC0/Emphasis/impactWood_light_001.ogg	Kenney_CC0	Emphasis	one	0.26	0.001	-5.1			6373	1791567082
 sfx/Kenney_CC0/Stationery/metalClick.ogg	Kenney_CC0	Stationery	one	0.45	0.272	4.6			13615	1791567082
 sfx/Kenney_CC0/Stationery/metalLatch.ogg	Kenney_CC0	Stationery	one	0.26	0.045	-6.6			10208	1791567082
+sfx/Kenney_CC0/TactileV7/click_001.wav	Kenney_CC0	TactileV7	one	0.11	0.001	-1.7		CC0-1.0	10190	1795691113
+sfx/Kenney_CC0/TactileV7/click_002.wav	Kenney_CC0	TactileV7	one	0.01	0.000	-2.3		CC0-1.0	1102	1795691113
+sfx/Kenney_CC0/TactileV7/click_003.wav	Kenney_CC0	TactileV7	one	0.02	0.000	-1.4		CC0-1.0	1742	1795691114
+sfx/Kenney_CC0/TactileV7/click_004.wav	Kenney_CC0	TactileV7	one	0.02	0.000	-0.6		CC0-1.0	1998	1795691114
+sfx/Kenney_CC0/TactileV7/click_005.wav	Kenney_CC0	TactileV7	one	0.02	0.001	-2.1		CC0-1.0	1742	1795691115
+sfx/Kenney_CC0/TactileV7/drop_001.wav	Kenney_CC0	TactileV7	one	0.13	0.000	-5.1		CC0-1.0	23374	1795691117
+sfx/Kenney_CC0/TactileV7/drop_002.wav	Kenney_CC0	TactileV7	one	0.20	0.000	-5.0		CC0-1.0	35662	1795691117
+sfx/Kenney_CC0/TactileV7/drop_003.wav	Kenney_CC0	TactileV7	one	0.20	0.000	-4.9		CC0-1.0	35150	1795691118
+sfx/Kenney_CC0/TactileV7/drop_004.wav	Kenney_CC0	TactileV7	one	0.29	0.001	-5.1		CC0-1.0	52046	1795691118
+sfx/Kenney_CC0/TactileV7/scratch_001.wav	Kenney_CC0	TactileV7	one	0.16	0.018	-1.0		CC0-1.0	14286	1795691102
+sfx/Kenney_CC0/TactileV7/scratch_002.wav	Kenney_CC0	TactileV7	one	0.16	0.052	-1.2		CC0-1.0	14286	1795691102
+sfx/Kenney_CC0/TactileV7/scratch_003.wav	Kenney_CC0	TactileV7	one	0.12	0.004	4.1		CC0-1.0	11086	1795691103
+sfx/Kenney_CC0/TactileV7/scratch_004.wav	Kenney_CC0	TactileV7	one	0.35	0.020	-1.2		CC0-1.0	30670	1795691103
+sfx/Kenney_CC0/TactileV7/scratch_005.wav	Kenney_CC0	TactileV7	one	0.34	0.242	-1.1		CC0-1.0	30414	1795691104
+sfx/Kenney_CC0/TactileV7/scroll_001.wav	Kenney_CC0	TactileV7	one	1.02	0.600	-2.8		CC0-1.0	90062	1795691104
+sfx/Kenney_CC0/TactileV7/scroll_002.wav	Kenney_CC0	TactileV7	one	1.01	0.650	-2.1		CC0-1.0	89294	1795691105
+sfx/Kenney_CC0/TactileV7/scroll_003.wav	Kenney_CC0	TactileV7	one	1.01	0.000	-2.2		CC0-1.0	89294	1795691105
+sfx/Kenney_CC0/TactileV7/scroll_004.wav	Kenney_CC0	TactileV7	one	1.00	0.400	-1.8		CC0-1.0	88398	1795691106
+sfx/Kenney_CC0/TactileV7/scroll_005.wav	Kenney_CC0	TactileV7	one	1.02	0.200	-1.9		CC0-1.0	90318	1795691107
+sfx/Kenney_CC0/TactileV7/switch_001.wav	Kenney_CC0	TactileV7	one	0.62	0.108	-4.3		CC0-1.0	109390	1795691109
+sfx/Kenney_CC0/TactileV7/switch_002.wav	Kenney_CC0	TactileV7	one	0.62	0.001	-4.6		CC0-1.0	109390	1795691109
+sfx/Kenney_CC0/TactileV7/switch_003.wav	Kenney_CC0	TactileV7	one	0.50	0.009	-4.8		CC0-1.0	88910	1795691110
+sfx/Kenney_CC0/TactileV7/switch_004.wav	Kenney_CC0	TactileV7	one	0.50	0.107	-4.8		CC0-1.0	88910	1795691111
+sfx/Kenney_CC0/TactileV7/switch_005.wav	Kenney_CC0	TactileV7	one	0.62	0.004	-3.5		CC0-1.0	109390	1795691111
+sfx/Kenney_CC0/TactileV7/switch_006.wav	Kenney_CC0	TactileV7	one	0.62	0.003	-1.1		CC0-1.0	109390	1795691112
+sfx/Kenney_CC0/TactileV7/switch_007.wav	Kenney_CC0	TactileV7	one	0.62	0.109	-3.1		CC0-1.0	109390	1795691112
+sfx/Kenney_CC0/TactileV7/tick_001.wav	Kenney_CC0	TactileV7	one	0.04	0.000	1.2		CC0-1.0	4046	1795691107
+sfx/Kenney_CC0/TactileV7/tick_002.wav	Kenney_CC0	TactileV7	one	0.02	0.000	1.8		CC0-1.0	2126	1795691107
+sfx/Kenney_CC0/TactileV7/tick_004.wav	Kenney_CC0	TactileV7	one	0.06	0.048	-1.9		CC0-1.0	4942	1795691108
+sfx/Kenney_CC0/TactileV7/toggle_001.wav	Kenney_CC0	TactileV7	one	0.16	0.007	-2.0		CC0-1.0	14030	1795691115
+sfx/Kenney_CC0/TactileV7/toggle_002.wav	Kenney_CC0	TactileV7	one	0.14	0.015	-2.2		CC0-1.0	12494	1795691116
+sfx/Kenney_CC0/TactileV7/toggle_003.wav	Kenney_CC0	TactileV7	one	0.16	0.001	-0.1		CC0-1.0	14286	1795691116
+sfx/Kenney_CC0/TactileV7/toggle_004.wav	Kenney_CC0	TactileV7	one	0.07	0.000	-1.6		CC0-1.0	6606	1795691116
 sfx/Kenney_CC0/Casino/cardFan1.ogg	Kenney_CC0	Casino	one	0.72	0.581	8.2			30824	1795362868
 sfx/Kenney_CC0/Casino/cardFan2.ogg	Kenney_CC0	Casino	one	1.31	1.055	-0.4			47541	1795362869
 sfx/Kenney_CC0/Casino/cardOpenPackage1.ogg	Kenney_CC0	Casino	one	1.08	0.408	-6.4			31496	1795362869
@@ -1369,6 +1402,7 @@ sfx/StableAudio/Crowd/b3_footsteps_wood_b.mp3	StableAudio	Crowd	one	2.61	0.836	-
 sfx/StableAudio/Crowd/b3_kids_laugh_a.mp3	StableAudio	Crowd	one	1.98	0.748	-3.4			48945	1791582060
 sfx/StableAudio/Crowd/b3_kids_laugh_b.mp3	StableAudio	Crowd	one	2.20	0.491	-3.1			54587	1791582060
 sfx/StableAudio/Tonal/b2_celesta_sparkle_a.mp3	StableAudio	Tonal	one	0.19	0.006	24.7			6313	1791587054
+sfx/StableAudio/Tonal/b2_celesta_sparkle_b.mp3	StableAudio	Tonal	one	0.16	0.005	24.6			3596	1795527288
 sfx/StableAudio/Tonal/b2_glock_ding_a.mp3	StableAudio	Tonal	one	0.77	0.006	12.3			20106	1791587056
 sfx/StableAudio/Tonal/b2_glock_ding_b.mp3	StableAudio	Tonal	one	0.84	0.006	15.9			21360	1791587056
 sfx/StableAudio/Tonal/b2_harp_gliss_a.mp3	StableAudio	Tonal	one	2.65	0.139	5.2			65245	1791587056
@@ -1590,27 +1624,32 @@ music/Gemini/data/data_03.mp3	Gemini	data	music	178.64	0.000	0.8			4288932	17916
 music/Gemini/ambient_space/ambient_space_01.mp3	Gemini	ambient_space	music	172.52	0.000	0.4			4142228	1791614910
 music/Gemini/ambient_space/ambient_space_02.mp3	Gemini	ambient_space	music	170.98	0.000	0.3			4105239	1791614928
 music/Gemini/tech/tech_01.mp3	Gemini	tech	music	178.32	0.000	0.3			4281409	1791614208
-music/CC0_PublicDomain/A Waltz For Naseem.mp3	own	CC0_PublicDomain	music	216.79	0.000	4.4			3472611	1795364131
+music/CC0_PublicDomain/A Waltz For Naseem.mp3	own	CC0_PublicDomain	music	215.73	0.000	4.7			5179311	1795755037
 music/CC0_PublicDomain/Abstract Anxiety.mp3	own	CC0_PublicDomain	music	268.85	0.000	-0.8			4305649	1795364123
 music/CC0_PublicDomain/Action Strike.mp3	own	CC0_PublicDomain	music	134.56	0.000	0.1			5377644	1795364110
-music/CC0_PublicDomain/Adventures of Flying Jack.mp3	own	CC0_PublicDomain	music	73.00	0.000	-2.6			3065948	1795364128
 music/CC0_PublicDomain/Advertime.mp3	own	CC0_PublicDomain	music	134.14	0.000	0.6			5360940	1795364125
 music/CC0_PublicDomain/After the End.mp3	own	CC0_PublicDomain	music	97.80	0.000	0.0			3914314	1795364121
-music/CC0_PublicDomain/Alien Spaceship Atmosphere.mp3	own	CC0_PublicDomain	music	124.06	0.000	2.2			2485206	1795364127
+music/CC0_PublicDomain/Alien Spaceship Atmosphere.mp3	own	CC0_PublicDomain	music	122.89	0.000	2.4			2951537	1795755040
 music/CC0_PublicDomain/Alternative Clock Dimension.mp3	own	CC0_PublicDomain	music	144.07	0.000	10.4			5766709	1795364106
 music/CC0_PublicDomain/Ancient Rite.mp3	own	CC0_PublicDomain	music	113.21	0.000	4.1			4663306	1795364104
 music/CC0_PublicDomain/Aquatic City Vanished.mp3	own	CC0_PublicDomain	music	148.75	0.000	3.8			2977174	1795364132
 music/CC0_PublicDomain/Asking Questions.mp3	own	CC0_PublicDomain	music	104.25	0.000	2.7			4172397	1795364108
 music/CC0_PublicDomain/Attic Secrets.mp3	own	CC0_PublicDomain	music	66.40	0.000	4.3			2981663	1795364104
-music/CC0_PublicDomain/Bass Meant Jazz.mp3	own	CC0_PublicDomain	music	279.75	0.000	1.7			4479938	1795364133
-music/CC0_PublicDomain/Be Chillin.mp3	own	CC0_PublicDomain	music	202.55	0.000	5.5			8104261	1795364120
+music/CC0_PublicDomain/Bass Meant Jazz.mp3	own	CC0_PublicDomain	music	278.73	0.000	1.9			6691439	1795755046
+music/CC0_PublicDomain/Be Chillin.mp3	own	CC0_PublicDomain	music	201.26	0.000	5.7			4832289	1795755051
+music/CC0_PublicDomain/ChillLofiR.mp3	own	CC0_PublicDomain	music	123.17	0.000	4.3	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/chill-lofi-inspired)	2957314	1795755056
+music/CC0_PublicDomain/adventuring_song.mp3	own	CC0_PublicDomain	music	86.07	0.000	3.4	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/adventure-time)	2067507	1795755053
+music/CC0_PublicDomain/crystal_cave_song18.mp3	own	CC0_PublicDomain	music	49.56	0.000	2.8	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/crystal-cave-song18)	1191227	1795755057
 music/CC0_PublicDomain/duru-arcade-vibe.mp3	own	CC0_PublicDomain	music	62.60	0.000	-1.8			2506753	1795363621
 music/CC0_PublicDomain/duru-denparcade.mp3	own	CC0_PublicDomain	music	85.33	0.000	-2.9			3415814	1795363622
 music/CC0_PublicDomain/duru-rhythm-fever.mp3	own	CC0_PublicDomain	music	88.80	0.000	-2.2			3554786	1795363629
 music/CC0_PublicDomain/duru-rondo.mp3	own	CC0_PublicDomain	music	64.32	0.000	-2.1			2575716	1795363632
 music/CC0_PublicDomain/duru-roomscene-lofi.mp3	own	CC0_PublicDomain	music	104.00	0.000	-3.3			4162916	1795363639
 music/CC0_PublicDomain/duru-winter-arcade.mp3	own	CC0_PublicDomain	music	62.08	0.000	-2.4			2485855	1795363640
+music/CC0_PublicDomain/espionage.mp3	own	CC0_PublicDomain	music	73.83	0.000	8.2	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/espionage)	1773653	1795755058
+music/CC0_PublicDomain/feel_good_island.mp3	own	CC0_PublicDomain	music	112.42	0.000	5.3	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/feel-good-island)	2699642	1795755060
 music/CC0_PublicDomain/korobeiniki-arcade-fullver.mp3	own	CC0_PublicDomain	music	160.00	0.000	-5.4			6402132	1795363642
 music/CC0_PublicDomain/korobeiniki-boombap-loop.mp3	own	CC0_PublicDomain	music	48.00	0.000	-1.4			1922655	1795363643
 music/CC0_PublicDomain/mountainking-arcade-loop.mp3	own	CC0_PublicDomain	music	40.50	0.000	-1.2			1622769	1795363646
-sfx/StableAudio/Tonal/b2_celesta_sparkle_b.mp3	StableAudio	Tonal	one	0.16	0.005	24.6			3596	1795527288
+music/CC0_PublicDomain/victory_theme_rpg.mp3	own	CC0_PublicDomain	music	56.74	0.000	-0.7	melodic documentary music bed	CC0-1.0 (https://opengameart.org/content/victory-theme-for-rpg)	1363122	1795755062
+music/CC0_PublicDomain/Adventures of Flying Jack.mp3	own	CC0_PublicDomain	music	72.55	0.000	-2.3			1743217	1795757086

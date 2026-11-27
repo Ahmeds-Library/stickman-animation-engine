@@ -148,7 +148,9 @@ def generate_llm_prompt_specification(topic, format_type="both", lang="en", dura
         "curiosity_and_hook_toolkit": hook_toolkit,
         "mandates": [
             "NO textbook language or flat narration. Every line must carry tension, contrast, or curiosity.",
-            "0–15s Present-Day Mirror Hook: Open in 2nd person ('You' / conversational 'Tum') anchored in a relatable modern habit (bed, phone, alarm, coffee), then snap-rewind into history.",
+            "0–12s Present-Day Mirror Hook: Open in 2nd person ('You' / conversational 'Tum') anchored in a relatable modern habit (bed, phone, alarm, coffee) with 3-4 energetic illustrated beats (dynamic push/pull/slide_wipe transitions) into Act 1.",
+            "75–80%+ Illustrated Shots & Anti-Clutter Restraint: NEVER place two editorial/breather/stat cards back-to-back (space cards 2–3 illustrated shots apart). NEVER draw automatic red circles around stickers or !/? stamps over character faces; use dark translucent checklist pills, headroom-safe/flanking props, and borderless hero strike/scale typography.",
+            "Full-Circle Callback + Standalone 16:9 Music-Only Outro: End 9:16 Shorts cleanly on a crisp final punchline/callback (ZERO 16:9 end-screen boxes on Shorts); on 16:9 Long documentaries, finish narration with a brief breath then append the standalone music-only Outro (zero VO bleed).",
             "Myth-Flip + Named Proof Loop: State the official story everyone believes -> flip it with real named proof (researcher/historian + year + location + concrete metric).",
             "Escalation & Open-Loop Bridges: End every act with a curiosity handoff into the next act so there are zero dead drop-off points.",
             "Full-Circle Emotional Payoff Ending: Always callback to the exact modern object/habit from the first 10 seconds to close the narrative loop.",
@@ -244,9 +246,20 @@ def calculate_line_gap(text, is_twist=False):
 
 
 PROGRAMMATIC_ARCHETYPES = {
-    "card", "card_stat", "card_phrase", "split_compare", "split_contrast",
-    "bar_timeline", "stat_pie", "stat_ring", "grid_week", "timeline"
+    "card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace",
+    "split_compare", "split_contrast",
+    "bar_timeline", "stat_pie", "stat_ring", "grid_week", "timeline",
+    "chapter_breather", "breather", "scale_compare", "scale_bar"
 }
+
+
+def normalize_natural_english(text):
+    """Converts telegraphic comma-separated 3+ item lists (e.g. 'sugar, coffee, soda!') to natural spoken conjunctions ('sugar, coffee, and soda!')."""
+    txt = str(text or "").strip()
+    m = re.match(r"^(.*?\b[A-Za-z0-9'-]+(?:\s+[A-Za-z0-9'-]+){0,2},\s+[A-Za-z0-9'-]+(?:\s+[A-Za-z0-9'-]+){0,2}),\s+([A-Za-z0-9'-]+(?:\s+[A-Za-z0-9'-]+){0,2})([.!?]?)$", txt)
+    if m and not re.search(r"\b(?:and|or|nor)\b\s*$", m.group(1), re.I) and not re.match(r"^(?:and|or|nor)\b", m.group(2), re.I):
+        return f"{m.group(1)}, and {m.group(2)}{m.group(3)}"
+    return txt
 
 
 def compile_pipeline_files(script_branch, out_dir, is_shorts=False, style_tag="bright"):
@@ -261,9 +274,11 @@ def compile_pipeline_files(script_branch, out_dir, is_shorts=False, style_tag="b
     for act in acts:
         for l in act.get("lines", []):
             if isinstance(l, str) and l.strip():
-                raw_lines.append(l.strip())
+                raw_lines.append(normalize_natural_english(l.strip()))
             elif isinstance(l, dict) and "text" in l:
-                raw_lines.append(l["text"].strip())
+                norm_t = normalize_natural_english(l["text"].strip())
+                l["text"] = norm_t
+                raw_lines.append(norm_t)
 
     if not raw_lines:
         raise ValueError(f"No narrative lines found in script branch for {out_dir}")
@@ -324,8 +339,8 @@ def compile_pipeline_files(script_branch, out_dir, is_shorts=False, style_tag="b
                 is_archetype = (
                     shot in PROGRAMMATIC_ARCHETYPES or
                     shot_token in PROGRAMMATIC_ARCHETYPES or
-                    shot.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                    shot_token.startswith(("card_", "split_", "timeline_", "stat_", "bar_"))
+                    shot.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "chapter_", "breather", "scale_")) or
+                    shot_token.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "chapter_", "breather", "scale_"))
                 )
 
                 prompt = s.get("prompt") or s.get("visual_description", "")

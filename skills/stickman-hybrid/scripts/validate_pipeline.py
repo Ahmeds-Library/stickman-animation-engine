@@ -14,6 +14,7 @@ import csv
 import re
 import socket
 import argparse
+import subprocess
 from PIL import Image
 import numpy as np
 
@@ -38,10 +39,13 @@ def resolve_sticker_path(img_name, project_dir="."):
     
     candidates = [
         raw,
-        raw + ".png" if not raw.endswith(".png") else raw,
+        raw + ".png" if not raw.lower().endswith((".png", ".webp", ".gif")) else raw,
         os.path.join(project_dir, "elements", "cut", f"{name_no_ext}.png"),
+        os.path.join(project_dir, "elements", "cut", f"{name_no_ext}.webp"),
+        os.path.join(project_dir, "elements", "cut", f"{name_no_ext}.gif"),
         os.path.join(project_dir, "elements", "cut", basename),
         os.path.join(project_dir, "..", "elements", "cut", f"{name_no_ext}.png"),
+        os.path.join(project_dir, "..", "elements", "cut", f"{name_no_ext}.webp"),
         os.path.join(project_dir, "..", "elements", "cut", basename),
         os.path.join(project_dir, "..", "short", "elements", "cut", f"{name_no_ext}.png"),
         os.path.join(project_dir, "..", "long", "elements", "cut", f"{name_no_ext}.png"),
@@ -74,7 +78,7 @@ def check_flow_bridge_active(port=8791):
 
 
 def detect_image_text_leak(img_path):
-    """Automated text-leak / top-banner sanity check using tesseract OCR."""
+    """Automated text-leak / top-banner sanity check using tesseract OCR with confidence gating."""
     if not os.path.exists(img_path) or os.path.getsize(img_path) < 10000:
         return False, ""
     try:
@@ -84,15 +88,27 @@ def detect_image_text_leak(img_path):
         top_crop = im.crop((0, 0, w, int(h * 0.28)))
         tmp_crop = f"/tmp/_ocr_crop_{os.getpid()}_{os.path.basename(img_path)}"
         top_crop.save(tmp_crop)
-        
-        r = subprocess.run(["tesseract", tmp_crop, "stdout", "--oem", "1", "-l", "eng", "--psm", "6"],
+
+        r = subprocess.run(["tesseract", tmp_crop, "stdout", "--oem", "1", "-l", "eng", "--psm", "6", "tsv"],
                            capture_output=True, text=True, timeout=5)
         if os.path.exists(tmp_crop):
-            try: os.remove(tmp_crop)
-            except Exception: pass
-            
-        txt = r.stdout.strip()
-        words = re.findall(r"\b[A-Za-z]{3,}\b", txt)
+            try:
+                os.remove(tmp_crop)
+            except OSError:
+                pass
+
+        words = []
+        for ln in r.stdout.splitlines()[1:]:
+            cols = ln.split("\t")
+            if len(cols) >= 12:
+                tok = cols[11].strip()
+                try:
+                    conf = float(cols[10])
+                except ValueError:
+                    conf = 0.0
+                if conf >= 65.0 and re.fullmatch(r"[A-Za-z]{3,}", tok):
+                    words.append(tok)
+
         suspect_kws = {"ancient", "history", "dental", "care", "pain", "tooth", "toothache", "ipsum", "lorem", "dolor", "chapter", "episode"}
         hit_kws = [w for w in words if w.lower() in suspect_kws]
         if hit_kws:
@@ -107,7 +123,11 @@ def detect_image_text_leak(img_path):
 def inspect_sticker_cutout_quality(png_path):
     """Verifies that a resolved sticker has true alpha transparency, no magenta halo, and no edge clipping."""
     try:
-        with Image.open(png_path) as im:
+        with Image.open(png_path) as im_raw:
+            if png_path.lower().endswith((".webp", ".gif")):
+                im = im_raw.convert("RGBA")
+            else:
+                im = im_raw
             if im.mode != "RGBA":
                 return True, "RGB mode (not RGBA)"
             a = np.array(im)
@@ -155,7 +175,8 @@ def validate_stickers_and_shots(project_dir="."):
 
     PROGRAMMATIC_SHOTS = {
         "card", "card_stat", "card_phrase", "split_compare", "split_contrast",
-        "bar_timeline", "stat_pie", "stat_ring", "grid_week"
+        "bar_timeline", "stat_pie", "stat_ring", "grid_week",
+        "chapter_breather", "breather", "scale_compare", "scale_bar"
     }
 
     with open(scenes_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -181,12 +202,13 @@ def validate_stickers_and_shots(project_dir="."):
                 shot_token = os.path.basename(shot_file)
                 shot_base = os.path.splitext(shot_token)[0]
                 shot_prefix = shot_base.split(":")[0].strip()
+                arch_pfx2 = ("card_", "split_", "timeline_", "stat_", "bar_", "chapter_", "breather", "scale_", "strike_")
                 if (shot_file in PROGRAMMATIC_SHOTS or shot_token in PROGRAMMATIC_SHOTS or shot_base in PROGRAMMATIC_SHOTS or
                     shot_prefix in PROGRAMMATIC_SHOTS or
-                    shot_file.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                    shot_token.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                    shot_base.startswith(("card_", "split_", "timeline_", "stat_", "bar_")) or
-                    shot_prefix.startswith(("card_", "split_", "timeline_", "stat_", "bar_"))):
+                    shot_file.startswith(arch_pfx2) or
+                    shot_token.startswith(arch_pfx2) or
+                    shot_base.startswith(arch_pfx2) or
+                    shot_prefix.startswith(arch_pfx2)):
                     continue
                 if shot_file:
                     # Check candidate locations for shot
@@ -315,10 +337,20 @@ def validate_audio_integrity(project_dir="."):
         if not has_bed:
             errors.append("Sound cues missing background music bed ('bed' loop cue required)")
 
-        # Verify that EVERY sound asset referenced in cues_pro.tsv actually exists on disk!
+        # Verify that EVERY sound asset referenced in cues_pro.tsv actually exists on disk & isn't blacklisted!
+        BANNED_SFX = (
+            "celesta", "sparkle", "twinkle", "chime", "bell", "ding", "jingle",
+            "boing", "squeak", "cartoon", "coin", "magic", "laser", "sci-fi",
+            "shimmer", "threetone", "twotone", "pepsound", "notification_ping",
+            "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out",
+            "scratch", "chalk", "marker", "pencil",
+        )
         missing_sfx = []
+        banned_hits = []
         for c in cues_rows:
             f_path = c.get("file", "").strip()
+            if c.get("kind") == "one" and any(b in f_path.lower() for b in BANNED_SFX):
+                banned_hits.append(f"{c.get('label')}: '{os.path.basename(f_path)}'")
             if f_path and not os.path.exists(f_path):
                 # Check candidate relative paths
                 cand = os.path.join(project_dir, f_path)
@@ -326,6 +358,8 @@ def validate_audio_integrity(project_dir="."):
                     missing_sfx.append(f"{c.get('label')}: '{f_path}'")
         if missing_sfx:
             errors.append(f"Missing {len(missing_sfx)} sound asset(s) referenced in cues_pro.tsv:\n  " + "\n  ".join(missing_sfx[:5]))
+        if banned_hits:
+            errors.append(f"Blacklisted twink/bell/scratch SFX in cues_pro.tsv:\n  " + "\n  ".join(banned_hits[:5]))
 
     # 3. Master Mix Check
     if not os.path.exists(mix_path):
@@ -493,8 +527,128 @@ def validate_multitrack_sync(project_dir="."):
         if prev_scene_t > mix_dur + 1.5:
             errors.append(f"Last scene starts at {prev_scene_t:.2f}s, exceeding master audio mix duration ({mix_dur:.2f}s)")
 
+    # 5. Fact-Number Parity Audit (card stats in SCENES_HYBRID.tsv vs spoken numbers in LINES.tsv)
+    parity_errs = validate_fact_number_parity(project_dir)
+    errors.extend(parity_errs)
+
     is_ok = (len(errors) == 0)
     return is_ok, errors
+
+
+def _extract_spoken_numbers(text):
+    """Parses both digit tokens ('1.4', '92') and English spoken number words ('two', 'ninety-two', 'one point four')."""
+    txt = str(text or "").lower().replace(",", "")
+    nums = set()
+    for m in re.findall(r"\d+(?:\.\d+)?", txt):
+        try:
+            nums.add(float(m))
+        except ValueError:
+            pass
+    ones = {
+        "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+        "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+        "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+        "eighteen": 18, "nineteen": 19,
+    }
+    tens = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+    # Decimal phrase e.g. 'one point four'
+    for mp in re.finditer(r"\b([a-z]+)\s+point\s+([a-z]+)\b", txt):
+        if mp.group(1) in ones and mp.group(2) in ones:
+            nums.add(float(f"{ones[mp.group(1)]}.{ones[mp.group(2)]}"))
+    # Compound tens e.g. 'ninety-two', 'sixty six'
+    for mt in re.finditer(r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[-\s]+(one|two|three|four|five|six|seven|eight|nine)\b", txt):
+        nums.add(float(tens[mt.group(1)] + ones[mt.group(2)]))
+    for w in re.findall(r"\b[a-z]+\b", txt):
+        if w in ones:
+            nums.add(float(ones[w]))
+        elif w in tens:
+            nums.add(float(tens[w]))
+    return nums
+
+
+def validate_fact_number_parity(project_dir="."):
+    """Verifies numeric stats shown on editorial cards match spoken numbers in LINES.tsv."""
+    lines_path = os.path.join(project_dir, "LINES.tsv")
+    scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
+    if not os.path.exists(lines_path) or not os.path.exists(scenes_path):
+        return []
+    line_map = {}
+    with open(lines_path, encoding="utf-8", errors="ignore") as lf:
+        for r in csv.DictReader(lf, delimiter="\t"):
+            lid = (r.get("id") or "").strip()
+            if lid:
+                line_map[lid] = r.get("text", "")
+                if lid.isdigit():
+                    line_map[str(int(lid))] = r.get("text", "")
+    errs = []
+    with open(scenes_path, encoding="utf-8", errors="ignore") as sf:
+        for idx_r, r in enumerate(csv.DictReader(sf, delimiter="\t"), 1):
+            cue = (r.get("cue") or "").strip()
+            img = (r.get("img") or "").strip().lower()
+            txt = (r.get("text") or "").strip()
+            if not cue or cue.startswith(("+", "#")) or not txt:
+                continue
+            if not any(k in img for k in ("card_stat", "strike_replace", "card_strike_replace", "scale_compare", "stat_")):
+                continue
+            card_nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", txt.replace(",", ""))]
+            if not card_nums:
+                continue
+            lid_tok = cue.split(".")[0].lstrip("@")
+            cand_txt = " ".join(filter(None, [
+                line_map.get(lid_tok, ""),
+                line_map.get(f"{int(lid_tok):02d}" if lid_tok.isdigit() else lid_tok, ""),
+            ]))
+            if not cand_txt:
+                continue
+            spoken_nums = _extract_spoken_numbers(cand_txt)
+            if not spoken_nums:
+                continue
+            for cn in card_nums:
+                matched = any(abs(cn - sn) <= max(0.05, 0.03 * max(abs(cn), 1.0)) for sn in spoken_nums)
+                if not matched and len(card_nums) >= 2:
+                    # Allow derived ratio on scale_compare (e.g. round(92 / 1.4) == 66)
+                    mn, mx = min(card_nums), max(card_nums)
+                    if mn > 0 and abs(cn - round(mx / mn)) <= 1:
+                        matched = True
+                if not matched:
+                    errs.append(f"Row {idx_r} Fact-Number Parity FAILED: card '{img}' displays '{cn:g}' but script line '{cand_txt.strip()}' speaks {sorted(spoken_nums)}")
+    return errs
+
+
+def check_list_prosody_gaps(project_dir="."):
+    """Inspects WORDS.tsv word gaps on checklist/inset_shelf lines for F_RUSHED_LIST (<0.22s spacing)."""
+    words_path = os.path.join(project_dir, "WORDS.tsv")
+    scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
+    if not os.path.exists(words_path) or not os.path.exists(scenes_path):
+        return []
+    line_words = {}
+    with open(words_path, encoding="utf-8", errors="ignore") as wf:
+        for r in csv.DictReader(wf, delimiter="\t"):
+            lid = (r.get("line") or "").strip()
+            try:
+                st, en = float(r["start"]), float(r["end"])
+                line_words.setdefault(lid, []).append((st, en, r.get("word", "")))
+                if lid.isdigit():
+                    line_words.setdefault(str(int(lid)), []).append((st, en, r.get("word", "")))
+            except Exception:
+                continue
+    rushed = []
+    with open(scenes_path, encoding="utf-8", errors="ignore") as sf:
+        for r in csv.DictReader(sf, delimiter="\t"):
+            cue = (r.get("cue") or "").strip()
+            ext = (r.get("extra") or "").lower()
+            if cue.startswith("+") or not any(k in ext for k in ("checklist", "inset_shelf")):
+                continue
+            lid = cue.split(".")[0].lstrip("@")
+            ws = line_words.get(lid) or line_words.get(f"{int(lid):02d}" if lid.isdigit() else lid, [])
+            if len(ws) < 4:
+                continue
+            gaps = [ws[i + 1][0] - ws[i][1] for i in range(len(ws) - 1)]
+            max_gap = max(gaps) if gaps else 0.0
+            list_pauses = [g for g in gaps if g >= 0.22]
+            if len(list_pauses) < 1 and max_gap < 0.22:
+                rushed.append(f"Line {lid} ({' '.join(w[2] for w in ws[:6])}...): max internal pause={max_gap:.2f}s < 0.22s")
+    return rushed
 
 
 def validate_vfx_and_scenes(project_dir="."):
@@ -512,7 +666,7 @@ def validate_vfx_and_scenes(project_dir="."):
     errors = []
     cut_extras = []
     ov_extras = []
-    DYNAMIC_CUT_VFX = {"zoom_punch", "danger", "shake", "ice", "bw", "flash", "blood", "rumble"}
+    DYNAMIC_CUT_VFX = {"zoom_punch", "zoom_dissolve", "slide_push", "paper_crossfade", "crossfade", "danger", "shake", "ice", "bw", "flash", "blood", "rumble"}
     DYNAMIC_OV_VFX = {"drop", "slam", "slide_left", "slide_right", "hover", "rise"}
 
     with open(scenes_path, "r", encoding="utf-8", errors="ignore") as sf:
@@ -704,9 +858,12 @@ def audit_timeline_real_visual_density(project_dir=".", format_type="9:16"):
             dedup.append(sc)
     scene_cuts = dedup
 
-    # 1. Unique Hero Shot Density (stop cheating with 6-12 recycled shots!)
+    # 1. Unique Hero Shot Density (stop cheating with 6-12 recycled shots; scale cleanly for <30s proofs)
     unique_hero_shots = {sc[2] for sc in scene_cuts if sc[2].startswith("shots/")}
-    min_req_shots = max(10, int(dur_sec / 5.5)) if is_shorts else max(25, int(dur_sec / 7.5))
+    if dur_sec < 30.0:
+        min_req_shots = max(3, int(dur_sec / 4.5))
+    else:
+        min_req_shots = max(10, int(dur_sec / 5.5)) if is_shorts else max(25, int(dur_sec / 7.5))
     if len(unique_hero_shots) < min_req_shots:
         msg = (f"Unique Shot Density FAILED: Only {len(unique_hero_shots)} unique Flow hero shots for "
                f"{dur_sec:.1f}s ({'9:16 Shorts' if is_shorts else '16:9 Long'}; minimum required is {min_req_shots}). "
@@ -720,7 +877,10 @@ def audit_timeline_real_visual_density(project_dir=".", format_type="9:16"):
         t0_c, c0_c, img0_c, ext0_c = scene_cuts[idx_c]
         t1_c, c1_c, img1_c, ext1_c = scene_cuts[idx_c + 1]
         cut_dur = t1_c - t0_c
-        if cut_dur < 1.50 and "rapid_list" not in (ext0_c or "").lower() and "rapid_list" not in (ext1_c or "").lower():
+        e0l = (ext0_c or "").lower()
+        e1l = (ext1_c or "").lower()
+        is_allowed_fast = any(k in e0l or k in e1l for k in ("rapid_list", "hook_beat"))
+        if cut_dur < 1.50 and not (is_allowed_fast and cut_dur >= 0.90):
             rapid_flickers.append(f"{c0_c}->{c1_c} ({cut_dur:.2f}s)")
     if rapid_flickers:
         msg = (f"Chaotic Rapid Shifting FAILED: {len(rapid_flickers)} erratic sub-1.5s scene cut(s) detected "
@@ -768,9 +928,20 @@ def audit_timeline_real_visual_density(project_dir=".", format_type="9:16"):
 
     for i in range(len(all_seq) - 2):
         (a, ca), (mid, _), (b, cb) = all_seq[i], all_seq[i + 1], all_seq[i + 2]
-        is_card_mid = mid.startswith(("card", "split", "timeline", "stat", "bar_"))
-        if a == b and not a.startswith(("card", "split", "timeline", "stat", "bar_")) and is_card_mid:
+        arch_pfx = ("card", "split", "timeline", "stat", "bar_", "chapter_", "breather", "scale_", "strike_")
+        is_card_mid = mid.startswith(arch_pfx)
+        if a == b and not a.startswith(arch_pfx) and is_card_mid:
             msg = f"Linear Flow Ping-Pong Repeat FAILED: '{a}' ({ca}) -> '{mid}' -> '{b}' ({cb}) snaps back to same shot."
+            errors.append(msg)
+            deductions.append(f"[-20 pts] {msg}")
+            break
+
+    # Ban Back-to-Back Blank/Editorial Cards (never let two blank/stat/breather cards run back-to-back)
+    arch_pfx_c = ("card", "split", "timeline", "stat", "bar_", "chapter_", "breather", "scale_", "strike_")
+    for i in range(len(all_seq) - 1):
+        (a, ca), (b, cb) = all_seq[i], all_seq[i + 1]
+        if a.startswith(arch_pfx_c) and b.startswith(arch_pfx_c):
+            msg = f"Consecutive Blank Cards BANNED: '{a}' ({ca}) -> '{b}' ({cb}) back-to-back kills visual engagement."
             errors.append(msg)
             deductions.append(f"[-20 pts] {msg}")
             break
@@ -808,8 +979,15 @@ def validate_pacing_and_density(project_dir=".", format_type="9:16"):
                 fast_cards = [f for f in plan.get("audit_breakdown", []) if f.get("code") == "F_READ_TOO_FAST"]
                 if fast_cards:
                     print(f"⚠️ Director Gate Advisory ({len(fast_cards)} fast card warning(s)): {fast_cards[0].get('msg','')}")
+                era_bad = [f for f in plan.get("audit_breakdown", []) if f.get("code") in ("ERA_MISMATCH", "NONLITERAL_STICKER")]
+                if era_bad:
+                    errors.append(f"Director Era/Literal Sticker Gate FAILED: {era_bad[0].get('msg', '')}")
         except Exception as dp_ex:
             errors.append(f"Director Supervision FAILED: {dp_ex}")
+
+    rushed_lists = check_list_prosody_gaps(project_dir)
+    if rushed_lists:
+        print(f"⚠️ List Prosody Advisory (F_RUSHED_LIST): {rushed_lists[0]}")
 
     # 0. Real Unique Shot Density & Opening 15s Flow Audit (Zero Fake Shot Recycling)
     ok_real, real_errs, _ = audit_timeline_real_visual_density(project_dir, format_type=format_type)

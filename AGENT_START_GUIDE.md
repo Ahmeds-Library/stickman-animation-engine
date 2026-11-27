@@ -55,7 +55,7 @@ Every AI agent must memorize and enforce these 10 non-negotiable rules:
 │   │   │   ├── vfx_smart_designer.py # Emotion & contextual visual effects director
 │   │   │   ├── sfx_smart_designer.py # Semantic sound design generator
 │   │   │   ├── flow_smart_generator.py# Google Flow prompt builder with 9:16 guards
-│   │   │   ├── validate_pipeline.py  # 5-Gate Pre-Render Quality Gate
+│   │   │   ├── validate_pipeline.py  # 6-Gate Pre-Render Quality Gate
 │   │   │   ├── render_pro.py         # Broadcast multi-layer video renderer with active sticker caps
 │   │   │   ├── evaluate_rl.py        # Autonomous RL QC evaluator with deduction aggregation
 │   │   │   └── rl_memory.py          # Continuous RL learning memory & self-tightening policies
@@ -513,17 +513,15 @@ Before handing any rendered `.mp4` to the user:
 
 ---
 
-## 🗺️ 13. Skills Ecosystem Map
+## 🗺️ 13. Skills Ecosystem & `v7` Documentary Engine Map
 
-The repository integrates these specialized skill systems:
-- **`skills/stickman-hybrid/`**: Master visual, full-bleed editorial archetype, collision-free multi-sticker, kinetic captioning, and video rendering engine.
-- **`skills/stickman-stickers/`**: Permanent 3-tier reusable sticker vault (`assets/flow_vault/` Tier 1 + `assets/cc0_library/` Tier 2 + live Google Flow auto-harvest + `CATALOG.tsv`).
-- **`skills/vox-doc-sound/`**: Voiceover synthesis, Whisper alignment, 1,600+ sound catalog, and 3-stem psychoacoustic audio mixing (-11 to -13 dB bed, -14 LUFS).
-- **`skills/youtube-seo-optimizer/`**: High-RPM metadata, search intent keywords, and chapter markers.
-- **`skills/emotional-arc-designer/`**: Peak-end rule emotional arousal curve modeling.
-- **`skills/visual-emotion-engineer/`**: Arousal-valence visual contrast and color temperature engineering.
-- **`skills/loss-aversion-designer/`**: Framing high-stakes evolutionary survival consequences.
-- **`skills/data-storytelling/`**: Narrative structure for complex archaeological/scientific data.
+The repository integrates these specialized skill systems and 4 verified commercial-safe (`Owned-Flow` / `CC0-1.0` / `MIT`) asset pillars:
+- **`skills/stickman-hybrid/`**: Master visual, full-bleed editorial archetype, 8 documentary motion primitives (`strike_replace`, `circle_focus`, `checklist_build` w/ `~52%` soft dim, `chapter_breather`, `pip_inset`, `inset_shelf`, `micro_accent`, `scale_compare`), unified white-head salience mask, kinetic captioning, and video rendering engine (`render_pro.py` + `director_supervisor.py`).
+  - **`backgrounds/CATALOG.tsv` (8 CC0-1.0 textures)**: Harmonized AmbientCG Paper/Cardboard/Concrete & Kenney Parchment textures (`parchment_warm_bright.png`, `sketchbook_grain.png`, `dotgrid_blueprint.png`, `split_warm_paper.png`, `split_cool_paper.png`, `breather_cream_editorial.png`, `kraft_archive_paper.png`, `dark_charcoal_matte.png`).
+  - **`vfx_assets/CATALOG.tsv` (9 CC0-1.0/MIT overlays)**: Kenney Light Masks/Dust Puffs, zero-mean paper grain, soft vignette, and MIT Doodle hand-drawn arrows/bans.
+- **`skills/stickman-stickers/`**: Permanent 3-tier reusable sticker vault (`310` indexed transparent `512x512` PNGs across `assets/flow_vault/` + `assets/cc0_library/` including Kenney CC0, Cartography CC0, MIT `doodle-icons`, MIT `naive-icons`, and Wikimedia CC0).
+- **`skills/vox-doc-sound/`**: Voiceover synthesis, Whisper alignment, `1,648`-file sound & music catalog (`Kenney_CC0/TactileV7/` scratches, clicks, ticks, scrolls, paper flips + strict zero-twink/zero-bell blacklist), and 3-stem psychoacoustic audio mixing (-11 to -13 dB bed, -14 LUFS) + standalone music-only Outro.
+- **`skills/youtube-seo-optimizer/`**, **`skills/emotional-arc-designer/`**, **`skills/visual-emotion-engineer/`**, **`skills/loss-aversion-designer/`**, **`skills/data-storytelling/`**: Companion storytelling & packaging intelligence.
 
 ---
 *End of Master AI Agent Startup Guide. Pin this file as your primary instruction set for all Stickman Hybrid animation production.*

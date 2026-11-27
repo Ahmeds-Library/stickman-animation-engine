@@ -307,9 +307,9 @@ def create_upload_package(project_root, slug, topic, look="bright", no_flow_thum
     print(f"   • Checklists: POSTING_GUIDE.md (Publishing workflow & pinned comments)")
 
 
-def render_pipeline_video(sub_dir, fmt="9:16", out_name=None, dry_run=False):
+def render_pipeline_video(sub_dir, fmt="9:16", out_name=None, dry_run=False, look="bright", captions="yes"):
     """Enforces Pre-Render Quality Gate and renders MP4 video."""
-    print(f"\n🎬 Rendering Final MP4 Video for {sub_dir} (Format: {fmt})...")
+    print(f"\n🎬 Rendering Final MP4 Video for {sub_dir} (Format: {fmt}, Look: {look}, Captions: {captions})...")
     cwd = os.getcwd()
     try:
         os.chdir(sub_dir)
@@ -330,8 +330,11 @@ def render_pipeline_video(sub_dir, fmt="9:16", out_name=None, dry_run=False):
             "--format", fmt,
             "--audio", "mix_pro.wav",
             "--scenes", "SCENES_HYBRID.tsv",
-            "--words", "WORDS.tsv"
+            "--words", "WORDS.tsv",
+            "--look", look,
         ]
+        if str(captions).lower() in ("no", "off", "false", "0"):
+            cmd += ["--no-captions"]
         if fmt == "16:9":
             cmd += ["--outro-sec", "8.0"]
         if out_name:
@@ -419,7 +422,7 @@ def main():
                 if os.path.exists(ASSET_REGISTRY):
                     subprocess.run([sys.executable, ASSET_REGISTRY, root])
             if resume in ("all", "render"):
-                render_pipeline_video(short_dir, fmt="9:16", out_name=f"{slug}_short_9x16.mp4", dry_run=args.dry_run)
+                render_pipeline_video(short_dir, fmt="9:16", out_name=f"{slug}_short_9x16.mp4", dry_run=args.dry_run, look=args.look, captions=args.captions)
 
     # 4. Long Pipeline (16:9 Widescreen)
     if args.format in ("long", "both"):
@@ -436,7 +439,7 @@ def main():
                 if os.path.exists(ASSET_REGISTRY):
                     subprocess.run([sys.executable, ASSET_REGISTRY, root])
             if resume in ("all", "render"):
-                render_pipeline_video(long_dir, fmt="16:9", out_name=f"{slug}_long_16x9.mp4", dry_run=args.dry_run)
+                render_pipeline_video(long_dir, fmt="16:9", out_name=f"{slug}_long_16x9.mp4", dry_run=args.dry_run, look=args.look, captions=args.captions)
 
     # 5. Full Reinforcement Learning Evaluation & Experience Replay
     if not args.dry_run:

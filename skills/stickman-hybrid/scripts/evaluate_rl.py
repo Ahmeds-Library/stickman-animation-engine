@@ -824,7 +824,18 @@ def audit_speech_cadence(base_dir=".", is_short=False):
     else:
         print(f"⚠️ Speech Cadence: RUSHED (> {max_pace} w/s)")
         status = "WARN"
-    return {"pace": pace, "status": status}
+    rushed_lists = []
+    try:
+        import validate_pipeline
+        rushed_lists = validate_pipeline.check_list_prosody_gaps(base_dir)
+        if rushed_lists:
+            print(f"⚠️ List Prosody Check (F_RUSHED_LIST): {len(rushed_lists)} compressed multi-item list(s) -> {rushed_lists[0]}")
+            status = "WARN"
+        else:
+            print("✅ List Prosody Spacing: PASS (Enumerated items have >= 0.22s breath cadence)")
+    except Exception:
+        pass
+    return {"pace": pace, "status": status, "rushed_lists": rushed_lists}
 
 def audit_shorts_viral_architecture(base_dir="."):
     """Rule 22 Audit: Evaluates 40-60s Viral Short Structure, Hook, and Funnel CTA Handoff."""
@@ -1278,8 +1289,10 @@ def audit_pipeline(base_dir=".", is_short=False):
     else:
         print(f"⏳ Audio file {audio_file} pending.")
 
-    # 1.5 Cadence
-    audit_speech_cadence(base_dir, is_short=is_short)
+    # 1.5 Cadence & List Prosody
+    cadence_res = audit_speech_cadence(base_dir, is_short=is_short)
+    if cadence_res.get("rushed_lists"):
+        pipeline_deductions.append(f"[-8 pts] F_RUSHED_LIST: {cadence_res['rushed_lists'][0]}")
 
     # 2. Pacing
     print("\n--- [2] Visual Pacing & Semantic Alignment Audit ---")
@@ -1335,11 +1348,35 @@ def audit_pipeline(base_dir=".", is_short=False):
                 pipeline_warnings.append(f"Director flagged {off_n} potentially off-topic sticker(s) in {dp_path}")
                 print(f"⚠️ Director Audit: {dsum.get('approved_stickers', 0)} approved, {off_n} flagged off-topic")
             else:
-                print(f"✅ Director Supervision Verified: {dsum.get('approved_stickers', 0)} approved stickers, 0 redundant, scale variety={dsum.get('scale_variety', [])}")
+                ann_list = [ann for s in dplan.get("scenes", []) for ann in s.get("annotations", [])]
+                ann_kinds = {}
+                for ann in ann_list:
+                    ak = ann.get("kind", "other")
+                    ann_kinds[ak] = ann_kinds.get(ak, 0) + 1
+                print(f"✅ Director Supervision Verified: {dsum.get('approved_stickers', 0)} approved stickers, {len(ann_list)} live ink annotations ({ann_kinds}), 0 redundant, scale variety={dsum.get('scale_variety', [])}")
         else:
             pipeline_deductions.append("[-15 pts] Missing DIRECTOR_PLAN.json (Director supervision unverified)")
     except Exception as de:
         print(f"⚠️ Director audit notice: {de}")
+
+    # 2.26 v7 CC0 Asset Pillars Audit
+    try:
+        skill_hybrid_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        skills_root = os.path.dirname(skill_hybrid_root)
+        bg_cat = os.path.join(skill_hybrid_root, "backgrounds", "CATALOG.tsv")
+        vfx_cat = os.path.join(skill_hybrid_root, "vfx_assets", "CATALOG.tsv")
+        stk_cat = os.path.join(skills_root, "stickman-stickers", "CATALOG.tsv")
+        sfx_cat = os.path.join(skills_root, "vox-doc-sound", "CATALOG.tsv")
+        counts = {}
+        for cname, cp in (("stickers", stk_cat), ("backgrounds", bg_cat), ("vfx", vfx_cat), ("sfx", sfx_cat)):
+            if os.path.exists(cp):
+                with open(cp, encoding="utf-8", errors="ignore") as cf:
+                    counts[cname] = max(0, sum(1 for _ in cf) - 1)
+            else:
+                counts[cname] = 0
+        print(f"📦 v7 CC0/MIT Asset Pillars: stickers={counts['stickers']}, backgrounds={counts['backgrounds']}, vfx={counts['vfx']}, sfx={counts['sfx']}")
+    except Exception:
+        pass
 
     # 2.5 Style
     audit_style_consistency(base_dir)

@@ -103,10 +103,16 @@ def run_doctor():
     print(f"🔤 Display Fonts: {'✅ VERIFIED' if os.path.exists(font_path) else '⚠️ Default system fonts used'}")
 
     # 7. CC0 Sound Effects & Music
-    sfx_path = os.path.join(ROOT_DIR, "skills", "vox-doc-sound", "sfx")
-    print(f"🎵 CC0 Sound Library: {'✅ VERIFIED (Wyzowl & Kenney CC0)' if os.path.exists(sfx_path) else '⚠️ Procedural fallback active'}")
+    sfx_cat = os.path.join(ROOT_DIR, "skills", "vox-doc-sound", "CATALOG.tsv")
+    if os.path.exists(sfx_cat):
+        with open(sfx_cat, encoding="utf-8", errors="ignore") as cf:
+            sfx_cnt = max(0, sum(1 for _ in cf) - 1)
+        print(f"🎵 CC0 Sound & Music Library: ✅ VERIFIED ({sfx_cnt} indexed tracks in vox-doc-sound/CATALOG.tsv)")
+    else:
+        sfx_path = os.path.join(ROOT_DIR, "skills", "vox-doc-sound", "sfx")
+        print(f"🎵 CC0 Sound Library: {'✅ VERIFIED (Wyzowl & Kenney CC0)' if os.path.exists(sfx_path) else '⚠️ Procedural fallback active'}")
 
-    # 7b. Permanent Sticker Vault & CC0 Library (skills/stickman-stickers)
+    # 7b. Permanent Sticker Vault & CC0/MIT Library (skills/stickman-stickers)
     stk_cat = os.path.join(ROOT_DIR, "skills", "stickman-stickers", "CATALOG.tsv")
     if os.path.exists(stk_cat):
         with open(stk_cat, encoding="utf-8", errors="ignore") as cf:
@@ -114,6 +120,22 @@ def run_doctor():
         print(f"🧩 Permanent Sticker Vault: ✅ VERIFIED ({cnt} indexed transparent stickers in CATALOG.tsv)")
     else:
         print("🧩 Permanent Sticker Vault: ⚠️ CATALOG.tsv not yet indexed (run: studio.py stickers --index)")
+
+    # 7c. v7 CC0 Editorial Backgrounds & VFX Overlays
+    bg_cat = os.path.join(ROOT_DIR, "skills", "stickman-hybrid", "backgrounds", "CATALOG.tsv")
+    vfx_cat = os.path.join(ROOT_DIR, "skills", "stickman-hybrid", "vfx_assets", "CATALOG.tsv")
+    if os.path.exists(bg_cat):
+        with open(bg_cat, encoding="utf-8", errors="ignore") as cf:
+            bg_cnt = max(0, sum(1 for _ in cf) - 1)
+        print(f"📜 CC0 Editorial Backgrounds: ✅ VERIFIED ({bg_cnt} textures in backgrounds/CATALOG.tsv)")
+    else:
+        print("📜 CC0 Editorial Backgrounds: ⚠️ backgrounds/CATALOG.tsv missing")
+    if os.path.exists(vfx_cat):
+        with open(vfx_cat, encoding="utf-8", errors="ignore") as cf:
+            vfx_cnt = max(0, sum(1 for _ in cf) - 1)
+        print(f"✨ CC0/MIT VFX Overlays: ✅ VERIFIED ({vfx_cnt} overlays in vfx_assets/CATALOG.tsv)")
+    else:
+        print("✨ CC0/MIT VFX Overlays: ⚠️ vfx_assets/CATALOG.tsv missing")
 
     # 8. Reinforcement Learning Policies (60 Rules)
     eval_path = os.path.join(SCRIPTS_DIR, "evaluate_rl.py")

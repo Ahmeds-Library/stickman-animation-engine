@@ -65,8 +65,11 @@ def process_item(item):
     if not m:
         return None, rel
     secs, peak_t, off = m
+    lic = (prev or {}).get("licence", "")
+    if not lic and ("kenney" in source.lower() or "cc0" in source.lower()):
+        lic = "CC0-1.0"
     return [rel, source, cat, kind, f"{secs:.2f}", f"{peak_t:.3f}", f"{off:.1f}",
-            (prev or {}).get("use_for", ""), (prev or {}).get("licence", ""),
+            (prev or {}).get("use_for", ""), lic,
             str(st.st_size), f"{st.st_mtime:.0f}"], None
 
 
