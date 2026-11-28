@@ -969,11 +969,16 @@ def _apply_alpha_to_image(im, alpha):
 
 
 def _interpolate_stat_numbers(target_text, ease_val):
-    """Interpolates numbers in target_text smoothly from 0 up to final values over ease curve."""
+    """Interpolates numbers in target_text smoothly from 0 up to final values over ease curve.
+    Rule: Never count-up 4-digit calendar years (e.g. 1000-2099) or dates with BC/BCE/AD/CE like stock tickers!
+    """
     if ease_val >= 0.999:
         return target_text
     def _repl(m):
         raw = m.group(0).replace(",", "")
+        # Stop Rolling Calendar Years: Keep 4-digit years intact
+        if re.match(r'^(?:1[0-9]{3}|20[0-2][0-9])$', raw):
+            return m.group(0)
         try:
             val = float(raw)
             cur = int(round(val * ease_val))
@@ -1292,14 +1297,16 @@ def _draw_live_ink_underline(d, x0, y0, x1, y1, progress=1.0, color=(235, 140, 4
 
 
 def detect_panel_polarity(badge_txt, body_txt=""):
-    """Detects positive vs negative polarity from panel headers and labels for sentiment-aware badges."""
+    """Detects positive vs negative polarity from panel headers and labels for sentiment-aware badges.
+    Strict mandate: 'MYTH' is ALWAYS false/red stamp_x; 'REALITY' is ALWAYS true/green stamp_check.
+    """
     combined = f"{badge_txt} {body_txt}".lower()
-    if "[+]" in combined or "(+)" in combined or "✓" in combined:
-        return "stamp_check", (28, 152, 82)
-    if "[-]" in combined or "(-)" in combined or "✗" in combined or "x" in combined.split():
+    if any(k in combined for k in ("myth", "fake", "lie", "wrong", "false", "misconception", "fiction", "[-]")):
         return "stamp_x", (208, 48, 38)
-    pos_kws = {"reality", "truth", "fact", "ancient", "sugar-free", "healthy", "natural", "clean", "solution", "correct", "real", "cure", "verified", "safe", "pure"}
-    neg_kws = {"myth", "fake", "lie", "modern", "sugar", "acid", "decay", "cavity", "rot", "pain", "danger", "crisis", "wrong", "false", "ruin", "culprit", "attacks", "fatal"}
+    if any(k in combined for k in ("reality", "truth", "fact", "real", "verified", "evidence", "actual", "[+]")):
+        return "stamp_check", (28, 152, 82)
+    pos_kws = {"sugar-free", "healthy", "natural", "clean", "solution", "correct", "cure", "safe", "pure"}
+    neg_kws = {"sugar", "acid", "decay", "cavity", "rot", "pain", "danger", "crisis", "ruin", "culprit", "attacks", "fatal"}
     pos_score = sum(1 for w in pos_kws if w in combined)
     neg_score = sum(1 for w in neg_kws if w in combined)
     if pos_score > neg_score:
@@ -1352,7 +1359,7 @@ def _auto_resolve_second_split_sticker(existing_stk, other_text):
     for pref in ("stone_ruin", "tin_ingot", "clay_tablet", "bronze_sword"):
         if pref in pool:
             return pool[pref]
-    return next(iter(pool.values()), None)
+    return None
 
 
 def _text_with_offset_shadow(block_im, dx=8, dy=10, shadow_col=(18, 16, 14, 65)):
@@ -1374,7 +1381,7 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
     overlay2 = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
     d2 = ImageDraw.Draw(overlay2)
 
-    parts = [p.strip() for p in text.split("|") if p.strip()] if "|" in text else [text.strip()]
+    parts = [p.strip() for p in text.split("|") if p.strip()] if "|" in text else ([text.strip()] if text.strip() else [])
     stat_txt = parts[0] if parts else "100%"
     sub_txt = " ".join(parts[1].split()[:6]) if len(parts) > 1 and parts[1].strip() else ""
 
@@ -1477,7 +1484,7 @@ def draw_card_stat(w, h, text, is_shorts=False, dt=0.0, sticker_im=None):
 
         else:
             num_m = re.search(r"([0-9]+)", stat_txt)
-            wm_str = num_m.group(1) if num_m else stat_txt.split()[0]
+            wm_str = num_m.group(1) if num_m else (stat_txt.split()[0] if stat_txt.split() else "100")
             wm_im = text_layer(wm_str, 720, INK, font_role="hero")
             if wm_im.width > int(W2 * 0.88):
                 wm_im = text_layer(wm_str, int(720 * (W2 * 0.84) / max(1, wm_im.width)), INK, font_role="hero")
@@ -2253,15 +2260,27 @@ def draw_strike_replace_card(w, h, text, is_shorts=False, dt=0.0, duration=3.0):
             d2.ellipse((pts_s[k + 1][0] - r_nib, pts_s[k + 1][1] - r_nib,
                         pts_s[k + 1][0] + r_nib, pts_s[k + 1][1] + r_nib), fill=(214, 46, 38, 246))
 
-    # 2. Commanding Hero Truth Reveal filling Y:18%-68% on 9:16 with per-line aligned highlighters
+    # 2. Commanding Hero Truth / Transformation Reveal filling Y:18%-68% on 9:16 with per-line aligned highlighters
     if ease_new > 0.02:
+        # Check for Neutral Historical Transformation Mode (e.g. HIGH LORD -> LORD OF THE FLIES)
+        # Avoid inverting historical shifts or demotions into triumphant green checkmarks!
+        trans_kws = {
+            "flies", "fly", "demon", "devil", "demoted", "corruption", "slander",
+            "evolution", "rebrand", "shift", "renamed", "becomes", "pagan", "idol",
+            "historical", "enemy", "peor", "zebub", "beelzebub"
+        }
+        is_neutral_transform = any(k in new_text.lower() or k in old_text.lower() for k in trans_kws)
+        reveal_color = SUB_ACCENT if is_neutral_transform else (18, 128, 62)
+        reveal_underline_col = ACCENT + (240,) if is_neutral_transform else (18, 128, 62, 240)
+        reveal_highlighter_col = (SUB_ACCENT + (130,)) if is_neutral_transform else (142, 224, 172, 132)
+
         m_stat = re.match(r"^\s*([0-9]+(?:[.,][0-9]+)?[%×xX+]?)\s+(.+)$", new_text.strip())
         if m_stat:
             stat_s = _interpolate_stat_numbers(m_stat.group(1).upper(), ease_new)
             sub_s = m_stat.group(2).upper()
             stat_im = render_wrapped_text_block(
                 stat_s, "hero", start_size=420 if is_shorts else 410, min_size=260,
-                max_w=int(W2 * 0.88), max_h=int(H2 * 0.25), color=(18, 128, 62), max_lines=1
+                max_w=int(W2 * 0.88), max_h=int(H2 * 0.25), color=reveal_color, max_lines=1
             )
             stat_sh = _apply_alpha_to_image(_text_with_offset_shadow(stat_im, dx=9, dy=11), ease_new)
             sy_stat = oy + old_sh.height + (190 if is_shorts else 64) + int(28 * (1.0 - ease_new))
@@ -2279,17 +2298,17 @@ def draw_strike_replace_card(w, h, text, is_shorts=False, dt=0.0, duration=3.0):
                 sub_x = W2 // 2 - sub_sh.width // 2
                 sub_y = sy_stat + stat_sh.height + (64 if is_shorts else 26)
                 _draw_per_line_highlighters(overlay2, W2 // 2 - sub_im.width // 2, sub_y, line_boxes,
-                                            color=(142, 224, 172, 132), pad_x=44, progress=ease_sub)
+                                            color=reveal_highlighter_col, pad_x=44, progress=ease_sub)
                 overlay2.alpha_composite(sub_sh, (sub_x, sub_y))
                 last_lb = line_boxes[-1]
                 uw = min(int(W2 * 0.82), last_lb[2] + 54)
                 uy = sub_y + last_lb[1] + last_lb[3] + 12
                 _draw_live_ink_underline(d2, W2 // 2 - uw // 2, uy, W2 // 2 + uw // 2, uy - 4,
-                                         progress=ease_sub, color=(18, 128, 62, 240), width=14)
+                                         progress=ease_sub, color=reveal_underline_col, width=14)
         else:
             new_im, line_boxes = render_wrapped_text_block(
                 new_text.upper(), "hero", start_size=236 if is_shorts else 256, min_size=118,
-                max_w=int(W2 * 0.88), max_h=int(H2 * 0.30), color=(18, 128, 62), max_lines=2, return_line_boxes=True
+                max_w=int(W2 * 0.88), max_h=int(H2 * 0.30), color=reveal_color, max_lines=2, return_line_boxes=True
             )
             new_sh = _apply_alpha_to_image(_text_with_offset_shadow(new_im, dx=7, dy=9), ease_new)
             nx = W2 // 2 - new_sh.width // 2
@@ -2301,7 +2320,7 @@ def draw_strike_replace_card(w, h, text, is_shorts=False, dt=0.0, duration=3.0):
             rw = min(int(W2 * 0.82), last_lb[2] + 50)
             uy = ny + last_lb[1] + last_lb[3] + 12
             _draw_live_ink_underline(d2, W2 // 2 - rw // 2, uy, W2 // 2 + rw // 2, uy - 4,
-                                     progress=ease_new, color=(18, 128, 62, 240), width=14)
+                                     progress=ease_new, color=reveal_underline_col, width=14)
 
     fr = card_bg(w, h, variant="default").convert("RGBA")
     fr.alpha_composite(overlay2.resize((w, h), Image.LANCZOS))
@@ -2583,24 +2602,8 @@ def draw_checklist_build(fr, W, H, dt, items, item_times=None, t_abs=0.0, is_sho
 
 
 def draw_era_anchor(fr, W, H, dt, label, is_shorts=False):
-    """Primitive 5: Persistent Top-Left Era / Date Anchor (sleek editorial chronological pill)."""
-    if not label or dt < 0.0:
-        return
-    p = min(1.0, dt / 0.28)
-    ease = 1.0 - (1.0 - p) ** 3
-    dx = int(-28 * (1.0 - ease))
-    lbl_im = text_layer(str(label).strip().upper(), 28 if is_shorts else 26, (250, 248, 240), font_role="hero")
-    pw = lbl_im.width + 58
-    ph = lbl_im.height + 24
-    px = (34 if is_shorts else 42) + dx
-    py = 96 if is_shorts else 38
-    pill = Image.new("RGBA", (pw + 12, ph + 12), (0, 0, 0, 0))
-    pd = ImageDraw.Draw(pill)
-    pd.rounded_rectangle((6, 8, 6 + pw, 8 + ph), radius=14, fill=(0, 0, 0, int(65 * ease)))
-    pd.rounded_rectangle((4, 4, 4 + pw, 4 + ph), radius=14, fill=(24, 28, 38, int(238 * ease)), outline=ACCENT + (int(220 * ease),), width=2)
-    pd.ellipse((18, 4 + ph // 2 - 5, 28, 4 + ph // 2 + 5), fill=ACCENT + (int(245 * ease),))
-    pill.alpha_composite(_apply_alpha_to_image(lbl_im, ease), (38, 4 + (ph - lbl_im.height) // 2))
-    fr.alpha_composite(pill, (px, py))
+    """Primitive 5: Persistent Top-Left Era / Date Anchor - PERMANENTLY DISABLED across both 9:16 and 16:9."""
+    return
 
 
 def draw_inset_shelf(fr, W, H, dt, items, item_times=None, t_abs=0.0, is_shorts=False, resolve_fn=None, layout_cache=None, cache_key=None, scene_end_t=None):
@@ -3222,10 +3225,9 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--look", default=None, help="Color look: bright (default), warm, ink, painted, night")
     ap.add_argument("--kenburns", action="store_true", default=False, help="Enable subtle Ken Burns drift (default: disabled to preserve full uncropped image)")
-    ap.add_argument("--captions", dest="subtitles", action="store_true", default=True, help="Render kinetic captions")
+    ap.add_argument("--captions", dest="subtitles", action="store_true", default=None, help="Render kinetic captions")
     ap.add_argument("--no-captions", dest="subtitles", action="store_false", help="Render without captions")
     ap.add_argument("--caption-font", default=None, help="Override kinetic caption font role or TTF path (caption, modern, montserrat, kalam, hero, etc.)")
-    ap.add_argument("--subtitles", action="store_true", default=True)
     ap.add_argument("--clip-seconds", type=float, default=None, help="Clip to first N seconds (e.g. short clip from long video)")
     ap.add_argument("--title", default=None, help="Header text for Shorts format")
     ap.add_argument("--scene-labels", action="store_true", default=False, help="Render floating scene label banners (default: False for clean modern sticker-focused visuals)")
@@ -3234,6 +3236,8 @@ def main():
     ap.add_argument("--frame-out", default="frame.png", help="Output path for single still frame")
     ap.add_argument("--outro-sec", type=float, default=None, help="Duration of standalone music-only outro (default: 8.0 for 16:9, 0.0 for 9:16)")
     args = ap.parse_args()
+    if args.subtitles is None:
+        args.subtitles = (args.format == "9:16")
     if args.format == "9:16":
         args.outro_sec = 0.0  # Strict mandate: NEVER attach 16:9 end-screen cards to 9:16 Shorts!
     elif args.outro_sec is None:
@@ -3380,16 +3384,52 @@ def main():
             dedup_scenes.append(sc)
     scenes = dedup_scenes
     
-    # Audio duration
+    # Audio duration & Narration boundary calculation
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                             "-of", "default=noprint_wrappers=1:nokey=1", args.audio],
                            capture_output=True, text=True)
     audio_dur = float(probe.stdout.strip()) if probe.stdout.strip() else (scenes[-1]["t0"] + 3.0)
     total = min(audio_dur, args.clip_seconds) if args.clip_seconds else audio_dur
-    story_dur = max(0.1, total - args.outro_sec) if args.outro_sec > 0 else total
+
+    final_word_end = 0.0
+    if words_list:
+        try:
+            final_word_end = max(float(w.get("end", 0.0)) for w in words_list)
+        except Exception:
+            final_word_end = 0.0
+
+    if args.outro_sec > 0:
+        if final_word_end > 0.0:
+            story_dur = max(final_word_end + 0.60, total - args.outro_sec)
+        else:
+            story_dur = max(0.1, total - args.outro_sec)
+        total = max(total, story_dur + args.outro_sec)
+    else:
+        story_dur = total
 
     for i in range(len(scenes)):
         scenes[i]["t1"] = scenes[i + 1]["t0"] if i + 1 < len(scenes) else story_dur
+
+    # Pre-compute contiguous shot spans for camera & transition coalescing
+    # Mandate: If consecutive rows share the exact same shot file, force transition = "none"
+    # and maintain ONE uninterrupted monotonic camera curve across the entire span (zero zoom reset, zero self-slide).
+    shot_spans = {}
+    for i, sc in enumerate(scenes):
+        img_p = sc.get("img", "")
+        is_shot_img = bool(img_p and (os.path.exists(img_p) or img_p.endswith((".png", ".jpg", ".webp"))) and img_p != "card")
+        if is_shot_img:
+            r_start = i
+            while r_start > 0 and scenes[r_start - 1].get("img") == img_p:
+                r_start -= 1
+            r_end = i
+            while r_end + 1 < len(scenes) and scenes[r_end + 1].get("img") == img_p:
+                r_end += 1
+            span_t0 = scenes[r_start]["t0"]
+            span_t1 = scenes[r_end]["t1"]
+            is_continuation = (i > r_start)
+            shot_spans[i] = (span_t0, span_t1, is_continuation)
+        else:
+            shot_spans[i] = (sc["t0"], sc["t1"], False)
 
     # Robust Overlay Re-Parenting Gate:
     # Guarantees that every overlay belongs to the scene active during its timestamp t_ov,
@@ -3668,10 +3708,19 @@ def main():
         t1_x = sc_x["t1"]
         dt_x = max(0.0, t_eval - t0_x)
         dur_x = max(0.1, t1_x - t0_x)
-        u_x = min(1.0, dt_x / dur_x)
+
+        # Monotonic camera curve across coalesced contiguous identical shot spans
+        span_t0, span_t1, is_continuation = shot_spans.get(si_idx, (t0_x, t1_x, False))
+        span_dur = max(0.1, span_t1 - span_t0)
+        u_x = min(1.0, max(0.0, (t_eval - span_t0) / span_dur))
+
         img_x = sc_x["img"]
         txt_x = sc_x["text"]
+        if not txt_x and ":" in img_x:
+            txt_x = img_x.split(":", 1)[1].strip()
         t_flags_x = f"{sc_x.get('extra', '')} {sc_x.get('pos', '')} {sc_x.get('space', '')}".strip().lower()
+        if is_continuation:
+            t_flags_x = "none cut"
 
         tok = os.path.basename(img_x)
         tok_b = os.path.splitext(tok)[0]
@@ -3862,6 +3911,10 @@ def main():
             prev_was_card = (scenes[si - 1]["img"] == "card" or pb.startswith(("card", "split", "bar_", "timeline", "stat_", "chapter_", "breather", "scale_", "strike_")))
 
         # Silky Cinema Transitions (~70% crisp beat cuts, ~30% smooth zoom_dissolve / slide_push / paper_crossfade)
+        # Consecutive duplicate shot protection: force transition = "none" to prevent self-slide or self-dissolve
+        if si > 0 and scenes[si].get("img") == scenes[si - 1].get("img") and scenes[si].get("img") != "card":
+            trans_type = "none cut"
+
         wants_slide = ("slide_push" in trans_type or "slide_wipe" in trans_type)
         wants_paper_cf = ("paper_crossfade" in trans_type or "fade" in trans_type or ((is_archetype_card != prev_was_card) and "cut" not in trans_type and not wants_slide))
         wants_zoom_dis = ("zoom_dissolve" in trans_type or ("crossfade" in trans_type and not wants_paper_cf and not wants_slide))
@@ -4355,7 +4408,15 @@ def main():
                 fr.alpha_composite(lbl_im, (lbl_x, lbl_y))
 
         # Animated Cause -> Effect Editorial Connecting Arrow (Sticker A -> Sticker B)
-        if sc.get("_group_pattern") == "cause_effect" and 0 in scene_drawn_stickers and len(sc.get("ov", [])) >= 2:
+        # STRICT GUARDRAIL: Only draw connecting ink arrows on dedicated cards or explicit cause_effect cues, NEVER on regular illustrated scenes!
+        sc_img = str(sc.get("img", "")).lower()
+        sc_tok = sc_img.split(":")[0].strip()
+        is_card_shot = (
+            sc.get("is_card", False) or
+            sc_tok.startswith(("card", "split", "scale", "stat", "timeline", "chapter", "breather")) or
+            "cause_effect" in str(sc.get("extra", "")).lower()
+        )
+        if is_card_shot and sc.get("_group_pattern") == "cause_effect" and 0 in scene_drawn_stickers and len(sc.get("ov", [])) >= 2:
             cxA, cyA, imA, tA, exitA = scene_drawn_stickers[0]
             ovB = sc["ov"][1]
             tB = ovB["t"]
@@ -4527,12 +4588,8 @@ def main():
                         is_shorts=is_shorts
                     )
 
-        # Persistent Top-Left Era / Date Anchor
-        era_lbl = sc.get("_era_anchor", "")
-        if not era_lbl and "era_anchor:" in extra:
-            era_lbl = extra.split("era_anchor:", 1)[1].split(",")[0].strip()
-        if era_lbl and not is_breather_card:
-            draw_era_anchor(fr, W, H, dt_scene, era_lbl, is_shorts=is_shorts)
+        # Persistent Top-Left Era / Date Anchor - PERMANENTLY REMOVED per core engine mandate
+        pass
 
         # Shorts Header & Progress Bar (14px with dark track & precise 0%->100% clamping)
         if is_shorts:

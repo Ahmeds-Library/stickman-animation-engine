@@ -5,7 +5,7 @@
 > All agents must follow [AGENT_START_GUIDE.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/AGENT_START_GUIDE.md) and [SKILL.md](file:///home/mirza-ahmed-hassan/Desktop/stickman-animation/skills/stickman-hybrid/SKILL.md).
 > 1. **5 Mandatory Intake Questions**: Never assume defaults on new videos; collect all 5 answers before code execution.
 > 2. **External Project Directory**: All project media, scripts, and upload packs live strictly in `~/StickmanHybrid/<project_slug>/` outside this repo.
-> 3. **Production Renderer**: Rendering is executed via `render_pro.py` (multi-font hierarchy, anti-aliased archetypes, active sticker caps, and post-mux audio validation). `render.py` now routes directly to `render_pro.py`.
+> 3. **Production Renderer**: Rendering is executed via `render_pro.py` (multi-font hierarchy, anti-aliased archetypes, active sticker caps, and post-mux audio validation). `render_pro.py` now routes directly to `render_pro.py`.
 
 These are the rules and the method behind stickman documentaries in the style of the big
 "ancient humans" and stick-figure explainer channels. The method was worked out by studying
@@ -22,7 +22,7 @@ until the reviewer approved them.
    moves or video-model clips. In this pack the stills carry cut-out stickers that pop in on
    the words (§9); that is the only motion.
 
-2. **Pace like the viral video, and measure it.** `render.py --pacing` lists every hold where nothing
+2. **Pace like the viral video, and measure it.** `validate_pipeline.py` checks every hold where nothing
    changes on screen: over 2 s in the first 30 s, over 3.5 s after that. Fix every hold with a beat
    on a spoken word before rendering:
    - a cut to another picture
@@ -221,7 +221,7 @@ topic + language + length
   WORDS.tsv + SHOTS.tsv ──> SCENES.tsv (cue on words, text only where needed)
   downloads ──> pictures.py review ──> PICK.tsv ──> pictures.py pick ──> img/sNN.jpg
   cues.tsv ──> mix.py ──> mix.wav
-  render.py ──> <project>.mp4 ──> pictures.py qc ──> qc.jpg (Claude checks it, fixes, re-renders)
+  render_pro.py ──> <project>.mp4 ──> pictures.py qc ──> qc.jpg (Claude checks it, fixes, re-renders)
 ```
 
 ---
@@ -364,7 +364,7 @@ queue with no visible reason. Nothing is wrong with the job, and nothing is lost
 ### §5 SCENES.tsv: cut on the words
 Columns are `cue  img  text  pos  extra`:
 - `cue`: `line.word`, for example `14.5` is the 6th word of line 14 (counting from 0).
-- Leave `pos` empty; render.py chooses the spot.
+- Leave `pos` empty; render_pro.py chooses the spot.
 
 **How to cut:**
 - Read each line in WORDS.tsv and cut when the line names a new thing.
@@ -402,12 +402,12 @@ sentence to every prompt; the look differs per topic.
      the moment it lands, about 3 s each, into a cache keyed by the file's content. Flow's
      mispaired numbers therefore do not matter.
    - After `pictures.py pick`, run `python <skill>/scripts/delama.py`. It only copies the
-     cleaned pictures into `img/clean/`, so it is instant. render.py uses them.
+     cleaned pictures into `img/clean/`, so it is instant. render_pro.py uses them.
    - Do not render or run `align.py` while the watcher is still running on a machine with 8 GB
      of RAM or less. Whisper alignment died with `mkl_malloc: failed to allocate memory` when
      both ran together. Stop the watcher first (`delama.py` without --watch finishes the rest),
      and always check that WORDS.tsv was actually written.
-   - If LaMa was skipped at setup, render.py's smooth fill is used instead.
+   - If LaMa was skipped at setup, render_pro.py's smooth fill is used instead.
 
 ### §7 Sound
 Use the vox-doc-sound skill: write `cues.tsv` on words, then `mix.py`. Keep it light:
@@ -427,12 +427,12 @@ Use the vox-doc-sound skill: write `cues.tsv` on words, then `mix.py`. Keep it l
 Silence is fine. If a sound is missing, vox-doc-sound says how to make one.
 
 ### §8 Render and check
-1. `python <skill>/scripts/render.py`. It uses mix.wav if present, else VO.wav. The look
+1. `python <skill>/scripts/render_pro.py`. It uses mix.wav if present, else VO.wav. The look
    comes from STYLE.txt, and it writes `<project>.mp4`.
 2. `python <skill>/scripts/pictures.py qc`, then open `qc.jpg` yourself. Check:
    - pictures in the right order
    - no tag over a face
-   - no Flow sparkle left (delama.py, or render.py's fallback fill)
+   - no Flow sparkle left (delama.py, or render_pro.py's fallback fill)
    - no leftover sheet line-ups
 3. Fix the problems, re-render, and only then show the user.
 
@@ -442,7 +442,7 @@ Silence is fine. If a sound is missing, vox-doc-sound says how to make one.
 1. **The scene picture comes first; never shape it for a sticker.** Write SHOTS prompts as full,
    natural scenes, the way the approved `food` film was made.
    - Stickers go to the quietest spot the picture already has, such as sky, ground or a wall
-     (`auto`). render.py keeps them off faces, white stickman bodies, skin and the centre.
+     (`auto`). render_pro.py keeps them off faces, white stickman bodies, skin and the centre.
    - When a picture has no calm spot, put that line's stickers on a plain collage card right
      after it.
    - A test that forced empty left/right/top areas into the pictures (the `space` column) was
@@ -507,10 +507,10 @@ This pack always makes it. A reviewer approved it as the main style.
      white border, NO sticker edge around the sign or the object, the magenta background shows
      through inside the circle around the object"
 
-     In SCENES use `pop+plain`, so render.py adds no white sticker border. A white rim and a black
+     In SCENES use `pop+plain`, so render_pro.py adds no white sticker border. A white rim and a black
      and white stroke looked wrong on these. Keep them small, 0.32-0.36 high, close together near
      the centre; big ones looked odd.
-5. `render.py` sees the `+` rows and renders frame by frame at 30 fps (about 1.5 minutes for a
+5. `render_pro.py` sees the `+` rows and renders frame by frame at 30 fps (about 1.5 minutes for a
    2-minute film). `auto` picks the quietest free spot.
    - Big white stickman heads are counted as busy, because plain edge detection called them
      empty and a sticker landed on a head.
@@ -518,7 +518,7 @@ This pack always makes it. A reviewer approved it as the main style.
      element usually is. Auto stickers are at most 0.34 of the frame high (default 0.3), and tag
      text is small (70 px; 60 px under a sticker). A reviewer found bigger text and centred
      stickers covered the main subject.
-   - Two stickers in one scene never overlap: render.py measures each one with its label and
+   - Two stickers in one scene never overlap: render_pro.py measures each one with its label and
      pushes them apart, shrinking them if they cannot fit.
    - After `pictures.py qc`, pin any sticker that still sits near a face to a fixed `x,y,h`.
    - Flow also swaps files ACROSS folders: a scene picture once landed among the stickers and a
@@ -526,7 +526,7 @@ This pack always makes it. A reviewer approved it as the main style.
      number, then pick and cut out again.
 6. **Re-voicing in another language:**
    - The new voice is usually longer (Urdu / Roman Urdu ran about 13-25% longer). Keeping the same beats
-     stretches every hold, so run `render.py --pacing` and add beats on the new language's words
+     stretches every hold, so run `validate_pipeline.py` and add beats on the new language's words
      until no hold is left.
    - Copy `img/`, `elements/`, `STYLE.txt`, SHOTS and ELEMENTS, then translate LINES.tsv line by
      line, keeping the ids.

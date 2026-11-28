@@ -14,28 +14,76 @@ Features:
 
 import os, sys, re, argparse
 
+HUMAN_ROLES_REPLACEMENTS = [
+    (r"\b(sailors?|seamen|mariners?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(captains?|commanders?)\b", r"2D stickman \1 with pure-white round head and black stick limbs"),
+    (r"\b(miners?)\b", r"2D stickman miners with pure-white round heads and black stick limbs"),
+    (r"\b(guards?|soldiers?|warriors?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(scientists?|researchers?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(villagers?|citizens?|townsfolk)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(harbor\s+masters?)\b", r"2D stickman harbor masters with pure-white round heads and black stick limbs"),
+    (r"\b(witnesses|onlookers?|spectators?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(crowds?|people|persons?|humans?)\b", r"2D stickman figures with pure-white round heads and black stick limbs"),
+    (r"\b(workers?|laborers?)\b", r"2D stickman workers with pure-white round heads and black stick limbs"),
+    (r"\b(historians?|scholars?|scribes?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+    (r"\b(priests?|monks?|prophets?)\b", r"2D stickman \1 with pure-white round heads and black stick limbs"),
+]
+
+def inline_rewrite_stickman_roles(text):
+    """Rewrites human role nouns inline so Flow receives stickman constraints at the noun level."""
+    out = text
+    for pat, repl in HUMAN_ROLES_REPLACEMENTS:
+        def _sub(m):
+            prefix = out[:m.start()]
+            if re.search(r"\b(?:stickman|stick-figure|stick figure)\s*$", prefix, re.IGNORECASE):
+                return m.group(0)
+            return re.sub(pat, repl, m.group(0), flags=re.IGNORECASE)
+        out = re.sub(pat, _sub, out, flags=re.IGNORECASE)
+    return out
+
 # Core Stickman Purity Anchor
 STICKMAN_ANATOMY_ANCHOR = (
-    "2D cartoon stickman character anatomy: clean round white ball head, simple dot eyes, "
-    "expressive thin black stick limbs, simple ink mouth, hand-drawn vector art style, thick dark outlines"
+    "2D stickman figure: pure flat crisp white round head, simple black dot eyes, "
+    "expressive ink mouth, thin black stick limbs, crisp black ink outlines, "
+    "zero realistic human anatomy, zero skin-toned heads"
+)
+
+# Bright Airy 2D Editorial Daylight & Warm Golden-Amber Sunset Directives
+DAYLIGHT_STAGE_ANCHOR = (
+    "bright airy editorial daylight with clean skies, crisp unbleached pigments "
+    "(terracotta red, fresh green), gentle grounded contact shadows, zero milky haze"
+)
+
+SUNSET_RICH_ANCHOR = (
+    "warm golden-amber 2D editorial sunset sky with bright readable colors, "
+    "gentle grounded contact shadows, open cheerful depth, zero dark gloomy shadows or milky fog"
+)
+
+SUNSET_SCENE_PAT = re.compile(
+    r"\b(?:sunset|dusk|evening|twilight|crisis|nightfall|amber sky)\b",
+    flags=re.IGNORECASE,
 )
 
 # Layered Negative Prompts
 NEGATIVE_STICKMAN = (
-    "photorealistic, realistic human skin texture, detailed human face, photograph, 3D CGI render, "
-    "glossy digital sculpture, uncanny valley, anime, manga, realistic muscles, realistic eyes, realistic lips"
+    "no realistic humans, no detailed human faces, no skin-toned heads, no noses, no ears, "
+    "no anime characters, no 3D render, photorealistic, 3D CGI, photograph, realistic skin, "
+    "manga, heavy grey face shading"
 )
 
 NEGATIVE_CLEANLINESS = (
-    "no text, no words, no letters, no alphabet, no comic titles, no headers, no top banner, no captions, "
-    "no speech bubbles, no dialogue text, no lorem ipsum, no readable writing, no pseudo-text on scrolls or signs or banners, "
-    "watermark, logo, typography, subtitles, credits, signature, newspaper headline, label, numbers, "
-    "phone frame, smartphone mockup, iphone frame, device bezel, tablet border, UI window, mockup, device casing, "
-    "blurry, out of focus, low resolution, multiple versions of the character in one frame, cluttered background"
+    "no text, no words, no letters, no text on screens, no words on monitors, no writing on scrolls, "
+    "no latin text, no lorem ipsum, no comic headers, watermark, phone bezel, comic border, "
+    "panel frame, paper margin, white frame, blurry"
+)
+
+NEGATIVE_LIGHTING = (
+    "no milky haze, no global white bloom, no overexposed bleached white, "
+    "no heavy dark moody shadows, no dark purple blotchy face shadows, no gloomy lighting"
 )
 
 NEGATIVE_ERA_ANCIENT = (
-    "no wristwatch, no plastic, no smartphone bezel, no electric light, no modern cars, no concrete"
+    "no wristwatch, plastic, smartphone, electric light, modern cars"
 )
 
 LAZY_ADJECTIVE_SOUP_PAT = re.compile(
@@ -97,60 +145,93 @@ LOOK_DIRECTIVES = {
     "casually_explained": "ultra-minimal 2D stick figure illustration, clean thin black vector strokes on white background",
     "minute_physics": "hand-drawn whiteboard and textured paper sketch explainer, animated black felt marker strokes",
     "painted": "2D illustrated graphic-novel style, detailed hand-painted backgrounds with realistic perspective",
-    "bright": "clean dark ink outlines, flat colours with soft shading, bright natural daylight palette"
+    "bright": "hand-drawn 2D flat cartoon palette, light cream walls, cheerful daylight",
 }
 
 def audit_and_enhance_prompt(prompt, is_sticker=False, is_ancient=False, space="auto", ref_char=None, look=None, cast_anchors=None, aspect="9:16"):
-    """Audits a raw prompt, strips lazy buzzwords, injects verbatim cast anchors & token-0 vertical framing (<1200 chars),
-    and appends concise multi-layered negative prompts.
+    """Audits a raw prompt, strips lazy buzzwords, injects verbatim cast anchors, bright 2D editorial lighting &
+    clean canonical stickman anatomy, enforces token-0 vertical framing (<1200 chars), and appends surgical negatives.
     """
-    cleaned = strip_lazy_adjectives(sanitize_policy_words(prompt.strip()))
+    raw_clean = strip_lazy_adjectives(sanitize_policy_words(str(prompt or "").strip()))
+    if not is_sticker and "no people" not in raw_clean.lower():
+        raw_clean = inline_rewrite_stickman_roles(raw_clean)
 
     # 0. Inject immutable cast_anchor verbatim when recurring ref character matches
     anchors = cast_anchors if isinstance(cast_anchors, dict) else load_cast_anchors(".")
     if not is_sticker and ref_char and ref_char in anchors:
         anch = anchors[ref_char].strip()
-        if anch[:24].lower() not in cleaned.lower():
-            cleaned = f"{anch} {cleaned}"
+        if anch[:24].lower() not in raw_clean.lower():
+            raw_clean = f"{anch} {raw_clean}"
 
-    # 1. Purity Check: Does it have stickman anatomy anchor?
-    has_stickman = any(w in cleaned.lower() for w in ["stickman", "stick figure", "stick-figure", "white ball head"])
-    if not is_sticker and not has_stickman and ref_char != "-":
-        cleaned = f"{cleaned}, featuring {STICKMAN_ANATOMY_ANCHOR}"
-
-    # 1b. Look Art Direction Anchor
-    if look and look in LOOK_DIRECTIVES:
-        directive = LOOK_DIRECTIVES[look]
-        if directive[:20].lower() not in cleaned.lower():
-            cleaned = f"{cleaned}, {directive}"
-
-    # 2. Spatial Composition Docking
-    if space == "left" and "left" not in cleaned.lower():
-        cleaned = f"{cleaned}, subject positioned on right, clear open background on left 45%"
-    elif space == "right" and "right" not in cleaned.lower():
-        cleaned = f"{cleaned}, subject positioned on left, clear open background on right 45%"
-
-    # 3. Aspect Token-0 Prefix or Sticker Chroma Constraints
+    # 1. Aspect Token-0 Prefix or Sticker Chroma Constraints
+    prefix = ""
     if is_sticker:
-        if "#FF00FF" not in cleaned and "magenta" not in cleaned.lower():
-            cleaned = f"Isolated prop cutout on pure solid uniform magenta background #FF00FF: {cleaned}, centered, single object, crisp sharp edges"
+        if "#FF00FF" not in raw_clean and "magenta" not in raw_clean.lower():
+            prefix = "Isolated prop cutout on pure solid uniform magenta background #FF00FF: "
     elif aspect == "9:16":
-        prefix = "A true full-height vertical 9:16 portrait orientation illustration, no phone frame, no device bezel, no text: "
-        if not cleaned.lower().startswith("a true full-height vertical 9:16"):
-            cleaned = prefix + cleaned
+        if not raw_clean.lower().startswith("a true full-height vertical 9:16"):
+            prefix = "A true full-height vertical 9:16 portrait, borderless edge-to-edge, no bezel, no text: "
+    elif aspect == "16:9":
+        if not raw_clean.lower().startswith(("clean 16:9", "complete 16:9")):
+            prefix = "Clean 16:9 widescreen 2D cartoon illustration, borderless edge-to-edge, no text: "
 
-    # 4. Assemble Concise Multi-Layered Negative Prompt
+    # 2. Craft Add-Ons (kept intact under budget while trimming only verbose middle scene text if needed)
+    addons = []
+    if is_sticker:
+        addons.append("centered, single object, crisp sharp edges")
+    else:
+        has_char_kw = bool(re.search(
+            r"\b(?:stickman|stick figure|stick-figure|white ball head|person|people|man|woman|child|boy|girl|human|caveman|worker|doctor|scientist|farmer|citizen|merchant|scribe|detective|soldier|villager|archaeologist|scholar|king|queen|emperor|priest|monk|god|goddess|deity|crowd|audience|warrior|leader|ruler|peasant|pastor|prophet|historian)\b",
+            raw_clean, re.IGNORECASE,
+        ))
+        wants_stickman = ("no people" not in raw_clean.lower()) and (
+            has_char_kw or (ref_char and ref_char != "-")
+        )
+        if wants_stickman and "pure flat crisp white round head" not in raw_clean.lower():
+            addons.append(STICKMAN_ANATOMY_ANCHOR)
+        if SUNSET_SCENE_PAT.search(raw_clean):
+            if "golden-amber" not in raw_clean.lower():
+                addons.append(SUNSET_RICH_ANCHOR)
+        elif look != "night" and "airy editorial daylight" not in raw_clean.lower():
+            addons.append(DAYLIGHT_STAGE_ANCHOR)
+
+        if look and look in LOOK_DIRECTIVES:
+            directive = LOOK_DIRECTIVES[look]
+            if directive[:20].lower() not in raw_clean.lower():
+                addons.append(directive)
+
+        if space == "left" and "left" not in raw_clean.lower():
+            addons.append("subject on right, open background on left 45%")
+        elif space == "right" and "right" not in raw_clean.lower():
+            addons.append("subject on left, open background on right 45%")
+        elif space == "top" and "open sky above" not in raw_clean.lower():
+            addons.append("subject in lower half, open sky above")
+
+    # 3. Assemble Concise Multi-Layered Negative Prompt
     negatives = [NEGATIVE_STICKMAN, NEGATIVE_CLEANLINESS]
-    if is_ancient:
-        negatives.append(NEGATIVE_ERA_ANCIENT)
     if is_sticker:
         negatives.append(NEGATIVE_CHROMA_STICKER)
+    else:
+        negatives.append(NEGATIVE_LIGHTING)
+    if is_ancient:
+        negatives.append(NEGATIVE_ERA_ANCIENT)
 
     negative_block = " Negative: " + ", ".join(negatives)
-    budget_body = max(220, 1180 - len(negative_block))
-    if len(cleaned) > budget_body:
-        cleaned = cleaned[:budget_body].rsplit(",", 1)[0].strip()
-    return f"{cleaned}{negative_block}"[:1199]
+    addon_str = (", " + ", ".join(addons)) if addons else ""
+    max_total = 1195
+    raw_budget = max_total - len(prefix) - len(addon_str) - len(negative_block)
+
+    if len(raw_clean) > max(60, raw_budget):
+        if raw_budget >= 60:
+            raw_clean = raw_clean[:raw_budget].rsplit(" ", 1)[0].rstrip(" ,.;:")
+        else:
+            raw_clean = raw_clean[:120].rsplit(" ", 1)[0].rstrip(" ,.;:")
+
+    body = f"{prefix}{raw_clean}{addon_str}".strip(" ,")
+    max_body = max_total - len(negative_block)
+    if len(body) > max_body:
+        body = body[:max_body].rsplit(",", 1)[0].strip()
+    return f"{body}{negative_block}"[:1199]
 
 def audit_shots_file(shots_path="SHOTS.tsv"):
     """Audits an entire SHOTS.tsv file and reports spatial distribution, policy warnings, and style compliance."""
@@ -201,18 +282,23 @@ def main():
     parser.add_argument("--ancient", action="store_true", help="Add anti-modern negative prompts")
     parser.add_argument("--space", choices=["left", "right", "center", "auto"], default="auto")
     parser.add_argument("--look", choices=list(LOOK_DIRECTIVES.keys()), default=None, help="Art direction look preset")
+    parser.add_argument("--aspect", choices=["9:16", "16:9"], default="9:16", help="Target aspect ratio")
     parser.add_argument("--audit-file", type=str, help="Audit a SHOTS.tsv file")
     args = parser.parse_args()
 
-    if args.audit_file:
-        res = audit_shots_file(args.audit_file)
+    if args.audit_file or (args.prompt and args.prompt.endswith(".tsv") and os.path.exists(args.prompt)):
+        target_tsv = args.audit_file or args.prompt
+        res = audit_shots_file(target_tsv)
         print("==================================================")
-        print(f"📋 SHOTS.TSV PROMPT AUDIT REPORT: {args.audit_file}")
+        print(f"📋 SHOTS.TSV PROMPT AUDIT REPORT: {target_tsv}")
         print("==================================================")
         for k, v in res.items():
             print(f"• {k}: {v}")
     elif args.prompt:
-        enhanced = audit_and_enhance_prompt(args.prompt, is_sticker=args.sticker, is_ancient=args.ancient, space=args.space, look=args.look)
+        enhanced = audit_and_enhance_prompt(
+            args.prompt, is_sticker=args.sticker, is_ancient=args.ancient,
+            space=args.space, look=args.look, aspect=args.aspect,
+        )
         print("==================================================")
         print("✨ ENHANCED & AUDITED FLOW PROMPT:")
         print("==================================================")

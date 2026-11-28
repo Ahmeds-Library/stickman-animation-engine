@@ -350,8 +350,8 @@ MODERN_CONTEXT_CUES = ("today", "now", "modern", "currently", "industrial", "sup
 def find_reusable_sticker(query_text, project_root, threshold=0.70, single_object_only=False, era_context=""):
     """Finds existing sticker in 3-tier order:
     Tier 0: Local project short/long elements/cut/
-    Tier 1: Global skills/stickman-stickers/assets/flow_vault/ (Owned-Flow priority)
-    Tier 2: Global skills/stickman-stickers/assets/cc0_library/ (CC0-1.0 fallback)
+    Tier 1: Global skills/stickman-stickers/assets/flow_vault/ (100% Owned-Flow priority)
+    Tier 2: GENERATE_FLOW_CUTOUT (live synthesis via Google Flow Cutout API)
     Enforces strict Era Compatibility when era_context describes prehistoric/ancient narration.
     Score = 0.40 * Concept_Ontology + 0.35 * Token_Jaccard + 0.25 * Trigram_Cosine (+ bonuses)
     """
@@ -440,7 +440,7 @@ def find_reusable_sticker(query_text, project_root, threshold=0.70, single_objec
     if best_score >= threshold and best_match:
         return best_match
 
-    # Tier 1 (flow_vault) & Tier 2 (cc0_library) lookup in skills/stickman-stickers/CATALOG.tsv
+    # Tier 1 (flow_vault) lookup in skills/stickman-stickers/CATALOG.tsv
     idx_mod = _get_sticker_library_indexer()
     if idx_mod:
         try:

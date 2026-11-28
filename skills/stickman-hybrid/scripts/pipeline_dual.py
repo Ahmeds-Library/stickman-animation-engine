@@ -43,6 +43,7 @@ SFX_SMART_DESIGNER = os.path.join(SKILL_SCRIPTS, "sfx_smart_designer.py")
 VFX_SMART_DESIGNER = os.path.join(SKILL_SCRIPTS, "vfx_smart_designer.py")
 ALIGN_HYBRID_SCENES = os.path.join(SKILL_SCRIPTS, "align_hybrid_scenes.py")
 DIRECTOR_SUPERVISOR = os.path.join(SKILL_SCRIPTS, "director_supervisor.py")
+STORYBOARD_PLANNER = os.path.join(SKILL_SCRIPTS, "storyboard_planner.py")
 ASSET_REGISTRY = os.path.join(SKILL_SCRIPTS, "asset_registry.py")
 VALIDATE_PIPELINE = os.path.join(SKILL_SCRIPTS, "validate_pipeline.py")
 
@@ -55,6 +56,7 @@ LOW_RESOURCE_ENGINE = os.path.join(SKILL_SCRIPTS, "low_resource_engine.py")
 LOW_RESOURCE_WHISPER = os.path.join(SKILL_SCRIPTS, "low_resource_whisper.py")
 
 KOKORO_VO = os.path.join(VOX_SCRIPTS, "kokoro_vo.py")
+URDU_VO = os.path.join(VOX_SCRIPTS, "urdu_vo.py")
 VO_JOIN = os.path.join(VOX_SCRIPTS, "vo_join.py")
 ALIGN_VO = os.path.join(VOX_SCRIPTS, "align.py")
 MIX_VO = os.path.join(VOX_SCRIPTS, "mix.py")
@@ -134,10 +136,15 @@ def synthesize_voice_pipeline(sub_dir, lang="en", voice="am_michael", speed=1.0)
                     subprocess.run([sys.executable, LOW_RESOURCE_WHISPER, "VO.wav", "--out-tsv", "WORDS.tsv"], check=True)
             print(f"✅ English voiceover complete & aligned for {sub_dir}")
         elif lang in ("ur", "roman_urdu"):
+            urdu_voice = "hm_omega" if voice in ("am_michael", "am_fenrir") else voice
             # Check if VO.wav already placed by user / external TTS
             if os.path.exists("VO.wav") and os.path.getsize("VO.wav") > 10000:
                 print(f"⏩ Existing Urdu VO.wav detected in {sub_dir}, performing alignment...")
                 subprocess.run([sys.executable, ALIGN_VO, "--vo", "VO.wav", "--lines", lines_tsv, "--out", "WORDS.tsv", "--lang", "ur", "--model", "base"], check=True)
+            elif os.path.exists(URDU_VO):
+                print(f"🎙️ Local Neural Urdu TTS (Kokoro-82M + EspeakG2P) synthesizing for {sub_dir}...")
+                subprocess.run([sys.executable, URDU_VO, "--script", lines_tsv, "--out", "VO.wav", "--voice", urdu_voice, "--speed", str(speed), "--align"], check=True)
+                print(f"✅ Local Urdu voiceover complete & aligned for {sub_dir}")
             else:
                 print(f"🤖 Automating Urdu Parler Voiceover via Kaggle API runner for {sub_dir}...")
                 if os.path.exists(KAGGLE_RUNNER):
@@ -167,6 +174,9 @@ def synthesize_voice_pipeline(sub_dir, lang="en", voice="am_michael", speed=1.0)
                 print(f"⏱️ Time-locked scenes and overlays to spoken words in {sub_dir}")
             if os.path.exists(DIRECTOR_SUPERVISOR):
                 subprocess.run([sys.executable, DIRECTOR_SUPERVISOR, "."])
+            if os.path.exists(STORYBOARD_PLANNER):
+                subprocess.run([sys.executable, STORYBOARD_PLANNER, "."])
+                print(f"🎬 Upfront Master Storyboard compiled & locked for {sub_dir}")
         return True
     finally:
         os.chdir(cwd)
@@ -212,6 +222,8 @@ def generate_sound_mix(sub_dir):
         ]
         if not is_short:
             mix_cmd.extend(["--outro-sec", "8.0"])
+        else:
+            mix_cmd.extend(["--outro-sec", "0.0"])
         # Auto-wire Vox Drop-Out silence dip from NARRATIVE_AUDIT.json if twist_line_id exists in VO.tsv
         na_path = "NARRATIVE_AUDIT.json"
         if os.path.exists(na_path) and os.path.exists("VO.tsv"):
@@ -333,10 +345,14 @@ def render_pipeline_video(sub_dir, fmt="9:16", out_name=None, dry_run=False, loo
             "--words", "WORDS.tsv",
             "--look", look,
         ]
-        if str(captions).lower() in ("no", "off", "false", "0"):
+        if fmt == "16:9" and str(captions).lower() not in ("yes", "true", "1"):
+            cmd += ["--no-captions"]
+        elif str(captions).lower() in ("no", "off", "false", "0"):
             cmd += ["--no-captions"]
         if fmt == "16:9":
             cmd += ["--outro-sec", "8.0"]
+        else:
+            cmd += ["--outro-sec", "0.0"]
         if out_name:
             cmd += ["--out", out_name]
         subprocess.run(cmd, check=True)

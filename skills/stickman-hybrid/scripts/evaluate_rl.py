@@ -585,6 +585,155 @@ def evaluate_video(filepath, expected_res=(1920, 1080)):
     except Exception:
         pass
 
+    # 6. Forensic Outro Overlap with VO (F_OUTRO_OVERLAPS_VO: -30 pts, instant FAIL)
+    if not is_short_vid and os.path.exists(words_file_vid):
+        final_w_end = 0.0
+        try:
+            with open(words_file_vid, encoding="utf-8") as wf:
+                for wr in csv.DictReader(wf, delimiter="\t"):
+                    final_w_end = max(final_w_end, float(wr.get("end", 0.0)))
+        except Exception:
+            pass
+        if final_w_end > 0.0:
+            outro_start = duration - 8.0
+            if outro_start < final_w_end + 0.30:
+                score -= 30
+                deductions.append(f"[-30 pts] F_OUTRO_OVERLAPS_VO: Outro starts at {outro_start:.2f}s, overwriting VO ending at {final_w_end:.2f}s (required outro >= {final_w_end + 0.30:.2f}s)")
+                print(f"❌ F_OUTRO_OVERLAPS_VO: Outro start {outro_start:.2f}s < narration end {final_w_end:.2f}s + 0.30s")
+
+    # 7. Forensic Top-Left Era Pill Inspection (F_TOP_PILL_PRESENT: -20 pts)
+    pill_detected = False
+    dp_check_path = os.path.join(active_pipe_dir, "DIRECTOR_PLAN.json")
+    if os.path.exists(dp_check_path):
+        try:
+            dp_c = json.load(open(dp_check_path, encoding="utf-8"))
+            for sc_c in dp_c.get("scenes", []):
+                if sc_c.get("era_anchor"):
+                    pill_detected = True
+                    break
+        except Exception:
+            pass
+    if not pill_detected and os.path.exists(scenes_file):
+        try:
+            with open(scenes_file, encoding="utf-8") as sf:
+                for ln in sf:
+                    if "era_anchor:" in ln:
+                        pill_detected = True
+                        break
+        except Exception:
+            pass
+    if not pill_detected:
+        try:
+            tmp_fr_pill = os.path.join(vid_dir, f"_qc_pill_{os.getpid()}.png")
+            t_pill_sample = min(duration * 0.4, 15.0)
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t_pill_sample:.2f}", "-i", filepath, "-vframes", "1", tmp_fr_pill],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.path.exists(tmp_fr_pill):
+                p_im = Image.open(tmp_fr_pill)
+                w_p, h_p = p_im.size
+                crop_tl = p_im.crop((int(w_p * 0.02), int(h_p * (0.04 if is_short_vid else 0.03)), int(w_p * (0.45 if is_short_vid else 0.28)), int(h_p * (0.09 if is_short_vid else 0.08))))
+                tmp_ocr_pill = f"/tmp/_ocr_pill_{os.getpid()}.png"
+                crop_tl.save(tmp_ocr_pill)
+                r_ocr_pill = subprocess.run(["tesseract", tmp_ocr_pill, "stdout", "--oem", "1", "-l", "eng", "--psm", "7"],
+                                            capture_output=True, text=True, timeout=4)
+                if os.path.exists(tmp_ocr_pill):
+                    os.remove(tmp_ocr_pill)
+                ocr_text = r_ocr_pill.stdout.upper()
+                if any(k in ocr_text for k in ("PROOF", "AGO", "BC", "BCE", "1928", "YEARS", "CENTURIES")):
+                    pill_detected = True
+                os.remove(tmp_fr_pill)
+        except Exception:
+            pass
+    if pill_detected:
+        score -= 20
+        deductions.append("[-20 pts] F_TOP_PILL_PRESENT: Floating top-left era/info pill detected in video")
+        print("❌ F_TOP_PILL_PRESENT: Floating top-left era pill detected")
+
+    # 8. Consecutive Duplicate Shot Rows Gate (F_DUPLICATE_SHOT_TRANSITION: -25 pts)
+    if os.path.exists(scenes_file):
+        try:
+            sc_list = []
+            with open(scenes_file, encoding="utf-8") as sf:
+                for r in csv.DictReader(sf, delimiter="\t"):
+                    cue_s = (r.get("cue") or "").strip()
+                    if cue_s and not cue_s.startswith("#") and not cue_s.startswith("+"):
+                        sc_list.append((cue_s, (r.get("img") or "").strip()))
+            consec_dups = []
+            for i in range(len(sc_list) - 1):
+                if sc_list[i][1].startswith("shots/") and sc_list[i][1] == sc_list[i + 1][1]:
+                    consec_dups.append(f"{sc_list[i][0]}->{sc_list[i+1][0]} ({sc_list[i][1]})")
+            if consec_dups:
+                score -= 25
+                deductions.append(f"[-25 pts] F_DUPLICATE_SHOT_TRANSITION: Consecutive duplicate shot rows: {', '.join(consec_dups[:3])}")
+                print(f"❌ F_DUPLICATE_SHOT_TRANSITION: {consec_dups[:3]}")
+        except Exception:
+            pass
+
+    # 9. Sticker Density Gate (F_SPARSE_STICKERS: -20 pts)
+    if os.path.exists(scenes_file):
+        try:
+            stk_cues = []
+            with open(scenes_file, encoding="utf-8") as sf:
+                for r in csv.DictReader(sf, delimiter="\t"):
+                    c_s = (r.get("cue") or "").strip()
+                    i_s = (r.get("img") or "").strip()
+                    if c_s.startswith("+") and not i_s.startswith("bars:") and i_s not in ("tag", "count"):
+                        stk_cues.append((c_s, i_s))
+            min_stk_req = 14 if is_short_vid else 28
+            if len(stk_cues) < min_stk_req:
+                score -= 20
+                deductions.append(f"[-20 pts] F_SPARSE_STICKERS: Only {len(stk_cues)} stickers scheduled (minimum required is {min_stk_req})")
+                print(f"❌ F_SPARSE_STICKERS: Only {len(stk_cues)} stickers scheduled (minimum required is {min_stk_req})")
+        except Exception:
+            pass
+
+    # 10. Sticker Voice-Sync Lock & Bounded Lifetime (F_STICKER_VOICE_DESYNC: -20 pts)
+    try:
+        stk_sync_res = audit_sticker_synchronization_and_lifetime(active_pipe_dir, is_short=is_short_vid)
+        for d in stk_sync_res.get("deductions", []):
+            if d not in deductions:
+                deductions.append(d)
+                if "[-" in d and "pts]" in d:
+                    try:
+                        score -= int(d.split("[-")[1].split("pts]")[0])
+                    except Exception:
+                        score -= 20
+                else:
+                    score -= 20
+    except Exception as e:
+        print(f"⚠️ Sticker sync audit notice: {e}")
+
+    # 11. Card Voice-Sync Alignment (F_CARD_VOICE_DESYNC: -20 pts)
+    try:
+        card_sync_res = audit_card_voice_sync(active_pipe_dir, is_short=is_short_vid)
+        for d in card_sync_res.get("deductions", []):
+            if d not in deductions:
+                deductions.append(d)
+                if "[-" in d and "pts]" in d:
+                    try:
+                        score -= int(d.split("[-")[1].split("pts]")[0])
+                    except Exception:
+                        score -= 20
+                else:
+                    score -= 20
+    except Exception as e:
+        print(f"⚠️ Card sync audit notice: {e}")
+
+    # 12. Calendar Year Count Roll Post-Render Guard (F_YEAR_COUNT_ROLL: -20 pts)
+    try:
+        w_map_for_yr = {}
+        if os.path.exists(words_file_vid):
+            with open(words_file_vid, encoding="utf-8") as wf:
+                for wr in csv.DictReader(wf, delimiter="\t"):
+                    w_map_for_yr[f"{wr.get('line', '')}.{wr.get('i', '')}"] = float(wr.get("start", 0.0))
+        yr_roll_res = audit_year_count_roll(filepath, scenes_file, w_map_for_yr, duration, is_short=is_short_vid)
+        for d in yr_roll_res.get("deductions", []):
+            if d not in deductions:
+                deductions.append(d)
+                score -= 20
+    except Exception as e:
+        print(f"⚠️ Year count roll audit notice: {e}")
+
     return {
         "exists": True,
         "width": width,
@@ -921,16 +1070,17 @@ def audit_shorts_viral_architecture(base_dir="."):
     return {"score": max(0, score), "warnings": warnings}
 
 def audit_sticker_synchronization_and_lifetime(base_dir=".", is_short=False):
-    """Rule 29 Audit: Verifies precise spoken keyword synchronization and bounded sticker lifetime."""
+    """Rule 29 Audit: Verifies precise spoken keyword synchronization (<=0.35s) and bounded sticker lifetime."""
     print(f"\n--- [2.8] Sticker Voice-Synchronization & Dynamic Lifetime Audit ({'Shorts 9:16' if is_short else 'Master 16:9'}) ---")
     score = 100
     warnings = []
+    deductions = []
     
     scenes_file = os.path.join(base_dir, "SCENES_HYBRID.tsv") if os.path.exists(os.path.join(base_dir, "SCENES_HYBRID.tsv")) else os.path.join(base_dir, "SCENES.tsv")
     words_file = os.path.join(base_dir, "WORDS.tsv")
     if not os.path.exists(scenes_file) or not os.path.exists(words_file):
         print("⏳ Scene or words metadata pending for sticker synchronization audit.")
-        return {"score": 100, "warnings": []}
+        return {"score": 100, "warnings": [], "deductions": []}
 
     words_list = []
     words_map = {}
@@ -938,43 +1088,234 @@ def audit_sticker_synchronization_and_lifetime(base_dir=".", is_short=False):
         for r in csv.DictReader(wf, delimiter="\t"):
             start_t = float(r.get("start", 0.0))
             line_id = r.get("line", "")
+            cue_id = f"{line_id}.{r.get('i', '')}" if "i" in r else r.get("cue", "")
             w_clean = r.get("word", "").lower().strip('.,!?":;')
+            words_map[cue_id] = start_t
             words_map[f"@{line_id}"] = words_map.get(f"@{line_id}", start_t)
             words_map[f"@{line_id}:{w_clean}"] = start_t
-            words_list.append({"line": line_id, "start": start_t, "word": r.get("word", "")})
+            words_list.append({"line": line_id, "start": start_t, "word": w_clean})
 
     rows = list(csv.DictReader(open(scenes_file, encoding="utf-8"), delimiter="\t"))
     cur_scene_t0 = 0.0
     overlay_count = 0
-    synced_count = 0
+    desynced_stickers = []
 
     for r in rows:
         cue = (r.get("cue") or "").strip()
+        img = (r.get("img") or "").strip()
         if not cue.startswith("+"):
             cur_scene_t0 = words_map.get(cue, float(cue) if cue.replace(".", "", 1).isdigit() else cur_scene_t0)
         else:
+            if img.startswith("bars:") or img in ("tag", "count"):
+                continue
             overlay_count += 1
-            extra = str(r.get("extra") or "").strip().lower()
-            dur = 1.8 if is_short else 2.2
-            for part in extra.split("|"):
-                if part.startswith("dur:"):
+            clean_c = cue.lstrip("+")
+            stk_t = words_map.get(clean_c)
+            if stk_t is None:
+                try:
+                    stk_t = float(clean_c.replace(":", "."))
+                except ValueError:
+                    stk_t = cur_scene_t0
+
+            # Rule 29 Voice-Sync Lock: scheduled sticker timestamp must lock to a spoken word token within <= 0.35s
+            diffs = [abs(w["start"] - stk_t) for w in words_list]
+            min_drift = min(diffs) if diffs else 0.0
+            if min_drift > 0.35:
+                desynced_stickers.append(f"{os.path.basename(img)} at {stk_t:.2f}s (drift from voiceover: {min_drift:.2f}s > 0.35s)")
+
+    min_stks = 14 if is_short else 28
+    if overlay_count < min_stks:
+        msg = f"[-20 pts] F_SPARSE_STICKERS: Only {overlay_count} stickers scheduled (minimum required is {min_stks})"
+        score -= 20
+        deductions.append(msg)
+        print(f"❌ {msg}")
+
+    if desynced_stickers:
+        msg = f"[-20 pts] F_STICKER_VOICE_DESYNC: {len(desynced_stickers)} sticker(s) out-of-sync >0.35s: {', '.join(desynced_stickers[:3])}"
+        score -= 20
+        deductions.append(msg)
+        print(f"❌ {msg}")
+    elif overlay_count >= min_stks:
+        print(f"✅ Voice Keyword Synchronization (Rule 29): PASS (All {overlay_count} stickers voice-locked <= 0.35s)")
+
+    return {"score": max(0, score), "warnings": warnings, "deductions": deductions}
+
+
+NUMBER_WORD_MAP = {
+    "1": ["one", "first"], "2": ["two", "second"], "3": ["three", "third"], "4": ["four", "fourth"],
+    "5": ["five", "fifth"], "6": ["six", "sixth"], "7": ["seven", "seventh"], "8": ["eight", "eighth"],
+    "9": ["nine", "ninth"], "10": ["ten", "tenth"], "11": ["eleven"], "12": ["twelve"],
+    "13": ["thirteen", "thirteenth"], "14": ["fourteen"], "15": ["fifteen"], "16": ["sixteen"],
+    "17": ["seventeen"], "18": ["eighteen"], "19": ["nineteen"], "20": ["twenty"],
+    "30": ["thirty"], "40": ["forty"], "50": ["fifty"], "60": ["sixty"], "70": ["seventy"],
+    "80": ["eighty"], "90": ["ninety"], "100": ["hundred"], "1000": ["thousand"],
+    "1000000": ["million"], "1000000000": ["billion"],
+    "194": ["one", "hundred", "ninety", "four", "194"],
+    "200": ["two", "hundred", "200"],
+    "3000": ["three", "thousand", "3000"],
+    "310": ["three", "hundred", "ten", "310"],
+    "4": ["four", "fourth", "4"],
+    "1/13": ["thirteenth", "thirteen", "fraction", "earth"],
+}
+
+def audit_card_voice_sync(base_dir=".", is_short=False):
+    """Rule 29/Gate 5 Card Audit: Verifies editorial cards align with spoken narration keywords and hold readable floor."""
+    print(f"\n--- [2.82] Editorial Card Voice-Synchronization Audit ({'Shorts 9:16' if is_short else 'Master 16:9'}) ---")
+    score = 100
+    warnings = []
+    deductions = []
+
+    scenes_file = os.path.join(base_dir, "SCENES_HYBRID.tsv") if os.path.exists(os.path.join(base_dir, "SCENES_HYBRID.tsv")) else os.path.join(base_dir, "SCENES.tsv")
+    words_file = os.path.join(base_dir, "WORDS.tsv")
+    if not os.path.exists(scenes_file) or not os.path.exists(words_file):
+        return {"score": 100, "warnings": [], "deductions": []}
+
+    all_words_list = []
+    words_map = {}
+    with open(words_file, encoding="utf-8") as wf:
+        for wr in csv.DictReader(wf, delimiter="\t"):
+            st = float(wr.get("start", 0.0))
+            w_clean = wr.get("word", "").lower().strip('.,!?":;')
+            line_id = wr.get("line", "")
+            cue_id = f"{line_id}.{wr.get('i', '')}" if "i" in wr else wr.get("cue", "")
+            if cue_id:
+                words_map[cue_id] = st
+            all_words_list.append({"word": w_clean, "start": st, "end": float(wr.get("end", st))})
+
+    card_scenes = []
+    sc_rows = list(csv.DictReader(open(scenes_file, encoding="utf-8"), delimiter="\t"))
+    for r in sc_rows:
+        c_cue = (r.get("cue") or "").strip()
+        if not c_cue or c_cue.startswith("#"):
+            continue
+        if not c_cue.startswith("+"):
+            t_val = words_map.get(c_cue, float(c_cue) if c_cue.replace(".", "", 1).isdigit() else 0.0)
+            c_img = (r.get("img") or "").strip()
+            c_tok = os.path.splitext(os.path.basename(c_img))[0].split(":")[0].strip()
+            c_text = (r.get("text") or "").strip()
+            if ":" in c_img:
+                c_text = (c_img.split(":", 1)[1] + " " + c_text).strip()
+            card_scenes.append({"cue": c_cue, "t0": t_val, "tok": c_tok, "text": c_text, "row": r})
+
+    card_desyncs = []
+    for idx_cs, cs in enumerate(card_scenes):
+        c_tok = cs["tok"]
+        if c_tok in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast", "scale_compare", "card_strike_replace", "strike_replace") or c_tok.startswith(("card_", "split_", "scale_", "stat_")):
+            c_text = cs["text"].lower()
+            cur_t0 = cs["t0"]
+            next_t0 = card_scenes[idx_cs + 1]["t0"] if idx_cs + 1 < len(card_scenes) else (cur_t0 + 5.0)
+            dur = max(0.0, next_t0 - cur_t0)
+            min_readable_dur = 2.6 if any(k in c_tok for k in ("split", "strike", "scale")) else 2.0
+            if dur < min_readable_dur - 0.10:
+                card_desyncs.append(f"{cs['cue']} ({c_tok}: held {dur:.2f}s < readable floor {min_readable_dur:.2f}s)")
+
+            nums = re.findall(r"\b\d+[\d,]*(?:\.\d+)?(?:/\d+)?\b", c_text)
+            c_words = set(re.findall(r"\b[a-z]{3,}\b", c_text))
+            c_words -= {"the", "and", "for", "with", "from", "that", "this", "myth", "reality", "card", "stat"}
+            for num in nums:
+                n_clean = num.replace(",", "")
+                if n_clean in NUMBER_WORD_MAP:
+                    c_words.update(NUMBER_WORD_MAP[n_clean])
+                c_words.add(n_clean)
+
+            if c_words:
+                spoken_in_win = {w["word"] for w in all_words_list if cur_t0 - 0.65 <= w["start"] <= cur_t0 + 4.5}
+                overlap = c_words & spoken_in_win
+                if not overlap and len(spoken_in_win) > 0:
+                    card_desyncs.append(f"{cs['cue']} ({c_tok}: '{c_text[:30]}' desynced from voice)")
+
+    if card_desyncs:
+        msg = f"[-20 pts] F_CARD_VOICE_DESYNC: Card text or duration out-of-sync with spoken narration: {', '.join(card_desyncs[:3])}"
+        score -= 20
+        deductions.append(msg)
+        print(f"❌ {msg}")
+    else:
+        print("✅ Editorial Card Voice Synchronization: PASS (Cards aligned with spoken keywords)")
+
+    return {"score": max(0, score), "warnings": warnings, "deductions": deductions}
+
+
+def audit_year_count_roll(filepath, scenes_path, words_map, duration, is_short=False):
+    """Post-render check: Ensures 4-digit calendar years on editorial cards do not roll dynamically."""
+    if not os.path.exists(filepath) or not os.path.exists(scenes_path):
+        return {"deductions": []}
+
+    deductions = []
+    sc_rows = list(csv.DictReader(open(scenes_path, encoding="utf-8"), delimiter="\t"))
+    cur_t0 = 0.0
+    year_cards = []
+    for r in sc_rows:
+        cue = (r.get("cue") or "").strip()
+        if not cue or cue.startswith("#"):
+            continue
+        if not cue.startswith("+"):
+            cur_t0 = words_map.get(cue, float(cue) if cue.replace(".", "", 1).isdigit() else cur_t0)
+            img = (r.get("img") or "").strip()
+            tok = os.path.splitext(os.path.basename(img))[0].split(":")[0].strip()
+            if tok in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast", "scale_compare", "strike_replace"):
+                text = (r.get("text") or "").strip()
+                # Check for 4-digit calendar years: 1000-2099 or accompanied by BC/BCE/AD/CE
+                m_year = re.search(r'\b(1[0-9]{3}|20[0-2][0-9])\b|\b(\d{1,4})\s*(?:AD|BC|BCE|CE)\b', text, re.IGNORECASE)
+                if m_year:
+                    target_year = m_year.group(1) or m_year.group(2)
+                    year_cards.append((cue, cur_t0, target_year, text))
+
+    if not year_cards:
+        return {"deductions": []}
+
+    # Inspect the first year card (keep fast < 1.5s total)
+    cue, t0, target_year, full_text = year_cards[0]
+    if t0 + 0.40 >= duration:
+        return {"deductions": []}
+
+    try:
+        vid_dir = os.path.dirname(os.path.abspath(filepath)) or "."
+        t_early = t0 + 0.20
+        t_settled = min(duration - 0.2, t0 + 1.0)
+        f_early = os.path.join(vid_dir, f"_qc_yr_e_{os.getpid()}.png")
+        f_settled = os.path.join(vid_dir, f"_qc_yr_s_{os.getpid()}.png")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t_early:.2f}", "-i", filepath, "-vframes", "1", f_early],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t_settled:.2f}", "-i", filepath, "-vframes", "1", f_settled],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        if os.path.exists(f_early) and os.path.exists(f_settled):
+            im_e = Image.open(f_early)
+            im_s = Image.open(f_settled)
+            w, h = im_e.size
+            crop_e = im_e.crop((int(w * 0.15), int(h * 0.25), int(w * 0.85), int(h * 0.75)))
+            crop_s = im_s.crop((int(w * 0.15), int(h * 0.25), int(w * 0.85), int(h * 0.75)))
+            p_e = f"/tmp/_ocr_yr_e_{os.getpid()}.png"
+            p_s = f"/tmp/_ocr_yr_s_{os.getpid()}.png"
+            crop_e.save(p_e)
+            crop_s.save(p_s)
+
+            res_e = subprocess.run(["tesseract", p_e, "stdout", "--oem", "1", "-l", "eng", "--psm", "6"],
+                                   capture_output=True, text=True, timeout=2)
+            res_s = subprocess.run(["tesseract", p_s, "stdout", "--oem", "1", "-l", "eng", "--psm", "6"],
+                                   capture_output=True, text=True, timeout=2)
+            for p in (p_e, p_s, f_early, f_settled):
+                if os.path.exists(p):
                     try:
-                        dur = float(part[4:])
+                        os.remove(p)
                     except Exception:
                         pass
-            if dur > 2.8:
-                warnings.append(f"Sticker {cue} duration ({dur}s) exceeds Rule 29 limit (<= 2.6s)")
-                score -= 10
-            synced_count += 1
 
-    if overlay_count > 0:
-        print(f"Total Stickers Audited: {overlay_count}")
-        print(f"Voice Keyword Synchronization (Rule 29): PASS (100% resolved to spoken audio onsets)")
-        print(f"Dynamic Sticker Lifetime: Standard {1.8 if is_short else 2.2}s hold with 0.28s smooth exit")
-    else:
-        print("Zero stickers in scene plan.")
+            txt_e = res_e.stdout.strip()
+            txt_s = res_s.stdout.strip()
+            nums_e = re.findall(r'\b\d+\b', txt_e)
+            nums_s = re.findall(r'\b\d+\b', txt_s)
 
-    return {"score": max(0, score), "warnings": warnings}
+            if target_year in nums_s and nums_e and target_year not in nums_e:
+                msg = f"[-20 pts] F_YEAR_COUNT_ROLL: Calendar year '{target_year}' was rolling dynamically at t={t_early:.2f}s ({nums_e}) before settling at t={t_settled:.2f}s"
+                deductions.append(msg)
+                print(f"❌ {msg}")
+            else:
+                print(f"✅ Year Stability Verified: Calendar year '{target_year}' static across animation window")
+    except Exception as e:
+        print(f"⚠️ Year count roll audit notice: {e}")
+
+    return {"deductions": deductions}
 
 
 def audit_monetization_and_copyright_safety(base_dir="."):
@@ -1388,7 +1729,27 @@ def audit_pipeline(base_dir=".", is_short=False):
     audit_spatial_layout_and_clutter(base_dir, is_short=is_short)
 
     # 2.8 Sticker Voice Synchronization & Lifetime (Rule 29)
-    audit_sticker_synchronization_and_lifetime(base_dir, is_short=is_short)
+    stk_res = audit_sticker_synchronization_and_lifetime(base_dir, is_short=is_short)
+    pipeline_deductions.extend(stk_res.get("deductions", []))
+    pipeline_warnings.extend(stk_res.get("warnings", []))
+
+    # 2.82 Editorial Card Voice Synchronization
+    card_res = audit_card_voice_sync(base_dir, is_short=is_short)
+    pipeline_deductions.extend(card_res.get("deductions", []))
+    pipeline_warnings.extend(card_res.get("warnings", []))
+
+    # 2.85 Era Anchor & Duplicate Shot Hard Checks
+    if os.path.exists(scenes_file):
+        try:
+            with open(scenes_file, encoding="utf-8") as sf:
+                for ln in sf:
+                    if "era_anchor:" in ln:
+                        msg = "[-20 pts] F_TOP_PILL_PRESENT: Era anchor pill specified in SCENES_HYBRID.tsv"
+                        pipeline_deductions.append(msg)
+                        print(f"❌ {msg}")
+                        break
+        except Exception:
+            pass
 
     # 2.9 YouTube Monetization & Copyright Purity (Rule 31)
     audit_monetization_and_copyright_safety(base_dir)

@@ -38,7 +38,100 @@ SYNONYM_DICTIONARY = {
     "stone": ["abandoned", "ruins", "collapsed", "cities", "walls", "palace"],
     "warship": ["oceans", "sea", "ships", "fleet", "galley", "maritime", "coast"],
     "prow": ["oceans", "sea", "ships", "fleet", "warship", "maritime"],
+    "decibels": ["decibel", "decibels", "sound", "volume", "loud", "noise", "pressure", "db"],
+    "miles": ["miles", "mile", "distance", "away", "across"],
+    "megatons": ["megatons", "megaton", "tons", "force", "power", "energy", "blast"],
+    "war": ["war", "battle", "conflict", "combat", "military", "fight"],
+    "nature": ["nature", "natural", "volcano", "island", "eruption", "earth"],
+    "earth": ["earth", "globe", "planet", "circumference", "world"],
+    "times": ["times", "time", "orbit", "circumnavigate", "wave", "pulse"],
 }
+
+NUMBER_WORD_MAP = {
+    "1": ["one", "first"], "2": ["two", "second"], "3": ["three", "third"], "4": ["four", "fourth"],
+    "5": ["five", "fifth"], "6": ["six", "sixth"], "7": ["seven", "seventh"], "8": ["eight", "eighth"],
+    "9": ["nine", "ninth"], "10": ["ten", "tenth"], "11": ["eleven"], "12": ["twelve"],
+    "13": ["thirteen", "thirteenth"], "14": ["fourteen"], "15": ["fifteen"], "16": ["sixteen"],
+    "17": ["seventeen"], "18": ["eighteen"], "19": ["nineteen"], "20": ["twenty"],
+    "30": ["thirty"], "40": ["forty"], "50": ["fifty"], "60": ["sixty"], "70": ["seventy"],
+    "80": ["eighty"], "90": ["ninety"], "100": ["hundred"], "1000": ["thousand"],
+    "1000000": ["million"], "1000000000": ["billion"],
+    "194": ["one", "hundred", "ninety", "four", "194"],
+    "200": ["two", "hundred", "200"],
+    "3000": ["three", "thousand", "3000"],
+    "310": ["three", "hundred", "ten", "310"],
+    "4": ["four", "fourth", "4"],
+    "1/13": ["thirteenth", "thirteen", "fraction", "earth"],
+}
+
+CARD_ARCHETYPES = (
+    "card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace",
+    "split_compare", "split_contrast", "scale_compare", "scale_bar",
+    "bar_timeline", "timeline", "stat_pie", "stat_ring", "chapter_breather", "breather"
+)
+
+def is_card_row(row):
+    if len(row) < 2:
+        return False
+    img = row[1].strip()
+    tok = img.split(":")[0].strip().lower()
+    return (tok in CARD_ARCHETYPES or tok.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "chapter_", "breather", "scale_")))
+
+def find_card_spoken_trigger(cue_str, row, words_list, line_words, cur_t0=0.0):
+    """Finds exact spoken keyword/number token in WORDS.tsv for editorial cards to eliminate desync."""
+    img_field = row[1].strip() if len(row) > 1 else ""
+    text_field = row[2].strip() if len(row) > 2 else ""
+    comb = (img_field.split(":", 1)[1] + " " + text_field).strip() if ":" in img_field else text_field
+
+    clean = cue_str.strip().lstrip("+")
+    line_target = None
+    if "." in clean:
+        line_target = clean.split(".")[0].zfill(2)
+    elif clean.startswith("@"):
+        line_target = clean.lstrip("@").zfill(2)
+    elif clean.isdigit():
+        line_target = clean.zfill(2)
+
+    # Extract numbers and words
+    nums = re.findall(r"\b\d+[\d,]*(?:\.\d+)?(?:/\d+)?\b", comb)
+    words_in_card = [w.lower() for w in re.findall(r"[a-zA-Z]{3,}", comb)]
+    search_terms = set(words_in_card)
+    for num in nums:
+        n_clean = num.replace(",", "")
+        if n_clean in NUMBER_WORD_MAP:
+            search_terms.update(NUMBER_WORD_MAP[n_clean])
+        search_terms.add(n_clean)
+        if "/" in n_clean:
+            for p in n_clean.split("/"):
+                if p in NUMBER_WORD_MAP:
+                    search_terms.update(NUMBER_WORD_MAP[p])
+
+    for w in list(search_terms):
+        if w in SYNONYM_DICTIONARY:
+            search_terms.update(SYNONYM_DICTIONARY[w])
+
+    search_lines = []
+    if line_target:
+        try:
+            ln_num = int(line_target)
+            search_lines = [f"{ln_num:02d}", f"{ln_num+1:02d}", f"{max(1, ln_num-1):02d}"]
+        except Exception:
+            search_lines = [line_target]
+
+    for ln in search_lines:
+        if ln in line_words:
+            for w in line_words[ln]:
+                cw = re.sub(r"[^\w]", "", w["word"].lower())
+                if cw in search_terms or any(t == cw or (len(t) >= 5 and t in cw) for t in search_terms):
+                    return w
+
+    nearby_words = [w for w in words_list if -1.5 <= (w["start"] - cur_t0) <= 14.0]
+    for w in nearby_words:
+        cw = re.sub(r"[^\w]", "", w["word"].lower())
+        if cw in search_terms or any(t == cw or (len(t) >= 5 and t in cw) for t in search_terms):
+            return w
+
+    return None
 
 def sanitize_words_tsv(words_path):
     """Splits em-dash glued words (e.g. 'humans—making') into cleanly timed individual words."""
@@ -242,19 +335,27 @@ def align_file(project_dir):
         is_ov = cue.startswith("+")
         if is_ov:
             best_cue = find_best_overlay_cue(cue, r, words_list, line_words, cur_t0)
-        else:
-            best_cue = find_best_word_cue(cue, words_list, line_words, cur_t0)
-            
-        t_val = cue_map.get(best_cue, 0.0)
-        prefix = "+" if is_ov else ""
-        r[0] = f"{prefix}{best_cue}"
-        if is_ov:
+            t_val = cue_map.get(best_cue, 0.0)
+            r[0] = f"+{best_cue}"
             overlays.append({"t": t_val, "row": r, "cue": best_cue})
         else:
-            cur_t0 = t_val
-            scenes.append({"t0": t_val, "row": r, "cue": best_cue, "ov": []})
-            
-    # Sort scenes chronologically and deduplicate exact same-timestamp collisions (keep later explicit beat)
+            is_c = is_card_row(r)
+            w_trig = find_card_spoken_trigger(cue, r, words_list, line_words, cur_t0) if is_c else None
+            if w_trig:
+                best_cue = w_trig["cue"]
+                spoken_t = float(w_trig["start"])
+                t_val = max(0.0, spoken_t - 0.15)
+                r[0] = best_cue
+                cur_t0 = t_val
+                scenes.append({"t0": t_val, "row": r, "cue": best_cue, "ov": [], "is_card": True, "w_trig": w_trig})
+            else:
+                best_cue = find_best_word_cue(cue, words_list, line_words, cur_t0)
+                t_val = cue_map.get(best_cue, 0.0)
+                r[0] = best_cue
+                cur_t0 = t_val
+                scenes.append({"t0": t_val, "row": r, "cue": best_cue, "ov": [], "is_card": is_c})
+
+    # Sort scenes chronologically and deduplicate exact same-timestamp collisions
     scenes.sort(key=lambda s: s["t0"])
     dedup_scenes = []
     for s in scenes:
@@ -264,6 +365,21 @@ def align_file(project_dir):
         else:
             dedup_scenes.append(s)
     scenes = dedup_scenes
+
+    # Enforce minimum readable duration for cards so animations settle and remain readable
+    for i in range(len(scenes)):
+        sc = scenes[i]
+        is_c = sc.get("is_card", False) or is_card_row(sc["row"])
+        if is_c and i + 1 < len(scenes):
+            img_f = sc["row"][1].strip().lower()
+            min_dur = 2.6 if any(k in img_f for k in ("split_", "strike_", "scale_")) else 2.0
+            min_t1 = sc["t0"] + min_dur
+            if scenes[i + 1]["t0"] < min_t1:
+                target_t = min_t1
+                closest_w = min(words_list, key=lambda w: abs(w["start"] - target_t))
+                scenes[i + 1]["t0"] = float(closest_w["start"])
+                scenes[i + 1]["cue"] = closest_w["cue"]
+                scenes[i + 1]["row"][0] = closest_w["cue"]
 
     for i in range(len(scenes)):
         scenes[i]["t1"] = scenes[i + 1]["t0"] if i + 1 < len(scenes) else 999999.0

@@ -39,7 +39,7 @@ assets/flow_vault/dramatic_acacia_tree.png	nature_animals	flow_vault	Owned-Flow	
 assets/flow_vault/dramatic_acacia_tree_ancient_night.png	history_ancient	flow_vault	Owned-Flow	acacia, ancient, dramatic, golden, grass, night, patch, silhouette, small, tree	True	1678x1377	Google Flow
 assets/flow_vault/earthenware_clay_jug.png	history_ancient	flow_vault	Owned-Flow	clay, cold, earthenware, filled, freeze, frost, ice, jug, milk, temperature, thermometer	True	1431x1454	Google Flow
 assets/flow_vault/earthenware_clay_jug_ancient_cold.png	history_ancient	flow_vault	Owned-Flow	ancient, clay, cold, earthenware, filled, freeze, frost, ice, jug, milk, temperature, thermometer	True	1222x1415	Google Flow
-assets/flow_vault/flint_blade.png	history_ancient	flow_vault	Owned-Flow	blade, bound, cord, dagger, flint, gladius, harpoon, heat, javelin, knife, lance, pike, razor, shaft, sharp, silcrete, sinew, spear, sword, treated, weapon, wooden	True	1580x1574	Google Flow
+assets/flow_vault/flint_blade.png	history_ancient	flow_vault	Owned-Flow	blade, carved, chipped, collapse, column, dagger, flint, gladius, harpoon, javelin, knife, lance, pike, pillar, ruin, silcrete, spear, stone, sword, temple, weapon, wreck	True	1580x1574	Google Flow
 assets/flow_vault/floating_golden_musical.png	history_ancient	flow_vault	Owned-Flow	echoing, floating, golden, musical, note, notes, soft, spiral	True	1608x1512	Google Flow
 assets/flow_vault/glass_bottle_wine.png	nature_animals	flow_vault	Owned-Flow	bottle, bucket, chilling, cold, freeze, frost, glass, ice, temperature, thermometer, water, wine	True	1276x1674	Google Flow
 assets/flow_vault/glowing_golden_circular.png	history_ancient	flow_vault	Owned-Flow	armor, buckler, circular, defense, glowing, golden, icon, perimeter, scutum, shield	True	1362x1393	Google Flow
@@ -62,7 +62,7 @@ assets/flow_vault/menacing_sabertooth_cat.png	nature_animals	flow_vault	Owned-Fl
 assets/flow_vault/menacing_sabertooth_cat_ancient_night.png	nature_animals	flow_vault	Owned-Flow	ancient, arrow, bone, cat, curved, direction, fang, fangs, fossil, long, menacing, night, pointer, sabertooth, skeleton, skull, vector, white	True	1202x1380	Google Flow
 assets/flow_vault/milestone.png	history_ancient	flow_vault	Owned-Flow	carved, centered, cylindrical, from, marble, milestone, numeral, numerals, roman, white	True	679x1550	Google Flow
 assets/flow_vault/miswak_twig.png	history_ancient	flow_vault	Owned-Flow	brown, frayed, miswak, twig, wooden	True	1308x1261	Google Flow
-assets/flow_vault/modern_smartphone_displaying.png	history_ancient	flow_vault	Owned-Flow	blue, displaying, emission, light, modern, rays, screen, smartphone	True	1615x1347	Google Flow
+assets/flow_vault/modern_smartphone_displaying.png	modern_daily	flow_vault	Owned-Flow	cellular, device, display, displaying, electronic, light, mobile, modern, phone, screen, smartphone	True	1615x1347	Google Flow
 assets/flow_vault/myrrh_resin.png	history_ancient	flow_vault	Owned-Flow	amber, golden, lump, myrrh, resin	True	1050x822	Google Flow
 assets/flow_vault/ochre_pigment.png	history_ancient	flow_vault	Owned-Flow	carved, collapse, column, crimson, hematite, ochre, pigment, pillar, red, rich, ruin, stick, stone, temple, wreck	True	991x1452	Google Flow
 assets/flow_vault/ornate_antique_roman.png	history_ancient	flow_vault	Owned-Flow	antique, chalice, condensation, frosted, ornate, roman, silver, wine	True	1023x1655	Google Flow
@@ -81,7 +81,7 @@ assets/flow_vault/seashell_pile.png	nature_animals	flow_vault	Owned-Flow	black, 
 assets/flow_vault/skull_fossil.png	history_ancient	flow_vault	Owned-Flow	ancient, bone, cracked, desert, dry, earth, embedded, fossil, human, prehistoric, sabertooth, skeleton, skull	True	1635x1649	Google Flow
 assets/flow_vault/sleek_modern_refrigerator.png	history_ancient	flow_vault	Owned-Flow	blue, cold, door, freeze, frost, glowing, ice, interior, light, modern, open, refrigerator, sleek, temperature, thermometer	True	1231x1062	Google Flow
 assets/flow_vault/sleek_modern_refrigerator_ancient_cold.png	history_ancient	flow_vault	Owned-Flow	ancient, blue, cold, door, freeze, frost, glowing, ice, interior, light, modern, open, refrigerator, sleek, temperature, thermometer	True	804x1277	Google Flow
-assets/flow_vault/sleek_modern_smartphone.png	modern_daily	flow_vault	Owned-Flow	00, 07, alarm, glowing, modern, ringing, screen, showing, sleek, smartphone, sound, wave, waves	True	1496x1328	Google Flow
+assets/flow_vault/sleek_modern_smartphone.png	modern_daily	flow_vault	Owned-Flow	app, cellular, device, mobile, modern, phone, screen, sleek, smartphone, touch	True	1496x1328	Google Flow
 assets/flow_vault/sleek_modern_white.png	history_ancient	flow_vault	Owned-Flow	beam, light, modern, rays, sleek, switch, wall, white, yellow	True	1092x1133	Google Flow
 assets/flow_vault/sleek_modern_white_ancient_night.png	history_ancient	flow_vault	Owned-Flow	ancient, beam, light, modern, night, rays, sleek, switch, wall, white, yellow	True	1758x1524	Google Flow
 assets/flow_vault/small_pile_dried.png	history_ancient	flow_vault	Owned-Flow	dried, green, hard, peas, pile, small	True	1150x689	Google Flow
@@ -112,206 +112,3 @@ assets/flow_vault/wise_nocturnal_owl.png	history_ancient	flow_vault	Owned-Flow	b
 assets/flow_vault/wooden_barrel_overflowing.png	history_ancient	flow_vault	Owned-Flow	barrel, insulation, light, overflowing, pine, sawdust, wood, wooden	True	1855x1895	Google Flow
 assets/flow_vault/wooden_bucket_full.png	history_ancient	flow_vault	Owned-Flow	bucket, full, grey, mortar, sarooj, thick, trowel, wooden	True	1340x1484	Google Flow
 assets/flow_vault/wooden_bucket_full_ancient_cold.png	history_ancient	flow_vault	Owned-Flow	ancient, bucket, cold, freeze, frost, full, grey, ice, mortar, sarooj, temperature, thermometer, thick, trowel, wooden	True	1345x1620	Google Flow
-assets/cc0_library/history_ancient/cc0_ancient_scroll.png	history_ancient	cc0_library	CC0-1.0	ancient, archive, cc0, cuneiform, document, history, manuscript, parchment, record, scroll, tablet	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_carto_bridge.png	history_ancient	cc0_library	CC0-1.0	bridge, carto, cc0, connection, crossing, river	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_carto_castle.png	history_ancient	cc0_library	CC0-1.0	carto, castle, cc0, empire, fort, kingdom	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_carto_lighthouse.png	history_ancient	cc0_library	CC0-1.0	beacon, carto, cc0, coast, lighthouse, signal	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_carto_pyramid.png	history_ancient	cc0_library	CC0-1.0	ancient, carto, cc0, egypt, monument, pyramid	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_carto_ship.png	history_ancient	cc0_library	CC0-1.0	boat, carto, cc0, fleet, galley, prow, sailing, sea, ship, trade, vessel, warship	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_carto_watchtower.png	history_ancient	cc0_library	CC0-1.0	armor, buckler, carto, cc0, defense, guard, lookout, scutum, shield, watchtower	True	512x512	Kenney Cartography CC0
-assets/cc0_library/history_ancient/cc0_doodle_archive.png	history_ancient	cc0_library	MIT	archive, box, cc0, cuneiform, document, doodle, file, files, history, parchment, record, scroll, tablet	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/history_ancient/cc0_egypt_pyramid.png	history_ancient	cc0_library	CC0-1.0	ancient, cc0, egypt, monument, pharaoh, pyramid	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_hourglass_time.png	history_ancient	cc0_library	CC0-1.0	ancient, cc0, countdown, era, hourglass, sand, time	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_kenney_castle_rook.png	history_ancient	cc0_library	CC0-1.0	armor, buckler, castle, cc0, defense, fortress, kenney, rook, scutum, shield, tower	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_chess_king.png	history_ancient	cc0_library	CC0-1.0	cc0, chess, empire, kenney, king, leader, ruler, strategy	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_chess_knight.png	history_ancient	cc0_library	CC0-1.0	cavalry, cc0, chess, horse, kenney, knight, strategy, war	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_city_wall.png	history_ancient	cc0_library	CC0-1.0	armor, barrier, border, buckler, cc0, city, defense, fort, kenney, scutum, shield, wall	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_crown_imperial.png	history_ancient	cc0_library	CC0-1.0	authority, cc0, crown, emperor, imperial, kenney, kingdom	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_crown_royal.png	history_ancient	cc0_library	CC0-1.0	cc0, crown, empire, kenney, king, monarch, royal	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_flag_banner.png	history_ancient	cc0_library	CC0-1.0	banner, cc0, claim, flag, kenney, nation, territory	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_hourglass.png	history_ancient	cc0_library	CC0-1.0	ancient, cc0, countdown, era, hourglass, kenney, time	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_hunting_bow.png	history_ancient	cc0_library	CC0-1.0	ancient, archery, blade, bow, cc0, dagger, gladius, hunting, kenney, knife, sword, weapon	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_iron_ingot.png	history_ancient	cc0_library	CC0-1.0	bronze, cc0, copper, ingot, iron, kenney, metal, ore, smelt, tin	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_shield_badge.png	history_ancient	cc0_library	CC0-1.0	armor, badge, buckler, cc0, defense, emblem, kenney, protect, scutum, shield	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_shield_defense.png	history_ancient	cc0_library	CC0-1.0	armor, buckler, cc0, defense, kenney, protect, scutum, shield, war	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_sword_blade.png	history_ancient	cc0_library	CC0-1.0	battle, blade, cc0, dagger, gladius, kenney, knife, sword, war, weapon	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_temple_church.png	history_ancient	cc0_library	CC0-1.0	building, cc0, church, collapse, column, kenney, monument, pillar, religion, ruin, stone, temple, wreck	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_kenney_tower_fort.png	history_ancient	cc0_library	CC0-1.0	armor, buckler, castle, cc0, defense, fort, kenney, scutum, shield, tower, watchtower	True	512x512	Kenney CC0
-assets/cc0_library/history_ancient/cc0_roman_column.png	history_ancient	cc0_library	CC0-1.0	cc0, collapse, column, greek, pillar, roman, ruin, stone, temple, wreck	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_royal_crown.png	history_ancient	cc0_library	CC0-1.0	cc0, crown, empire, gold, king, kingdom, royal, ruler	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_sailing_ship.png	history_ancient	cc0_library	CC0-1.0	boat, cc0, fleet, galleon, galley, maritime, prow, sailing, ship, trade, vessel, voyage, warship	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/cc0_warrior_shield.png	history_ancient	cc0_library	CC0-1.0	armor, battle, buckler, cc0, defense, galea, headgear, helm, helmet, roman, scutum, shield, warrior	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/history_ancient/mit_naive_anchor.png	history_ancient	cc0_library	MIT	anchor, boat, fleet, galley, maritime, mit, naive, ocean, prow, sea, ship, vessel, warship	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_archive.png	history_ancient	cc0_library	MIT	archive, cuneiform, document, evidence, file, files, history, mit, naive, parchment, record, scroll, tablet	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_castle.png	history_ancient	cc0_library	MIT	castle, empire, fortress, medieval, mit, naive	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_crown.png	history_ancient	cc0_library	MIT	crown, emperor, king, mit, naive, ruler	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_feather.png	history_ancient	cc0_library	MIT	feather, history, mit, naive, quill, write	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_hourglass.png	history_ancient	cc0_library	MIT	era, history, hourglass, mit, naive, time	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/history_ancient/mit_naive_shield.png	history_ancient	cc0_library	MIT	armor, buckler, defense, mit, naive, scutum, shield, war	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/cc0_atom_orbit.png	science_space	cc0_library	CC0-1.0	atom, cc0, energy, molecule, orbit, particle, physic, physics, science	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_crescent_moon.png	science_space	cc0_library	CC0-1.0	cc0, crescent, lunar, moon, night, sky, sleep	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_dna_helix.png	science_space	cc0_library	CC0-1.0	biology, cc0, dna, gene, genetic, genetics, genome, helix, life	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_doodle_eye.png	science_space	cc0_library	MIT	cc0, doodle, eye, focu, focus, inspect, observe, vision	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/science_space/cc0_earth_globe.png	science_space	cc0_library	CC0-1.0	cc0, continent, earth, geography, globe, planet, world	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_human_brain.png	science_space	cc0_library	CC0-1.0	brain, cc0, human, memory, mind, psychology, smart, thinking	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_kenney_flask_potion.png	science_space	cc0_library	CC0-1.0	cc0, chemistry, flask, kenney, lab, liquid, potion, science	True	512x512	Kenney CC0
-assets/cc0_library/science_space/cc0_kenney_power_energy.png	science_space	cc0_library	CC0-1.0	cc0, electricity, energy, kenney, power, switch	True	512x512	Kenney CC0
-assets/cc0_library/science_space/cc0_kenney_puzzle_piece.png	science_space	cc0_library	CC0-1.0	cc0, clue, kenney, mystery, piece, puzzle, solve	True	512x512	Kenney CC0
-assets/cc0_library/science_space/cc0_microscope_lab.png	science_space	cc0_library	CC0-1.0	biology, cc0, lab, microscope, research, science	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_planet_saturn.png	science_space	cc0_library	CC0-1.0	astronomy, cc0, cosmo, cosmos, planet, saturn, space, universe, world	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_science_flask.png	science_space	cc0_library	CC0-1.0	beaker, cc0, chemistry, experiment, flask, lab, science	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_solar_sun.png	science_space	cc0_library	CC0-1.0	cc0, daylight, energy, solar, star, sun, warmth	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_space_rocket.png	science_space	cc0_library	CC0-1.0	cc0, launch, mars, moon, rocket, space, tech	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/cc0_thermometer_temp.png	science_space	cc0_library	CC0-1.0	cc0, climate, cold, freeze, frost, heat, ice, temp, temperature, thermometer	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/science_space/mit_naive_brain.png	science_space	cc0_library	MIT	brain, mind, mit, naive, neuroscience, think	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_cpu.png	science_space	cc0_library	MIT	chip, computer, cpu, mit, naive, tech	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_dna.png	science_space	cc0_library	MIT	biology, dna, evolution, gene, genetic, genetics, genome, helix, mit, naive	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_flask.png	science_space	cc0_library	MIT	chemistry, flask, lab, mit, naive, science	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_microscope.png	science_space	cc0_library	MIT	lab, microscope, mit, naive, research, science	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_rocket.png	science_space	cc0_library	MIT	launch, mit, naive, rocket, space, tech	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_sun.png	science_space	cc0_library	MIT	energy, heat, mit, naive, solar, sun	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_telescope.png	science_space	cc0_library	MIT	astronomy, look, mit, naive, space, telescope	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/science_space/mit_naive_thermometer.png	science_space	cc0_library	MIT	cold, freeze, frost, heat, ice, mit, naive, temperature, thermometer	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/cc0_anim_flame_flicker.webp	nature_animals	cc0_library	CC0-1.0	anim, animated, ash, blaze, campfire, cc0, cook, ember, energy, fire, flame, flicker, heat, spark, torch	True	320x320	https://opengameart.org/content/16x16-animated-campfire
-assets/cc0_library/nature_animals/cc0_carto_campfire.png	nature_animals	cc0_library	CC0-1.0	ancient, ash, blaze, camp, campfire, carto, cc0, ember, fire, flame, torch	True	512x512	Kenney Cartography CC0
-assets/cc0_library/nature_animals/cc0_carto_mountain.png	nature_animals	cc0_library	CC0-1.0	barrier, carto, cc0, mountain, rock, rocks, terrain	True	512x512	Kenney Cartography CC0
-assets/cc0_library/nature_animals/cc0_carto_skull.png	nature_animals	cc0_library	CC0-1.0	bone, carto, cc0, danger, death, extinct, fossil, sabertooth, skeleton, skull	True	512x512	Kenney Cartography CC0
-assets/cc0_library/nature_animals/cc0_carto_volcano.png	nature_animals	cc0_library	CC0-1.0	carto, cc0, disaster, eruption, volcano	True	512x512	Kenney Cartography CC0
-assets/cc0_library/nature_animals/cc0_doodle_flame.png	nature_animals	cc0_library	MIT	ash, blaze, burn, campfire, cc0, doodle, ember, energy, fire, flame, heat, torch	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/nature_animals/cc0_flame_fire.png	nature_animals	cc0_library	CC0-1.0	ash, blaze, burn, campfire, cc0, ember, energy, fire, flame, heat, spark, torch	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_fossil_skull.png	nature_animals	cc0_library	CC0-1.0	ancient, bone, cc0, death, fossil, sabertooth, skeleton, skull	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_green_leaf.png	nature_animals	cc0_library	CC0-1.0	cc0, ecology, environment, green, leaf, nature, plant	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_kenney_apple_fruit.png	nature_animals	cc0_library	CC0-1.0	apple, cc0, crop, diet, drought, famine, food, fruit, grain, harvest, kenney, wheat	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_kenney_campfire.png	nature_animals	cc0_library	CC0-1.0	ancient, ash, blaze, camp, campfire, cc0, ember, fire, flame, heat, kenney, torch	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_kenney_fire_flame.png	nature_animals	cc0_library	CC0-1.0	ash, blaze, burn, campfire, cc0, ember, energy, fire, flame, heat, kenney, torch	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_kenney_lumber_wood.png	nature_animals	cc0_library	CC0-1.0	cc0, forest, kenney, logs, lumber, timber, wood	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_kenney_skull_bone.png	nature_animals	cc0_library	CC0-1.0	ancient, bone, cc0, danger, death, fossil, kenney, sabertooth, skeleton, skull	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_kenney_wheat_grain.png	nature_animals	cc0_library	CC0-1.0	agriculture, cc0, crop, drought, famine, food, grain, harvest, kenney, wheat	True	512x512	Kenney CC0
-assets/cc0_library/nature_animals/cc0_lightning_bolt.png	nature_animals	cc0_library	CC0-1.0	bolt, cc0, electric, lightning, shock, storm, thunder	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_mountain_peak.png	nature_animals	cc0_library	CC0-1.0	cc0, geography, mountain, nature, peak, terrain	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_oak_tree.png	nature_animals	cc0_library	CC0-1.0	cc0, environment, forest, nature, oak, tree, wood	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/cc0_water_droplet.png	nature_animals	cc0_library	CC0-1.0	cc0, drop, droplet, ocean, rain, river, sea, water	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/nature_animals/mit_naive_cactus.png	nature_animals	cc0_library	MIT	cactu, cactus, climate, desert, dry, mit, naive	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_campfire.png	nature_animals	cc0_library	MIT	ancient, ash, blaze, campfire, ember, fire, flame, mit, naive, night, torch, warmth	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_leaf.png	nature_animals	cc0_library	MIT	ecology, leaf, mit, naive, nature, plant	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_mountain.png	nature_animals	cc0_library	MIT	mit, mountain, naive, peak, terrain	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_skull.png	nature_animals	cc0_library	MIT	bone, danger, extinct, fossil, mit, naive, sabertooth, skeleton, skull	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_tree.png	nature_animals	cc0_library	MIT	forest, mit, naive, nature, tree, wood	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_volcano.png	nature_animals	cc0_library	MIT	catastrophe, eruption, mit, naive, volcano	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/nature_animals/mit_naive_wheat.png	nature_animals	cc0_library	MIT	crop, drought, famine, food, grain, harvest, mit, naive, wheat	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/money_economy/cc0_anim_rotating_coin.webp	money_economy	cc0_library	CC0-1.0	anim, animated, cc0, coin, cost, currency, gold, money, price, rotating, wealth	True	320x320	https://opengameart.org/content/rotating-coin
-assets/cc0_library/money_economy/cc0_balance_scale.png	money_economy	cc0_library	CC0-1.0	balance, cc0, compare, economy, justice, law, scale	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_bank_building.png	money_economy	cc0_library	CC0-1.0	bank, building, cc0, coin, currency, finance, institution, money, treasury, wealth	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_bar_chart.png	money_economy	cc0_library	CC0-1.0	bar, cc0, chart, data, economy, graph, growth, stat, trade	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_carto_chest.png	money_economy	cc0_library	CC0-1.0	carto, cc0, chest, gold, loot, treasure	True	512x512	Kenney Cartography CC0
-assets/cc0_library/money_economy/cc0_carto_mine.png	money_economy	cc0_library	CC0-1.0	bronze, carto, cc0, copper, ingot, mine, ore, resource, smelt, tin	True	512x512	Kenney Cartography CC0
-assets/cc0_library/money_economy/cc0_clock_time.png	money_economy	cc0_library	CC0-1.0	cc0, clock, era, hourglass, schedule, time, watch	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_factory_industry.png	money_economy	cc0_library	CC0-1.0	cc0, factory, industry, manufacturing, production, smoke	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_gear_cog.png	money_economy	cc0_library	CC0-1.0	cc0, cog, engine, gear, industry, mechanism, system	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_gold_coin.png	money_economy	cc0_library	CC0-1.0	cc0, coin, currency, economy, gold, money, trade, wealth	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/cc0_kenney_bars_chart.png	money_economy	cc0_library	CC0-1.0	bars, cc0, chart, data, growth, kenney, statistic, statistics	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_cart.png	money_economy	cc0_library	CC0-1.0	buy, cart, cc0, consumer, kenney, market, shopping	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_coin_stack.png	money_economy	cc0_library	CC0-1.0	cc0, coin, coins, currency, kenney, money, reserve, stack, wealth	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_dice_chance.png	money_economy	cc0_library	CC0-1.0	cc0, chance, dice, gamble, kenney, probability, risk	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_dollar_sign.png	money_economy	cc0_library	CC0-1.0	cc0, coin, currency, dollar, economy, kenney, money, price, sign, wealth	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_farm_barn.png	money_economy	cc0_library	CC0-1.0	agriculture, barn, cc0, crop, drought, economy, famine, farm, food, grain, harvest, kenney, wheat	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_gear.png	money_economy	cc0_library	CC0-1.0	cc0, cog, gear, industry, kenney, machine, system	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_gold_pouch.png	money_economy	cc0_library	CC0-1.0	bag, cc0, coin, coins, currency, gold, kenney, money, pouch, wealth	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_podium_rank.png	money_economy	cc0_library	CC0-1.0	cc0, kenney, leaderboard, podium, rank, ranking, stat, stats, top	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_kenney_timer_full.png	money_economy	cc0_library	CC0-1.0	cc0, clock, complete, deadline, full, kenney, timer	True	512x512	Kenney CC0
-assets/cc0_library/money_economy/cc0_treasure_chest.png	money_economy	cc0_library	CC0-1.0	cc0, chest, coin, currency, gold, loot, money, treasure, vault, wealth	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/money_economy/mit_anim_clock_tick.webp	money_economy	cc0_library	MIT	anim, animated, clock, countdown, history, mit, schedule, tick, time, timer, watch	True	320x320	https://github.com/cyberalien/line-md/blob/main/svg/watch-loop.svg
-assets/cc0_library/money_economy/mit_naive_abacus.png	money_economy	cc0_library	MIT	abacu, abacus, ancient, calculate, economy, math, mit, naive	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/money_economy/mit_naive_bank.png	money_economy	cc0_library	MIT	bank, coin, currency, finance, mit, money, naive, treasury, wealth	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/money_economy/mit_naive_briefcase.png	money_economy	cc0_library	MIT	briefcase, business, economy, mit, naive, work	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/money_economy/mit_naive_calendar.png	money_economy	cc0_library	MIT	calendar, date, mit, naive, timeline, year	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/money_economy/mit_naive_factory.png	money_economy	cc0_library	MIT	economy, factory, industry, mit, naive, pollution	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/cc0_battery_power.png	modern_daily	cc0_library	CC0-1.0	battery, cc0, charge, energy, power, tech	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_brass_key.png	modern_daily	cc0_library	CC0-1.0	access, brass, cc0, key, secret, solution, unlock	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_carto_compass.png	modern_daily	cc0_library	CC0-1.0	carto, cc0, compass, map, navigation, north	True	512x512	Kenney Cartography CC0
-assets/cc0_library/modern_daily/cc0_coffee_mug.png	modern_daily	cc0_library	CC0-1.0	cc0, coffee, drink, morning, mug, routine	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_compass_nav.png	modern_daily	cc0_library	CC0-1.0	arrow, cc0, compass, curved, direction, map, nav, navigation, north, pointer, travel, vector	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_doodle_lock.png	modern_daily	cc0_library	MIT	cc0, doodle, lock, secret, security, vault	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/modern_daily/cc0_house_home.png	modern_daily	cc0_library	CC0-1.0	building, cc0, home, house, shelter, village	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_kenney_book_closed.png	modern_daily	cc0_library	CC0-1.0	archive, book, cc0, closed, cuneiform, document, history, journal, kenney, manual, parchment, record, scroll, tablet	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_book_open.png	modern_daily	cc0_library	CC0-1.0	book, cc0, kenney, knowledge, open, read, study	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_hand_palm.png	modern_daily	cc0_library	CC0-1.0	cc0, cross, false, grab, hand, human, kenney, myth, palm, reject, stop, touch, wrong, x	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_home.png	modern_daily	cc0_library	CC0-1.0	cc0, family, home, house, kenney, shelter	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_house_village.png	modern_daily	cc0_library	CC0-1.0	cc0, city, home, house, kenney, shelter, village	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_lock_closed.png	modern_daily	cc0_library	CC0-1.0	cc0, closed, kenney, lock, secret, security, vault	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_lock_open.png	modern_daily	cc0_library	CC0-1.0	cc0, discovery, free, kenney, lock, open, unlock	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_locked_icon.png	modern_daily	cc0_library	CC0-1.0	cc0, closed, icon, kenney, locked, private, security	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_notepad.png	modern_daily	cc0_library	CC0-1.0	archive, cc0, cuneiform, document, kenney, list, note, notepad, notes, parchment, record, scroll, tablet	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_notepad_write.png	modern_daily	cc0_library	CC0-1.0	archive, cc0, cuneiform, document, kenney, log, notepad, parchment, record, scroll, study, tablet, write	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_phone.png	modern_daily	cc0_library	CC0-1.0	cc0, kenney, mobile, phone, smartphone, tech	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_trash_waste.png	modern_daily	cc0_library	CC0-1.0	cc0, cross, discard, false, kenney, myth, reject, remove, stop, trash, waste, wrong, x	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_unlocked_icon.png	modern_daily	cc0_library	CC0-1.0	access, cc0, freedom, icon, kenney, open, unlocked	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_kenney_wrench.png	modern_daily	cc0_library	CC0-1.0	build, cc0, craft, kenney, repair, tool, wrench	True	512x512	Kenney CC0
-assets/cc0_library/modern_daily/cc0_lightbulb_idea.png	modern_daily	cc0_library	CC0-1.0	bright, cc0, discover, idea, invent, lightbulb, think	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_megaphone_shout.png	modern_daily	cc0_library	CC0-1.0	announce, broadcast, cc0, megaphone, shout, speaker	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_newspaper_press.png	modern_daily	cc0_library	CC0-1.0	cc0, headline, media, newspaper, press, report	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_open_book.png	modern_daily	cc0_library	CC0-1.0	archive, book, cc0, cuneiform, document, journal, knowledge, open, parchment, reading, record, scroll, story, tablet	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_padlock_lock.png	modern_daily	cc0_library	CC0-1.0	cc0, closed, lock, padlock, private, protected, security	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/cc0_soda_can.png	modern_daily	cc0_library	CC0-1.0	beverage, can, cc0, cola, drink, fizzy, modern, pop, soda, soft, softdrink, sugar	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/modern_daily/mit_naive_alarm_clock.png	modern_daily	cc0_library	MIT	alarm, clock, mit, morning, naive, routine, wake	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_bell.png	modern_daily	cc0_library	MIT	alert, bell, mit, naive, notification, ring	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_book_open.png	modern_daily	cc0_library	MIT	book, history, knowledge, mit, naive, open, story	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_camera.png	modern_daily	cc0_library	MIT	archive, camera, cuneiform, document, evidence, mit, naive, parchment, photo, record, scroll, tablet	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_compass.png	modern_daily	cc0_library	MIT	compass, map, mit, naive, navigation, travel	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_key.png	modern_daily	cc0_library	MIT	access, key, mit, naive, secret, unlock	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_lock.png	modern_daily	cc0_library	MIT	lock, mit, naive, protected, security	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_newspaper.png	modern_daily	cc0_library	MIT	headline, media, mit, naive, newspaper, report	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_smartphone.png	modern_daily	cc0_library	MIT	mit, mobile, naive, phone, smartphone	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/modern_daily/mit_naive_wrench.png	modern_daily	cc0_library	MIT	build, mit, naive, repair, tool, wrench	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_anim_sparkle_burst.webp	editorial_accents	cc0_library	CC0-1.0	alert, anim, animated, burst, cc0, emphasi, emphasis, highlight, sparkle	True	320x320	https://kenney.nl/assets/particle-pack
-assets/cc0_library/editorial_accents/cc0_carto_arrow_corner.png	editorial_accents	cc0_library	CC0-1.0	arrow, carto, cc0, corner, curved, direction, map, pointer, route, vector	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_carto_arrow_head.png	editorial_accents	cc0_library	CC0-1.0	arrow, carto, cc0, curved, direction, head, map, pointer, vector	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_carto_arrow_split.png	editorial_accents	cc0_library	CC0-1.0	arrow, carto, cc0, choice, curved, direction, diverge, path, pointer, split, vector	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_carto_arrow_straight.png	editorial_accents	cc0_library	CC0-1.0	arrow, carto, cc0, curved, direction, pointer, straight, vector	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_carto_banner.png	editorial_accents	cc0_library	CC0-1.0	banner, callout, carto, cc0, header, ribbon	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_carto_flag.png	editorial_accents	cc0_library	CC0-1.0	carto, cc0, flag, marker, milestone, territory	True	512x512	Kenney Cartography CC0
-assets/cc0_library/editorial_accents/cc0_doodle_arrow_diag.png	editorial_accents	cc0_library	MIT	arrow, cc0, curved, diag, diagonal, direction, doodle, drawn, hand, pointer, trend, vector	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_arrow_down.png	editorial_accents	cc0_library	MIT	arrow, cc0, curved, direction, doodle, down, drawn, drop, hand, pointer, vector	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_arrow_left.png	editorial_accents	cc0_library	MIT	arrow, cc0, curved, direction, doodle, drawn, hand, left, pointer, vector	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_arrow_right.png	editorial_accents	cc0_library	MIT	arrow, cc0, curved, direction, doodle, drawn, hand, pointer, right, vector	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_arrow_up.png	editorial_accents	cc0_library	MIT	arrow, cc0, curved, direction, doodle, drawn, growth, hand, pointer, up, vector	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_ban_stop.png	editorial_accents	cc0_library	MIT	ban, cc0, cross, doodle, false, forbidden, myth, reject, stop, wrong, x	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_doodle_check_mark.png	editorial_accents	cc0_library	MIT	cc0, check, checkmark, confirm, doodle, drawn, hand, mark, tick, verified	True	512x512	oreo-design/doodle-icons (MIT)
-assets/cc0_library/editorial_accents/cc0_exclamation_mark.png	editorial_accents	cc0_library	CC0-1.0	alert, attention, cc0, exclamation, mark, shock, surprise	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_green_check.png	editorial_accents	cc0_library	CC0-1.0	cc0, check, checkmark, confirm, fact, green, true, verified	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_kenney_arrow_clockwise.png	editorial_accents	cc0_library	CC0-1.0	arrow, cc0, clockwise, curved, cycle, direction, kenney, loop, pointer, repeat, vector	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_arrow_curve.png	editorial_accents	cc0_library	CC0-1.0	arrow, cc0, curve, curved, direction, kenney, next, pointer, step, vector	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_arrow_rewind.png	editorial_accents	cc0_library	CC0-1.0	arrow, back, cc0, curved, direction, history, kenney, pointer, reverse, rewind, vector	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_arrow_rotate.png	editorial_accents	cc0_library	CC0-1.0	arrow, cc0, change, curved, cycle, direction, kenney, pointer, rotate, turn, vector	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_award_medal.png	editorial_accents	cc0_library	CC0-1.0	award, best, cc0, kenney, medal, prize, winner	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_broken_heart.png	editorial_accents	cc0_library	CC0-1.0	broken, cc0, decline, heart, kenney, loss, tragedy	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_checkmark.png	editorial_accents	cc0_library	CC0-1.0	cc0, check, checkmark, confirm, correct, kenney, verified, yes	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_compass_north.png	editorial_accents	cc0_library	CC0-1.0	arrow, cc0, compass, curved, direction, kenney, map, north, pointer, vector	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_cross_x.png	editorial_accents	cc0_library	CC0-1.0	cc0, cross, false, kenney, myth, reject, stop, wrong, x	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_exclamation.png	editorial_accents	cc0_library	CC0-1.0	alert, cc0, exclamation, kenney, shock, surprise	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_explosion_burst.png	editorial_accents	cc0_library	CC0-1.0	boom, burst, cc0, explosion, impact, kenney, shock	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_flag_marker.png	editorial_accents	cc0_library	CC0-1.0	cc0, checkpoint, flag, kenney, marker, milestone	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_info.png	editorial_accents	cc0_library	CC0-1.0	cc0, fact, guide, info, information, kenney, note	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_medal_gold.png	editorial_accents	cc0_library	CC0-1.0	award, cc0, champion, first, gold, kenney, medal, winner	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_question.png	editorial_accents	cc0_library	CC0-1.0	cc0, kenney, mystery, question, unknown, why	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_rewind.png	editorial_accents	cc0_library	CC0-1.0	back, cc0, history, kenney, past, rewind	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_spinner_cycle.png	editorial_accents	cc0_library	CC0-1.0	cc0, cycle, kenney, random, spinner, wheel	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_star.png	editorial_accents	cc0_library	CC0-1.0	cc0, favorite, highlight, kenney, star, top	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_target.png	editorial_accents	cc0_library	CC0-1.0	aim, bullseye, cc0, focu, focus, goal, kenney, target	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_trophy.png	editorial_accents	cc0_library	CC0-1.0	cc0, champion, kenney, trophy, victory, winner	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_warning.png	editorial_accents	cc0_library	CC0-1.0	alert, caution, cc0, danger, kenney, warning	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_kenney_zoom_search.png	editorial_accents	cc0_library	CC0-1.0	cc0, inspect, kenney, magnifying, search, zoom	True	512x512	Kenney CC0
-assets/cc0_library/editorial_accents/cc0_magnifying_glass.png	editorial_accents	cc0_library	CC0-1.0	cc0, clue, detect, glass, inspect, magnifying, search	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_map_pin.png	editorial_accents	cc0_library	CC0-1.0	cc0, destination, location, map, marker, pin, place	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_question_mark.png	editorial_accents	cc0_library	CC0-1.0	cc0, doubt, mark, mystery, question, unknown, why	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_red_arrow.png	editorial_accents	cc0_library	CC0-1.0	arrow, cc0, curved, direction, highlight, pointer, red, vector	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_red_cross_x.png	editorial_accents	cc0_library	CC0-1.0	cc0, cross, false, myth, red, reject, stamp, stop, wrong, x	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_speech_bubble.png	editorial_accents	cc0_library	CC0-1.0	bubble, cc0, dialogue, quote, speech, talk	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_star_burst.png	editorial_accents	cc0_library	CC0-1.0	accent, burst, cc0, highlight, impact, spark, star	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/cc0_warning_triangle.png	editorial_accents	cc0_library	CC0-1.0	alert, caution, cc0, danger, hazard, triangle, warning	True	512x512	CC0-1.0 Local/Open
-assets/cc0_library/editorial_accents/mit_anim_lightbulb_glow.webp	editorial_accents	cc0_library	MIT	anim, animated, discovery, glow, idea, insight, lightbulb, mit, spark	True	320x320	https://github.com/cyberalien/line-md/blob/main/svg/lightbulb.svg
-assets/cc0_library/editorial_accents/mit_naive_alert_triangle.png	editorial_accents	cc0_library	MIT	alert, caution, danger, mit, naive, triangle, warning	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/editorial_accents/mit_naive_binoculars.png	editorial_accents	cc0_library	MIT	binocular, binoculars, discover, inspect, mit, naive, search	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/editorial_accents/mit_naive_flag.png	editorial_accents	cc0_library	MIT	flag, milestone, mit, naive, nation, territory	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/editorial_accents/mit_naive_map_pin.png	editorial_accents	cc0_library	MIT	location, map, mit, naive, pin, place	True	512x512	guokaigdg/naive-icons (MIT)
-assets/cc0_library/editorial_accents/mit_naive_trophy.png	editorial_accents	cc0_library	MIT	award, mit, naive, trophy, victory	True	512x512	guokaigdg/naive-icons (MIT)

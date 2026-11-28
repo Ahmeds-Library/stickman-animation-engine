@@ -145,7 +145,7 @@ def _detect_music_onset_sec(path):
     return 0.0
 
 
-def build(cues, vo, out, dur, dip):
+def build(cues, vo, out, dur, dip, story_dur=None):
     cmd, parts, sfx = ["ffmpeg", "-y", "-loglevel", "error"], [], []
     labels = [c["label"] for c in cues]
     
@@ -228,7 +228,7 @@ def build(cues, vo, out, dur, dip):
             "agate=threshold=-38dB:ratio=2.5:range=-24dB:attack=20:release=140,"
             "loudnorm=I=-19:TP=-1.5:LRA=10,"
             "aresample=48000,volume=1.0dB,"
-            f"apad=whole_dur={dur:.3f},atrim=0:{dur:.3f},"
+            f"atrim=0:{(min(dur, story_dur) if story_dur else dur):.3f},apad=whole_dur={dur:.3f},"
             "asplit=2[vomix][vokey]"
         )
         parts.append(vox_chain)
@@ -476,11 +476,33 @@ def main():
             aligned_t = start_time(raw_t, peak, c["file"])
             c["_trim_start"] = max(0.0, peak - raw_t) if (raw_t < peak and not ROLLING.search(c["file"].replace("\\", "/"))) else 0.0
             c["t"] = aligned_t
-    story_dur = (media_len(a.vo) + 0.40) if a.vo else (max(c["t"] for c in cues) + 2.0)
+    final_word_end = 0.0
+    if a.words and os.path.exists(a.words):
+        try:
+            with open(a.words, encoding="utf-8") as wf:
+                for line in wf:
+                    parts = line.strip().split("\t")
+                    if len(parts) >= 4:
+                        try:
+                            w_end = float(parts[3])
+                            if w_end > final_word_end:
+                                final_word_end = w_end
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    if final_word_end > 0.0:
+        story_dur = final_word_end + 0.60
+    elif a.vo and os.path.exists(a.vo):
+        story_dur = media_len(a.vo) + 0.60
+    else:
+        story_dur = (max(c["t"] for c in cues) + 2.0) if cues else 10.0
+
     dur = a.dur or (story_dur + a.outro_sec)
     dip = Resolver(tsv(a.lines) if a.lines else None, tsv(a.words) if a.words else None)(a.dip) \
         if a.dip else None
-    build(cues, a.vo, a.out, dur, dip)
+    build(cues, a.vo, a.out, dur, dip, story_dur=story_dur)
 
 
 if __name__ == "__main__":

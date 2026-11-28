@@ -47,7 +47,8 @@ BANNED_SFX_KEYWORDS = (
     "boing", "squeak", "cartoon", "coin", "magic", "laser", "sci-fi",
     "shimmer", "threetone", "twotone", "pepsound", "notification_ping",
     "ping", "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out",
-    "scratch", "chalk", "scroll", "marker", "pencil"
+    "scratch", "chalk", "scroll", "marker", "pencil",
+    "beep", "beeps", "countdown", "reverse", "screech", "radio", "glitch", "buzz", "alarm_phone"
 )
 
 def collect_audio_catalog(sfx_root):

@@ -87,7 +87,7 @@ def run_doctor():
     # 4. Neural Speech (Kokoro-82M)
     try:
         from kokoro import KPipeline
-        print("🎙️ Local Neural TTS (Kokoro-82M Apache 2.0) -> ✅ READY")
+        print("🎙️ Local Neural TTS (Kokoro-82M Apache 2.0 - English & Urdu) -> ✅ READY")
     except Exception:
         print("🎙️ Local Neural TTS (Kokoro-82M): Will auto-install on first run -> ⏳ READY")
 
@@ -243,16 +243,68 @@ def run_sheets(args):
           f"f_codes={sig.get('f_codes')}")
 
 
+def run_storyboard(args):
+    """Compiles STORYBOARD.md & STORYBOARD.json and runs pre-flight Gate 0 audit."""
+    target = getattr(args, "target", ".")
+    strict = getattr(args, "strict", False)
+    as_json = getattr(args, "json", False)
+    sb_script = os.path.join(ROOT_DIR, "skills", "stickman-hybrid", "scripts", "storyboard_planner.py")
+    cmd = [sys.executable, sb_script, target]
+    if strict:
+        cmd.append("--strict")
+    if as_json:
+        cmd.append("--json")
+    res = subprocess.run(cmd)
+    if res.returncode != 0 and strict:
+        sys.exit(res.returncode)
+
+
+def run_voice(args):
+    """Generates broadcast studio voiceover for English or Urdu using local Kokoro-82M."""
+    lang = getattr(args, "lang", "en")
+    text = getattr(args, "text", None)
+    script = getattr(args, "script", None)
+    out = getattr(args, "out", "VO.wav")
+    voice = getattr(args, "voice", None)
+    speed = getattr(args, "speed", 1.0)
+    align = getattr(args, "align", False)
+
+    vox_dir = os.path.join(ROOT_DIR, "skills", "vox-doc-sound", "scripts")
+    if lang in ("ur", "roman_urdu"):
+        engine = os.path.join(vox_dir, "urdu_vo.py")
+        cmd = [sys.executable, engine, "-o", out, "--speed", str(speed)]
+        if voice:
+            cmd.extend(["--voice", voice])
+        if text:
+            cmd.extend(["-t", text])
+        elif script:
+            cmd.extend(["-s", script])
+        if align:
+            cmd.append("--align")
+        subprocess.run(cmd, check=True)
+    else:
+        engine = os.path.join(vox_dir, "kokoro_vo.py")
+        cmd = [sys.executable, engine]
+        if script:
+            cmd.append(script)
+        else:
+            import tempfile
+            tf = tempfile.NamedTemporaryFile("w", delete=False, suffix=".tsv", encoding="utf-8")
+            tf.write(f"id\ttext\n01\t{text or 'This is a test of the local Kokoro neural broadcast voice engine.'}\n")
+            tf.close()
+            cmd.append(tf.name)
+        cmd.extend(["--speed", str(speed)])
+        if voice:
+            cmd.extend(["--voice", voice])
+        cmd.extend(["--out", os.path.splitext(out)[0]])
+        subprocess.run(cmd, check=True)
+
+
 def run_stickers(args):
-    """Manages and searches the permanent skills/stickman-stickers vault & CC0 library."""
+    """Manages and searches the permanent skills/stickman-stickers bespoke Flow vault."""
     stk_scripts = os.path.join(ROOT_DIR, "skills", "stickman-stickers", "scripts")
     if getattr(args, "harvest", False):
         subprocess.run([sys.executable, os.path.join(stk_scripts, "harvest_project_stickers.py")])
-    elif getattr(args, "fetch_cc0", False):
-        cmd = [sys.executable, os.path.join(stk_scripts, "fetch_cc0_stickers.py")]
-        if getattr(args, "online", False):
-            cmd.append("--online")
-        subprocess.run(cmd)
     elif getattr(args, "search", None):
         cmd = [sys.executable, os.path.join(stk_scripts, "index_stickers.py"), "--search", args.search]
         if getattr(args, "json", False):
@@ -384,6 +436,12 @@ Examples:
     p_gate.add_argument("target", nargs="?", default=".", help="Target project directory")
     p_gate.add_argument("--format", choices=["9:16", "16:9"], default="9:16", help="Target aspect ratio")
 
+    # 2b. Storyboard (Gate 0 Upfront Master Storyboard)
+    p_sb = subparsers.add_parser("storyboard", help="Generate upfront STORYBOARD.md & STORYBOARD.json with Gate 0 verification")
+    p_sb.add_argument("target", nargs="?", default=".", help="Target project directory")
+    p_sb.add_argument("--strict", action="store_true", help="Fail if Gate 0 has deficits")
+    p_sb.add_argument("--json", action="store_true", help="Output pure JSON")
+
     # 3. Hook
     p_hook = subparsers.add_parser("hook", help="Generate high-retention 3-second viral hook videos")
     p_hook.add_argument("topic", nargs="?", default="Black Holes", help="Video topic")
@@ -439,13 +497,21 @@ Examples:
     p_trends.add_argument("--json", action="store_true", help="Output pure JSON")
 
     # 8b. Sticker Library Manager
-    p_stk = subparsers.add_parser("stickers", help="Search, index, harvest, or fetch CC0 stickers in skills/stickman-stickers")
-    p_stk.add_argument("--search", "-s", default=None, help="Search indexed Flow & CC0 stickers")
+    p_stk = subparsers.add_parser("stickers", help="Search, index, or harvest bespoke Flow stickers in skills/stickman-stickers")
+    p_stk.add_argument("--search", "-s", default=None, help="Search indexed Flow stickers")
     p_stk.add_argument("--index", action="store_true", help="Rebuild CATALOG.tsv")
     p_stk.add_argument("--harvest", action="store_true", help="Harvest & deduplicate Flow stickers from ~/StickmanHybrid/*")
-    p_stk.add_argument("--fetch-cc0", action="store_true", help="Build/fetch 100% CC0 2D sticker library")
-    p_stk.add_argument("--online", action="store_true", help="Query Wikimedia Commons CC0 API during --fetch-cc0")
     p_stk.add_argument("--json", action="store_true", help="Output JSON search results")
+
+    # 8c. Local Neural Voice Studio
+    p_vo = subparsers.add_parser("voice", help="Synthesize studio voiceover locally (English or Urdu) via Kokoro-82M")
+    p_vo.add_argument("--text", "-t", default=None, help="Spoken text to synthesize")
+    p_vo.add_argument("--script", "-s", default=None, help="Script lines TSV or text file")
+    p_vo.add_argument("--lang", "-l", choices=["en", "ur", "roman_urdu"], default="en", help="Language (default: en)")
+    p_vo.add_argument("--voice", default=None, help="Voice name (default: am_michael for English, hm_omega for Urdu)")
+    p_vo.add_argument("--speed", type=float, default=1.0, help="Speech rate multiplier (default: 1.0)")
+    p_vo.add_argument("--align", action="store_true", help="Run Faster-Whisper alignment to produce WORDS.tsv")
+    p_vo.add_argument("--out", "-o", default="VO.wav", help="Output WAV path (default: VO.wav)")
 
     # 9. Create Pipeline (Unified Master Intake)
     p_create = subparsers.add_parser("create", help="Generate full stickman documentary pipeline from 5 intake questions")
@@ -467,6 +533,8 @@ Examples:
         run_doctor()
     elif args.command == "gate":
         run_gate(args)
+    elif args.command == "storyboard":
+        run_storyboard(args)
     elif args.command == "hook":
         run_hook(args)
     elif args.command == "heading":
@@ -485,6 +553,8 @@ Examples:
         run_trends(args)
     elif args.command == "stickers":
         run_stickers(args)
+    elif args.command == "voice":
+        run_voice(args)
     elif args.command == "create":
         run_create(args)
     else:

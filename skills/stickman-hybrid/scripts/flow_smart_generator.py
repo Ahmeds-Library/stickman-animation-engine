@@ -21,6 +21,15 @@ try:
     import key
 except ImportError:
     key = None
+try:
+    from validate_pipeline import measure_shot_photometrics, detect_image_text_leak, detect_outer_frame_border
+except ImportError:
+    def measure_shot_photometrics(img_path, scene_mood="auto", prompt=""):
+        return {"ok": True, "failures": [], "warnings": [], "summary": "unavailable"}
+    def detect_image_text_leak(img_path):
+        return False, ""
+    def detect_outer_frame_border(img_path, edge_pct=0.028):
+        return {"ok": True, "border_detected": False, "close_ratio": 0.0, "med_rgb": [], "msg": "Borderless"}
 
 # Sensitive word rewriter dictionary for Google Flow safety filter
 SENSITIVE_REPLACEMENTS = {
@@ -62,22 +71,28 @@ def get_style_tokens(look_override=None):
             body = " ".join(l for l in lines if l.strip() and not l.lower().startswith("look:"))
             if body:
                 return body.strip()
-    return "hand-drawn 2D cartoon illustration for a history explainer channel, clean dark ink outlines, flat colours with soft shading, a bright natural and varied colour palette like a modern flat cartoon: clear blue skies, fresh greens, clean whites, light pastel walls, colourful objects, balanced neutral daylight. Not sepia, not brown, not golden or orange colour cast. Full-bleed background that fills the whole frame, simple and readable. Simple round-head stick-figure characters with dot eyes and thin limbs."
+    return (
+        "hand-drawn 2D cartoon illustration for a history explainer channel, crisp dark ink outlines, "
+        "flat editorial colours with gentle grounded contact shadows under feet and objects, a bright airy "
+        "natural colour palette: clear light blue skies, fresh greens, clean bright whites, cream walls, "
+        "balanced cheerful daylight without milky haze or bleached overexposure. Borderless full-bleed frame. "
+        "People are simple pure-white round-head stick-figure characters with dot eyes and thin black stick limbs."
+    )
 
 NEGATIVE_PROMPT = (
     " Negative: photorealistic, hyperrealistic 3D render, glossy CGI, photograph, real human face, "
-    "realistic skin texture, stock photo, watermark, logo, text, subtitles, distorted anatomy, "
-    "modern artifacts in prehistoric scenes, anime, manga, inconsistent art style, cluttered background, blurry, "
-    "multiple versions of the character in one frame, low resolution, extra limbs, bad proportions."
+    "realistic skin texture, heavy grey face shading, dark moody graphic-novel shading, "
+    "no text, no words, no letters, no comic border, no panel frame, no paper margin, no white frame, "
+    "no milky haze, no global white bloom, no overexposed bleached white, no heavy dark moody shadows, "
+    "no dark purple blotchy face shadows, watermark, logo, subtitles, anime, manga, blurry, multiple versions of character."
 )
 
 SHORTS_NEGATIVE_PROMPT = (
-    " Negative: landscape framing, horizontal composition, horizontal orientation, widescreen, 16:9, 4:3, "
-    "letterboxing, pillarboxing, black bars, white bars, border bars, horizontal strips, cinema aspect bars, "
-    "panoramic view, horizon panorama, blank margins, cropped top, cropped bottom, "
-    "photorealistic, hyperrealistic 3D render, glossy CGI, photograph, real human face, "
-    "realistic skin texture, stock photo, watermark, logo, text, subtitles, distorted anatomy, "
-    "modern artifacts in prehistoric scenes, anime, manga, blurry, extra limbs, bad proportions."
+    " Negative: landscape framing, horizontal composition, widescreen, 16:9, 4:3, letterboxing, pillarboxing, "
+    "black bars, white bars, phone bezel, comic border, panel frame, paper margin, white frame, "
+    "photorealistic, 3D CGI, photograph, real human face, heavy grey face shading, dark moody shading, "
+    "no text, no words, no letters, no milky haze, no global white bloom, no overexposed bleached white, "
+    "no heavy dark moody shadows, no dark purple blotchy face shadows, watermark, logo, blurry, anime, manga."
 )
 
 def verify_vertical_layout(image_path):
@@ -324,20 +339,86 @@ def generate_smart(prompt, aspect, target_path, is_sticker=False, max_retries=3)
                         ok = False
                         msg = f"Vertical layout violation: {vert_msg}"
                 if ok:
+                    b_res = detect_outer_frame_border(target_path)
+                    if b_res.get("border_detected"):
+                        ok = False
+                        msg = f"Outer comic/paper border violation: {b_res.get('msg', '')}"
+                if ok:
+                    has_leak, leak_msg = detect_image_text_leak(target_path)
+                    if has_leak:
+                        ok = False
+                        msg = f"Text leak: {leak_msg}"
+                pm_failed = False
+                pm_repair_cues = ""
+                if ok:
+                    pm = measure_shot_photometrics(target_path, prompt=current_prompt)
+                    print(f"📸 Photometrics [{os.path.basename(target_path)}]: {pm.get('summary', '')}")
+                    for w_pm in pm.get("warnings", []):
+                        print(f"   ⚠️ Photometric advisory: {w_pm}")
+                    if not pm.get("ok", True):
+                        ok = False
+                        pm_failed = True
+                        msg = "Photometric QA failed: " + "; ".join(pm.get("failures", []))
+                        fail_txt = " ".join(pm.get("failures", [])).lower()
+                        if "dark" in fail_txt or "gloomy" in fail_txt or "heavy" in fail_txt:
+                            pm_repair_cues = (
+                                "bright cheerful open airy 2D editorial daylight, clean light blue sky and pastel cream tones, "
+                                "gentle light grounded shadows only, pure flat white stickman heads, zero dark gloomy shading"
+                            )
+                        else:
+                            pm_repair_cues = (
+                                "crisp saturated flat 2D editorial colors, unbleached sunlit pigments, gentle grounded contact shadows, "
+                                "zero milky haze, zero white bloom, borderless edge-to-edge full bleed"
+                            )
+                if ok:
                     print(f"✅ Scene saved & verified: {target_path} ({os.path.getsize(target_path)/1024:.1f} KB)")
                     return True
                 else:
                     print(f"⚠️ Image verification failed ({msg}), refining prompt for retry...")
-                    if attempt >= 2:
+                    if "Text leak" in msg:
+                        try:
+                            import flow_prompt_auditor
+                            base_body, _, _ = prompt.partition(" Negative:")
+                            base_body = re.sub(r"^A true full-height vertical 9:16[^:]*:\s*", "", base_body, flags=re.IGNORECASE)
+                            base_body = re.sub(r"^Clean 16:9 widescreen[^:]*:\s*", "", base_body, flags=re.IGNORECASE)
+                            blank_cues = "blank screen, completely blank monitor, blank scroll, empty wall, no letters, no words, no writing on displays"
+                            current_prompt = flow_prompt_auditor.audit_and_enhance_prompt(
+                                f"{base_body[:220]}, {blank_cues}", aspect=aspect, look="bright"
+                            )
+                        except Exception:
+                            current_prompt = f"{prompt[:700]}, blank screens, no writing.{SHORTS_NEGATIVE_PROMPT if aspect == '9:16' else NEGATIVE_PROMPT}"[:1195]
+                    elif pm_failed:
+                        # Targeted Bright-2D Lighting Repair Retry preserving Token-0 framing and Negative block
+                        try:
+                            import flow_prompt_auditor
+                            base_body, _, _ = prompt.partition(" Negative:")
+                            base_body = re.sub(r"^A true full-height vertical 9:16[^:]*:\s*", "", base_body, flags=re.IGNORECASE)
+                            base_body = re.sub(r"^Clean 16:9 widescreen[^:]*:\s*", "", base_body, flags=re.IGNORECASE)
+                            current_prompt = flow_prompt_auditor.audit_and_enhance_prompt(
+                                f"{base_body[:220]}, {pm_repair_cues}", aspect=aspect, look="bright"
+                            )
+                        except Exception:
+                            current_prompt = f"{prompt[:750]}, {pm_repair_cues}.{SHORTS_NEGATIVE_PROMPT if aspect == '9:16' else NEGATIVE_PROMPT}"[:1195]
+                    elif attempt >= 2:
                         # 3-Strike Shot Simplification Rule: simplify to clean single-subject composition on 3rd try
                         core_base = re.split(r"\b(?:Composition:|Style:|Negative:)\b", prompt)[0].strip()[:260]
                         st_tok = get_style_tokens()[:220]
                         if aspect == "9:16":
-                            current_prompt = f"A true full-height vertical 9:16 portrait orientation illustration, no phone bezel, no text: clean single focal subject of {core_base}. Style: {st_tok}. Negative: photorealistic, 3D CGI, horizontal bars, text, watermark."
+                            current_prompt = f"A true full-height vertical 9:16 portrait orientation illustration, no phone bezel, no text: clean single focal subject of {core_base}. Style: {st_tok}.{SHORTS_NEGATIVE_PROMPT}"[:1195]
                         else:
-                            current_prompt = f"Clean 16:9 single-subject 2D cartoon illustration of {core_base}. Style: {st_tok}. Negative: photorealistic, 3D CGI, text, watermark."
+                            current_prompt = f"Clean 16:9 single-subject 2D cartoon illustration of {core_base}. Style: {st_tok}.{NEGATIVE_PROMPT}"[:1195]
                     else:
-                        current_prompt = f"Tight vertical portrait shot, centered vertical composition, full bleed tall frame, towering vertical scale, absolutely no letterbox, no bars. {prompt}"
+                        base_only, _, neg_tail = prompt.partition(" Negative:")
+                        neg_suffix = f" Negative:{neg_tail}" if neg_tail else (SHORTS_NEGATIVE_PROMPT if aspect == "9:16" else NEGATIVE_PROMPT)
+                        if aspect == "9:16":
+                            prefix_v = "A true full-height vertical 9:16 portrait orientation illustration, edge-to-edge borderless full bleed, no letterbox, no black or cream margin bars: "
+                        else:
+                            prefix_v = "Clean 16:9 widescreen 2D cartoon illustration, edge-to-edge full bleed: "
+                        cleaned_base = re.sub(r"^A true full-height vertical 9:16[^:]*:\s*", "", base_only, flags=re.IGNORECASE)
+                        budget_b = max(140, 1190 - len(prefix_v) - len(neg_suffix))
+                        if len(cleaned_base) > budget_b:
+                            cleaned_base = cleaned_base[:budget_b].rsplit(",", 1)[0].strip()
+                        current_prompt = f"{prefix_v}{cleaned_base}{neg_suffix}"[:1199]
             else:
                 # Chroma-key sticker
                 print(f"🎨 Chroma-keying {dest_raw} -> {cut_path}...")
@@ -455,31 +536,16 @@ def generate_all_shots(aspect=None, force=False, target_shot=None):
             
         prompt = s["prompt"].strip()
         ref_char = (s.get("ref") or "").strip()
-        try:
-            import flow_prompt_auditor
-            prompt = flow_prompt_auditor.strip_lazy_adjectives(prompt)
-            anchors = flow_prompt_auditor.load_cast_anchors(".")
-            if ref_char and ref_char in anchors and anchors[ref_char][:24].lower() not in prompt.lower():
-                prompt = f"{anchors[ref_char]} {prompt}"
-        except Exception:
-            pass
-        side = s.get("space", "").strip().lower()
-        if is_16x9:
-            if side in ("left", "right"):
-                keep = "left" if side == "right" else "right"
-                prompt += f" Composition: complete 16:9 widescreen scene, subject on {keep}, open background on {side}."
-            elif side == "top":
-                prompt += " Composition: complete 16:9 widescreen scene, subject in lower half, open sky above."
-            else:
-                prompt += " Composition: complete 16:9 widescreen 2D cartoon scene."
-            neg_compact = " Negative: photorealistic, 3D CGI, text, watermark, no wristwatch, no plastic, no smartphone bezel, no electric light, no modern cars."
-            body_16 = f"{prompt}. Style: {style_tok}"
-            if len(body_16) + len(neg_compact) > 1190:
-                body_16 = body_16[:1190 - len(neg_compact)].rsplit(",", 1)[0]
-            full_prompt = f"{body_16}{neg_compact}"
-        else:
-            # SHORTS 9:16 NATIVE VERTICAL PROMPT ARCHITECTURE (< 1200 chars, token-0 vertical prefix)
-            sanitized = prompt
+        side = s.get("space", "").strip().lower() or "auto"
+        look_name = "bright"
+        for lp in ["STYLE.txt", "../STYLE.txt"]:
+            if os.path.exists(lp):
+                for lline in open(lp, encoding="utf-8"):
+                    if lline.strip().lower().startswith("look:"):
+                        look_name = lline.strip().split(":", 1)[1].strip() or "bright"
+                        break
+
+        if not is_16x9:
             for horiz_w, vert_rep in [
                 (r"\blandscape\b", "vertical environment"),
                 (r"\bhorizon\b", "tall sky"),
@@ -487,23 +553,34 @@ def generate_all_shots(aspect=None, force=False, target_shot=None):
                 (r"\bwide shot\b", "full-height vertical shot"),
                 (r"\bsplit screen\b", "vertical stacked comparison")
             ]:
-                sanitized = re.sub(horiz_w, vert_rep, sanitized, flags=re.IGNORECASE)
+                prompt = re.sub(horiz_w, vert_rep, prompt, flags=re.IGNORECASE)
 
-            prefix = "A true full-height vertical 9:16 portrait orientation illustration. Clean edge-to-edge canvas, no phone frame, no device bezel, no text: "
-            if side in ("left", "right"):
-                keep = "left" if side == "right" else "right"
-                comp = f"Tall 9:16 framing, subject on {keep}, open space on {side}, zero borders."
-            elif side == "top":
-                comp = "Tall 9:16 framing, subject in lower half, open vertical space above, zero borders."
+        try:
+            import flow_prompt_auditor
+            is_anc = any(k in prompt.lower() for k in ("caveman", "ancient", "egypt", "roman", "neolithic", "fossil", "stone age", "medieval"))
+            full_prompt = flow_prompt_auditor.audit_and_enhance_prompt(
+                prompt,
+                is_sticker=False,
+                is_ancient=is_anc,
+                space=side,
+                ref_char=ref_char,
+                look=look_name,
+                aspect=aspect,
+            )
+            if not is_16x9:
+                # Ensure vertical framing negatives remain strict alongside v4.1 surgical lighting negatives
+                full_prompt = full_prompt.replace(" Negative: ", " Negative: horizontal, widescreen, 16:9, letterboxing, ")[:1199]
+        except Exception:
+            if is_16x9:
+                body_16 = f"{prompt}. Style: {style_tok}"
+                neg_compact = NEGATIVE_PROMPT
+                if len(body_16) + len(neg_compact) > 1190:
+                    body_16 = body_16[:1190 - len(neg_compact)].rsplit(",", 1)[0]
+                full_prompt = f"{body_16}{neg_compact}"
             else:
-                comp = "Tall 9:16 framing, centered vertical composition filling full height, zero borders."
-
-            neg_9 = " Negative: horizontal, widescreen, 16:9, letterboxing, phone mockup, photorealistic, 3D CGI, text, watermark, no wristwatch, no plastic, no smartphone bezel, no electric light, no cars."
-            style_short = style_tok[:260]
-            max_san = max(180, 1180 - len(prefix) - len(comp) - len(style_short) - len(neg_9) - 16)
-            if len(sanitized) > max_san:
-                sanitized = sanitized[:max_san].rsplit(",", 1)[0].strip()
-            full_prompt = f"{prefix}{sanitized}. {comp} Style: {style_short}.{neg_9}"[:1198]
+                prefix = "A true full-height vertical 9:16 portrait orientation illustration, no phone frame, no device bezel, no text: "
+                comp = f"Tall 9:16 framing, subject centered, zero borders."
+                full_prompt = f"{prefix}{prompt}. {comp} Style: {style_tok[:240]}.{SHORTS_NEGATIVE_PROMPT}"[:1198]
 
         print(f"\n[{idx}/{total}] 🎬 Generating Scene {sid_raw}: {target} ({aspect})...")
         generate_smart(full_prompt, aspect=aspect, target_path=target, is_sticker=False)

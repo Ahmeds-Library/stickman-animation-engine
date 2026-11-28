@@ -5,7 +5,7 @@
 | `teeth/` | How Did Ancient Humans Clean Their Teeth? | bright | 38 | 51 | 13 |
 | `cooking/` | Why Are Humans the Only Animals That Cook? | warm | 44 | 57 | 11 |
 | `food/` | How Did Ancient Humans Stop Food From Rotting? (hybrid, Nano Banana 2, LaMa) | bright | 27 + 17 stickers | 37 | 28 overlays |
-| `food_hi/` | the same film in Urdu / Roman Urdu (Aman; made at 1.15x before the 1.10x preset was approved), re-paced with `render.py --pacing`: 96 visual changes, 24 in the hook | bright | 10 new stickers | 41 | 62 overlays |
+| `food_hi/` | the same film in Urdu / Roman Urdu (Aman; made at 1.15x before the 1.10x preset was approved), re-paced with `validate_pipeline.py`: 96 visual changes, 24 in the hook | bright | 10 new stickers | 41 | 62 overlays |
 | `boat_hi/` | **The current target.** इंसानों ने पहली नाव कैसे बनाई? Food-style: full natural scenes; the line's named objects are stickers (scene = place + action), no repeats, maps with stickers, English text on cards only, soft paper sounds instead of pops, Aman one doc voice 1.10x | bright | 22 + 22 | 39 | 24 overlays |
 | `time_hi/` | घड़ी से पहले इंसान समय कैसे जानते थे? Urdu / Roman Urdu voice (Aman, one doc voice, 1.10x), English text on cards only, layouts mixed per line (`space`/`flip`), 25 stickers | bright | 21 + 25 | 38 | 38 overlays |
 | `teeth_hybrid/` | the teeth film in the hybrid look (§9): same pictures + 20 stickers | bright | 38 + 20 | 47 | 29 overlays |

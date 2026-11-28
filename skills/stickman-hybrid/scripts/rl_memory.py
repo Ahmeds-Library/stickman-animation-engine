@@ -152,9 +152,42 @@ DEFAULT_POLICY = {
             "opening_proof_beats_before_breather": True,
             "full_circle_callback_plus_standalone_outro": True,
             "enforce_cc0_mit_catalog_clearance": True
+        },
+        "rule_48_v41_photometric_lighting": {
+            "brightness_100_daylight_range": [60.0, 82.0],
+            "brightness_100_sunset_range": [44.0, 68.0],
+            "brightness_100_flat_max": 86.0,
+            "brightness_100_gloomy_min": 45.0,
+            "shadow_area_pct_target_range": [5.0, 28.0],
+            "shadow_area_pct_heavy_max": 38.0,
+            "saturation_pct_target_range": [20.0, 58.0],
+            "clipped_white_pct_max": 14.0,
+            "contrast_std_min": 30.0,
+            "enforce_borderless_full_bleed": True,
+            "enforce_clean_flat_white_head": True
+        },
+        "rule_49_v8_high_density_and_sync": {
+            "shorts_unique_shots_target": [26, 36],
+            "long_unique_shots_target": [58, 80],
+            "forbid_duplicate_shot_transitions": True,
+            "shorts_stickers_target": [16, 24],
+            "long_stickers_target": [32, 48],
+            "strict_voice_sync_max_drift_sec": 0.35,
+            "disable_era_anchor_pill": True,
+            "forbid_calendar_year_count_roll": True,
+            "enforce_stickman_only_humans": True,
+            "full_frame_ocr_leak_gate": True,
+            "lock_outro_after_vo": True,
+            "long_outro_music_only_sec": 8.0,
+            "neutral_transformation_mode": True
         }
     },
     "user_feedback_log": [
+        {
+            "timestamp": "2026-11-28T11:28:00",
+            "feedback": "Permanent Core Engine Fixes + High-Density Visuals, Richer Animations, Max Stickers/Cards, Music & VFX Upgrade. Fix stuck pill, same frame animating twice, out-of-sync/inverted cards & stickers, Long Outro overwriting VO, non-stickman humans, low unique shots.",
+            "action": "Enforced multi-frame visual progression (26-36 Shorts, 58-80 Long), renderer safety coalescing, zero era pill, voice-sync <=0.35s, neutral strike_replace, 4-digit year roll freeze, outro lock strictly after story_dur, full-frame OCR gate, and 8 new hard-fail F-codes."
+        },
         {
             "timestamp": "2026-11-22T20:45:00",
             "feedback": "Ziada image use kia kro, fast pacing sustains dopamine",
@@ -238,8 +271,13 @@ def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warn
     memory = load_rl_memory()
     codes = sorted(list(set(f_codes or [])))
     # Also extract any F_* tags embedded in deductions/warnings for backward compatibility
+    known_f_codes = (
+        "F_STUTTER", "F_METRONOME", "F_READ_TOO_FAST", "F_NO_SILENCE_DROP",
+        "F_FLASH_FRAME", "F_WHOOSH_FATIGUE",
+        "F_FLAT_LIGHTING", "F_GLOOMY_DARK_STYLE", "F_MILKY_HAZE", "F_BURNT_HIGHLIGHTS", "F_COMIC_BORDER",
+    )
     for txt in list(deductions or []) + list(warnings or []):
-        for fc in ("F_STUTTER", "F_METRONOME", "F_READ_TOO_FAST", "F_NO_SILENCE_DROP", "F_FLASH_FRAME", "F_WHOOSH_FATIGUE"):
+        for fc in known_f_codes:
             if fc in str(txt) and fc not in codes:
                 codes.append(fc)
 
@@ -277,6 +315,21 @@ def record_evaluation_run(slug, format_type, rl_score, metrics, deductions, warn
         memory["rules"]["rule_27_audio_sound_design"]["silent_cut_target_pct"] = 0.45
     if "F_METRONOME" in codes and "rule_42_visual_metaphor_entropy" in memory["rules"]:
         memory["rules"]["rule_42_visual_metaphor_entropy"]["enforce_pacing_variance"] = True
+    if any(fc in codes for fc in ("F_FLAT_LIGHTING", "F_GLOOMY_DARK_STYLE", "F_MILKY_HAZE", "F_BURNT_HIGHLIGHTS", "F_COMIC_BORDER")):
+        r48 = memory.setdefault("rules", {}).setdefault("rule_48_v41_photometric_lighting", {})
+        r48["enforce_borderless_full_bleed"] = True
+        r48["enforce_clean_flat_white_head"] = True
+        if "F_GLOOMY_DARK_STYLE" in codes:
+            r48["shadow_area_pct_heavy_max"] = min(38.0, float(r48.get("shadow_area_pct_heavy_max", 38.0)))
+            print("🎯 [RL F_GLOOMY_DARK_STYLE] Restored bright open airy 2D daylight & <=38% gentle shadows")
+        if "F_MILKY_HAZE" in codes:
+            r48["contrast_std_min"] = max(30.0, float(r48.get("contrast_std_min", 30.0)))
+            print("🎯 [RL F_MILKY_HAZE] Reinforced zero milky haze / crisp unbleached pigments")
+        if "F_BURNT_HIGHLIGHTS" in codes:
+            r48["clipped_white_pct_max"] = min(14.0, float(r48.get("clipped_white_pct_max", 14.0)))
+            print("🎯 [RL F_BURNT_HIGHLIGHTS] Reinforced unbleached surface highlight protection")
+        if "F_COMIC_BORDER" in codes:
+            print("🎯 [RL F_COMIC_BORDER] Enforced borderless edge-to-edge full-bleed canvas")
     
     # Adaptive Self-Correction:
     # If pacing received deductions, tighten cut duration in policy

@@ -182,15 +182,12 @@ def _sidecar_tags(png_path):
 def rebuild_catalog(skill_dir=None):
     sdir = skill_dir or SKILL_DIR
     fvault = os.path.join(sdir, "assets", "flow_vault")
-    cc0dir = os.path.join(sdir, "assets", "cc0_library")
     cat_path = os.path.join(sdir, "CATALOG.tsv")
     os.makedirs(fvault, exist_ok=True)
-    for c in CATEGORIES:
-        os.makedirs(os.path.join(cc0dir, c), exist_ok=True)
 
     rows = []
 
-    # 1. Scan Tier 1: flow_vault (Owned-Flow)
+    # Scan Tier 1: flow_vault (Bespoke Owned-Flow Cutouts)
     for root, _, files in os.walk(fvault):
         for fn in sorted(files):
             if not fn.lower().endswith((".png", ".webp", ".gif")):
@@ -212,32 +209,6 @@ def rebuild_catalog(skill_dir=None):
                 "alpha_ok": "True" if alpha_ok else "False",
                 "dims": dims,
                 "origin": meta.get("origin", "Google Flow"),
-            })
-
-    # 2. Scan Tier 2: cc0_library/<category> (CC0-1.0 / Public Domain / MIT)
-    for cat in CATEGORIES:
-        cdir = os.path.join(cc0dir, cat)
-        if not os.path.isdir(cdir):
-            continue
-        for fn in sorted(os.listdir(cdir)):
-            if not fn.lower().endswith((".png", ".webp", ".gif")):
-                continue
-            fp = os.path.join(cdir, fn)
-            meta = _sidecar_tags(fp)
-            base = os.path.splitext(fn)[0]
-            raw_tags = meta.get("tags", "")
-            toks = tokenize_text(f"{base} {raw_tags}")
-            alpha_ok, dims, _ = inspect_png_alpha(fp)
-            rel_p = os.path.relpath(fp, sdir).replace(os.sep, "/")
-            rows.append({
-                "path": rel_p,
-                "category": cat,
-                "source": "cc0_library",
-                "license": meta.get("license", "CC0-1.0"),
-                "tags": ", ".join(expand_tags(toks)),
-                "alpha_ok": "True" if alpha_ok else "False",
-                "dims": dims,
-                "origin": meta.get("origin", "CC0-1.0 Local/Open"),
             })
 
     with open(cat_path, "w", encoding="utf-8", newline="") as f:
@@ -374,9 +345,8 @@ def main():
     else:
         rows = rebuild_catalog()
         fv = sum(1 for r in rows if r["source"] == "flow_vault")
-        cc = sum(1 for r in rows if r["source"] == "cc0_library")
         ok_n = sum(1 for r in rows if r["alpha_ok"] == "True")
-        print(f"Rebuilt CATALOG.tsv: {len(rows)} stickers ({fv} flow_vault, {cc} cc0_library, {ok_n} alpha_ok=True) -> {CATALOG_PATH}")
+        print(f"Rebuilt CATALOG.tsv: {len(rows)} stickers ({fv} flow_vault, {ok_n} alpha_ok=True) -> {CATALOG_PATH}")
 
 
 if __name__ == "__main__":

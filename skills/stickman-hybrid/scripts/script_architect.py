@@ -155,7 +155,10 @@ def generate_llm_prompt_specification(topic, format_type="both", lang="en", dura
             "Escalation & Open-Loop Bridges: End every act with a curiosity handoff into the next act so there are zero dead drop-off points.",
             "Full-Circle Emotional Payoff Ending: Always callback to the exact modern object/habit from the first 10 seconds to close the narrative loop.",
             "Natural Native Fluency: For Urdu / Roman Urdu, enforce natural conversational spoken style (relatable modern terms, punchy rhythm—never stiff textbook translations).",
-            "Calm Clause-Locked Documentary Pacing Rules: Shorts (60-75s) use smooth 2.5s-4.0s clause-locked beats (min 1.8s except explicit rapid_list; max 4.2s) with 15-20 UNIQUE Flow hero shots + full-bleed editorial cards; Long Documentary (5-6m) uses 3.5s-5.5s clause-locked beats (min 2.2s; max 6.5s) with 50-70 UNIQUE Flow hero shots. Strict A->B->C linear flow; NEVER recycle 6-12 images or ping-pong A->card->A!",
+            "Calm Clause-Locked Documentary Pacing & Real Multi-Frame Density: Shorts (60–95s) target 26–36 UNIQUE Flow hero frames (~2.4s–3.2s avg shot pace) with max hold 3.5s; Long Documentary (4–6m) targets 58–80 UNIQUE Flow hero frames (~3.4s–4.2s avg shot pace) with max hold 4.2s. Whenever a narrative beat runs longer than 3.5s (Shorts) or 4.2s (Long), author multiple distinct sequential unique shots (Wide establishing -> Medium reaction -> Close-up detail, or action step 1 -> action step 2) via Google Flow so visuals constantly evolve with real cinematic momentum. NEVER split one static shot_XX.png across consecutive rows to bypass max-hold! Strict A->B->C linear flow; NEVER recycle images or ping-pong A->card->A!",
+            "High Purposeful Sticker Density: Plan 16–24 voice-locked stickers/animated .webp props per Short (~1 every 4–5s across illustrated shots) and 32–48 voice-locked stickers per Long documentary. Strict Voice-Sync Lock: Every sticker must land right on its exact spoken noun in WORDS.tsv inside the same scene (abs(stk_t - keyword_t) <= 0.35s).",
+            "Rich Variety of Slow Staged Editorial Cards: Schedule 4–6 cards per Short and 12–18 cards per Long (spaced every 2–4 illustrated shots, never two blank cards back-to-back) rotating across strike_replace (with neutral transformation mode A -> B for historical shifts), split_compare (verified 50/50 polarity: MYTH is false/red, REALITY is true/green), scale_compare, checklist_build, inset_shelf, card_stat, data_timeline, chapter_breather. Card-to-Voice Sync: Card core nouns/numbers must be spoken in WORDS.tsv within [card_t0 - 0.5s, card_t1 + 0.5s].",
+            "Mood-Tone Guard: Block cheerful/smiling prompts on dark, tragic, demon, drought, starvation, dying, disease, or crisis lines. Match visual mood to narrative weight.",
             "Dynamic CTA Duration Rule: Never hardcode '4-minute' or '10-minute' in Short CTAs; use '{long_minutes}-minute' or match the actual Long script/VO word count duration cleanly.",
             "Anti-Redundancy Sticker Rule: Never paste a floating sticker whose object is already the main focus of the underlying hero shot (e.g. no torch sticker over burning ruins); instead add complementary props or place stickers cleanly inside card_stat / split_compare layouts.",
             "6-Archetype Visual Variety & Collision-Free Multi-Sticker Syntax: Leverage all 6 full-bleed editorial archetypes paired with real 2D transparent stickers: (1) card_stat: 1 hero sticker + curved ink arrow + soft elliptical ground shadow, (2) split_compare: Top-vs-Bottom on 9:16 Shorts / Left-vs-Right on 16:9 Long with balanced stickers on both halves + compact corner verdict badges (stamp_x / stamp_check), (3) bar_timeline & stat_pie: contextual climax/accent sticker anchored outside chart labels, (4) calm directional pan_left/pan_right across unique Flow hero art, (5) Flow hero scenes: unlimited 1-4+ simultaneous word-synced stickers whenever visual diagrams/lists need them (multi-slot collision-free spatial solver distributes them cleanly across corners with >=32px padding), (6) verdict stamps: animated stamp_x / stamp_check.",
@@ -348,11 +351,26 @@ def compile_pipeline_files(script_branch, out_dir, is_shorts=False, style_tag="b
 
                 if is_archetype:
                     img_path = shot
+                    last_hero_shot_file = None
                 else:
                     if not shot.endswith((".png", ".jpg")):
                         shot += ".png"
                     img_path = f"shots/{shot}"
                     shot_base = os.path.splitext(shot)[0]
+                    # REAL MULTI-FRAME DENSITY: Auto-diverge if blueprint attempts to repeat identical shot consecutively
+                    if 'last_hero_shot_file' in locals() and last_hero_shot_file == img_path:
+                        shot_base = f"{shot_base}_b"
+                        shot = f"{shot_base}.png"
+                        img_path = f"shots/{shot}"
+                        prompt = f"Sequential progression view: {prompt}"
+                    last_hero_shot_file = img_path
+
+                    # Mood-Tone Guard: block cheerful/smiling prompts on dark, tragic, crisis lines
+                    is_dark = any(k in prompt.lower() or k in text_val.lower() for k in ("demon", "hell", "drought", "starve", "starved", "death", "die", "dying", "crisis", "peril", "wither", "withered", "terror", "horr"))
+                    if is_dark:
+                        for bad_mood in ("peaceful smile", "cheerful", "smiling", "happy", "joyful"):
+                            prompt = prompt.replace(bad_mood, "solemn")
+
                     if shot_base not in seen_shots:
                         seen_shots.add(shot_base)
                         shots_rows.append({"id": shot_base, "ref": "-", "prompt": prompt})

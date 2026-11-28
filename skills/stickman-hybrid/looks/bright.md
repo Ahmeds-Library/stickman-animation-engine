@@ -8,7 +8,7 @@
 
 **STYLE** (paste this after `look: bright`):
 
-hand-drawn 2D cartoon illustration for a history explainer channel, clean dark ink outlines, flat colours with soft shading, a bright natural and varied colour palette like a modern flat cartoon: clear blue skies, fresh greens, clean whites, light pastel walls, colourful objects, balanced neutral daylight. Not sepia, not brown, not golden or orange colour cast. Full-bleed background that fills the whole frame, simple and readable, 16:9. People are simple round-head stick-figure characters with dot eyes and thin limbs.
+hand-drawn 2D cartoon illustration for a history explainer channel, crisp clean dark ink outlines, flat editorial colours with gentle grounded contact shadows under feet and objects, a bright airy natural colour palette like a modern flat cartoon: clear light blue skies, fresh greens, clean bright whites, light cream and pastel walls, warm terracotta and colourful objects, balanced cheerful daylight. Zero milky washout or bleached overexposure, not sepia, not brown, not moody or gloomy. Borderless full-bleed background that fills the whole frame edge-to-edge. People are simple pure-white round-head stick-figure characters with clean flat white heads, simple black dot eyes, light expressive ink brows and mouth matching the scene, and thin black stick limbs.
 
 **Character sheet** (text-to-image, one generation with `--outputs 2`; keep the better one):
 

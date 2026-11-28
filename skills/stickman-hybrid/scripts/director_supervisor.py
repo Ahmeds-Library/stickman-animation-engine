@@ -57,6 +57,21 @@ MODERN_ELECTRIC_DIGITAL_PROPS = {
     "battery", "robot", "rocket", "airplane", "fridge", "briefcase",
 }
 GENERIC_METAPHOR_PROPS = {"mit_anim_lightbulb_glow", "cc0_anim_sparkle_burst", "mit_anim_clock_tick"}
+STOPWORDS = {
+    "a", "an", "the", "with", "and", "in", "of", "to", "for", "on", "by", "at", "from", "into", "across",
+    "cartoon", "sticker", "flat", "style", "color", "colors", "illustration", "modern", "ancient",
+    "prehistoric", "isolated", "one", "single", "pure", "white", "black", "grey", "gray", "background",
+    "magenta", "cutout", "prop", "icon", "dark", "ink", "outlines", "outline", "soft", "shading",
+    "bright", "natural", "palette", "centered", "solid", "ff00ff", "shadow", "shadows", "clutter",
+    "text", "showing", "no", "clean", "2d", "3d", "vector", "drawing", "placed", "perfectly", "against",
+    "table", "floor", "people", "watermark", "letters", "labels", "absolutely",
+    "this", "that", "these", "those", "is", "was", "are", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "but", "if", "or", "because", "as", "until",
+    "while", "about", "against", "between", "through", "during", "before", "after", "above",
+    "below", "up", "down", "out", "off", "over", "under", "again", "further", "then", "once",
+    "what", "when", "where", "which", "who", "whom", "why", "how", "all", "any", "both", "each",
+    "few", "more", "most", "other", "some", "such", "than", "too", "very", "can", "will", "just"
+}
 
 
 def is_era_compatible(sticker_toks, context_corpus):
@@ -529,16 +544,12 @@ def _plan_scene_annotations(sc, spoken_text, words_in_win, scene_idx, total_scen
 
     # 2. Target 55-70% purposeful visual accents across illustrated shots (including Scene 0 opening hook!)
     # Never stamp red !/? over characters — use kinetic upper-edge emphasis or callback PiP cleanly clear of heads.
-    if scene_idx == 0 and dur >= 1.5:
-        h_toks = [w.get("word", "").strip(",.!?").upper() for w in words_in_win[:3] if len(w.get("word", "").strip(",.!?")) >= 3]
-        hook_lbl = f"PROOF: {' '.join(h_toks[:2])}" if h_toks else "REAL EVIDENCE"
-        if not current_era and not re.search(r"\b(?:19|18|14|15|20)\d{2}\b", spoken_text):
-            current_era = hook_lbl
-    elif scene_idx >= max(2, total_scenes - 1) and total_scenes >= 4 and dur >= 2.4:
+    # Note: Era anchor pill is permanently disabled per core engine mandate.
+    if scene_idx >= max(2, total_scenes - 1) and total_scenes >= 4 and dur >= 2.4:
         p_t = t0 + 0.25
         anns.append({"kind": "pip_inset", "t0": round(p_t, 3), "t1": round(min(t1, p_t + min(2.6, dur - 0.3)), 3), "label": "CALLBACK"})
 
-    return anns[:1], current_era
+    return anns[:1], ""
 
 
 def _infer_shot_function(idx, total_scenes, spoken_text, img_tok):
@@ -559,8 +570,148 @@ def _infer_shot_function(idx, total_scenes, spoken_text, img_tok):
     return "setup"
 
 
+def _load_available_vault_stickers():
+    """Loads 316-sticker catalog items with path, slug, and tag tokens for deterministic local matching."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(script_dir, "..", "..", "stickman-stickers", "CATALOG.tsv"),
+        os.path.join(script_dir, "..", "..", "..", "skills", "stickman-stickers", "CATALOG.tsv"),
+        os.path.join(script_dir, "skills", "stickman-stickers", "CATALOG.tsv"),
+        "skills/stickman-stickers/CATALOG.tsv",
+    ]
+    items = []
+    for cp in candidates:
+        cp = os.path.normpath(cp)
+        if os.path.exists(cp):
+            try:
+                with open(cp, encoding="utf-8") as f:
+                    for r in csv.DictReader(f, delimiter="\t"):
+                        p = r.get("path", "").strip()
+                        slug = os.path.splitext(os.path.basename(p))[0].lower()
+                        tags_str = r.get("tags", "").lower() + " " + slug.replace("_", " ")
+                        tags = set(re.findall(r"[a-z]{3,}", tags_str))
+                        items.append({"path": p, "slug": slug, "tags": tags, "category": r.get("category", "")})
+                if items:
+                    break
+            except Exception:
+                pass
+    return items
+
+
+def _backfill_stickers_locally(director_scenes, words_rows, shots_rows, project_dir, target_stickers, current_approved):
+    """Local deterministic backfill: finds voice-synced vault stickers for scenes needing decorations."""
+    needed = target_stickers - current_approved
+    if needed <= 0:
+        return director_scenes, current_approved
+
+    vault_items = _load_available_vault_stickers()
+    if not vault_items:
+        return director_scenes, current_approved
+
+    shot_prompt_tokens = {}
+    for sh in shots_rows:
+        sid = (sh.get("id") or sh.get("shot") or "").strip()
+        pr = (sh.get("prompt") or "").lower()
+        if sid:
+            shot_prompt_tokens[sid] = set(re.findall(r"[a-z]{3,}", pr))
+
+    globally_used = set()
+    for sc in director_scenes:
+        for ov in sc.get("overlays", []):
+            if ov.get("status") == "APPROVED":
+                globally_used.add(os.path.splitext(os.path.basename(ov.get("img", "")))[0].lower())
+
+    newly_added = 0
+    for sc in director_scenes:
+        if needed <= 0:
+            break
+        if sc.get("shot_size") == "DATA" or sc.get("camera_move") == "static":
+            continue
+        cur_ovs = sc.get("overlays", [])
+        if len(cur_ovs) >= 2:
+            continue
+
+        t0, t1 = sc["t0"], sc["t1"]
+        scene_words = [w for w in words_rows if (t0 - 0.05) <= float(w.get("start", 0.0)) <= (t1 - 0.20)]
+        if not scene_words:
+            continue
+
+        shot_id = os.path.splitext(os.path.basename(sc.get("img", "")))[0]
+        bg_toks = shot_prompt_tokens.get(shot_id, set()) | set(re.findall(r"[a-z]{3,}", sc.get("img", "").lower()))
+        scene_text = (sc.get("spoken_preview") or "").lower()
+
+        for sw in scene_words:
+            if needed <= 0:
+                break
+            w_raw = sw.get("word", "").lower().strip('.,!?"\':;')
+            if len(w_raw) < 3 or w_raw in STOPWORDS:
+                continue
+
+            candidate = None
+            for vi in vault_items:
+                if vi["slug"] in globally_used or vi["slug"] in GENERIC_METAPHOR_PROPS:
+                    continue
+                # STRICT NOUN MATCHING: w_raw must match slug or primary noun, never loose context tags!
+                slug_toks = set(vi["slug"].split("_"))
+                if w_raw == vi["slug"] or w_raw in slug_toks:
+                    if len(vi["tags"] & bg_toks) >= 2 or (len(vi["tags"]) == 1 and (vi["tags"] & bg_toks)):
+                        continue
+                    if not is_era_compatible(vi["tags"], scene_text):
+                        continue
+                    candidate = vi
+                    break
+
+            if candidate:
+                w_start = float(sw.get("start", t0))
+                sync_t = max(t0, round(w_start - 0.06, 3))
+                if abs(sync_t - w_start) <= 0.35:
+                    k_idx = len(sc["overlays"])
+                    slot_side = "left" if (k_idx % 2 == 0) else "right"
+                    motion_arch, sfx_kind = _pick_motion_archetype(candidate["path"], slot_side=slot_side)
+                    ov_new = {
+                        "idx": k_idx,
+                        "row_idx": -1,
+                        "cue": f"+{sc['cue']}",
+                        "img": candidate["path"],
+                        "status": "APPROVED",
+                        "reason": f"Local deterministic backfill: voice-locked on '{w_raw}' (<=0.35s)",
+                        "trigger_word": w_raw,
+                        "sync_t": sync_t,
+                        "motion_archetype": motion_arch,
+                        "sfx_kind": sfx_kind,
+                        "rest_tilt_deg": -2.2 if slot_side == "left" else 2.2,
+                        "arrow_to_next": False,
+                        "idle_breath": True,
+                        "exit_ease_sec": 0.22,
+                    }
+                    sc["overlays"].append(ov_new)
+                    globally_used.add(candidate["slug"])
+                    newly_added += 1
+                    needed -= 1
+                    break
+
+    return director_scenes, current_approved + newly_added
+
+
 def supervise_project(project_dir=".", pre_spend=False):
     """Runs Unified Director Supervision (Gate 0 + Choreography) & writes DIRECTOR_PLAN.json."""
+    # W7: Clean/null any stale era_anchor from previous runs
+    dp_path = os.path.join(project_dir, "DIRECTOR_PLAN.json")
+    if os.path.exists(dp_path):
+        try:
+            with open(dp_path, "r", encoding="utf-8") as f:
+                dp_old = json.load(f)
+            dirty = False
+            for sc_old in dp_old.get("scenes", []):
+                if sc_old.get("era_anchor"):
+                    sc_old["era_anchor"] = ""
+                    dirty = True
+            if dirty:
+                with open(dp_path, "w", encoding="utf-8") as f:
+                    json.dump(dp_old, f, indent=2)
+        except Exception:
+            pass
+
     scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
     if not os.path.exists(scenes_path):
         scenes_path = os.path.join(project_dir, "SCENES.tsv")
@@ -739,8 +890,8 @@ def supervise_project(project_dir=".", pre_spend=False):
             group_pattern = "solo_focus"
         elif n_ov == 2:
             has_causal_cue = ("cause_effect" in ext_l or any("cause_effect" in o["extra"].lower() for o in sc["overlays"]))
-            has_causal_text = any(ck in spoken_text.lower() for ck in CAUSAL_LINE_KWS)
-            group_pattern = "cause_effect" if (has_causal_cue or (not is_editorial_card and has_causal_text and len(sc["overlays"]) == 2)) else "duo_converge"
+            # STRICT GUARDRAIL: Only set cause_effect arrow on explicit cue or dedicated cards, NEVER automatically on regular illustrated shots!
+            group_pattern = "cause_effect" if (has_causal_cue or (is_editorial_card and "cause_effect" in ext_l)) else "duo_converge"
         elif n_ov == 3:
             group_pattern = "trio_cascade"
         else:
@@ -768,7 +919,7 @@ def supervise_project(project_dir=".", pre_spend=False):
             if not is_special and stk_base in scene_approved_stk:
                 status = "REJECTED_REDUNDANT"
                 reason = f"Duplicate identical sticker '{stk_base}' already active in scene {sc['cue']}"
-            elif not is_special and not is_era_compatible(stk_raw_toks | stk_exp_toks, scene_corpus):
+            elif not is_special and not is_era_compatible(stk_raw_toks, scene_corpus):
                 status = "REJECTED_ERA_MISMATCH"
                 reason = f"Modern/electric prop '{stk_base}' incompatible with prehistoric/ancient scene '{spoken_text[:60].strip()}'"
             elif not is_special and not is_editorial_card and shot_primary_toks:
@@ -804,12 +955,15 @@ def supervise_project(project_dir=".", pre_spend=False):
                 flagged_count += 1
 
             # 2. Exact Spoken Word Time-Sync Lock (-0.06s visual anticipation)
+            # Mandate: abs(sync_t - keyword_t) <= 0.35s; sticker MUST land right on its exact spoken noun in WORDS.tsv
             clean_c = ov["cue"].lstrip("+")
-            if clean_c in words_map:
-                hit_t = words_map[clean_c]
-                hit_word = next((w.get("word", "") for w in words_rows if w.get("line") == clean_c.split(".")[0] and w.get("i") == clean_c.split(".")[1]), "")
-            else:
-                hit_t, hit_word = _find_best_word_in_window(words_rows, t0, t1, ov["img"], stk_desc, used_word_times)
+            hit_t, hit_word = _find_best_word_in_window(words_rows, t0, t1, ov["img"], stk_desc, used_word_times)
+            if hit_t is None and clean_c in words_map:
+                c_cand_t = words_map[clean_c]
+                if t0 - 0.2 <= c_cand_t <= t1 + 0.2:
+                    hit_t = c_cand_t
+                    hit_word = next((w.get("word", "") for w in words_rows if w.get("line") == clean_c.split(".")[0] and w.get("i") == clean_c.split(".")[1]), "")
+
             if hit_t is not None:
                 used_word_times.append(hit_t)
                 sync_t = max(t0, round(hit_t - 0.06, 3))
@@ -874,7 +1028,7 @@ def supervise_project(project_dir=".", pre_spend=False):
             "fg_mg_bg": fg_mg_bg,
             "camera_move": cam_move,
             "group_pattern": group_pattern,
-            "era_anchor": current_era,
+            "era_anchor": "",  # Permanently disabled per core engine mandate
             "annotations": scene_anns,
             "spoken_preview": spoken_text[:120].strip(),
             "overlays": directed_ovs,
@@ -923,6 +1077,37 @@ def supervise_project(project_dir=".", pre_spend=False):
         audit_flags.append({"code": "REDUNDANT_STICKER", "cue": "-", "penalty": min(24, rejected_count * 6),
                             "msg": f"{rejected_count} REJECTED_REDUNDANT sticker(s)"})
 
+    # Format Target Budget Enforcement & Local Deterministic Backfill (W5)
+    is_short_proj = "short" in os.path.abspath(project_dir).lower()
+    dur_est = max_word_t if max_word_t > 0 else (len(scenes) * 3.5)
+    if is_short_proj:
+        target_stickers = max(6, min(14, int(dur_est / 8.0)))
+        target_shots = max(10, min(36, int(dur_est / 3.2)))
+    else:
+        target_stickers = max(12, min(24, int(dur_est / 9.5)))
+        target_shots = max(18, min(80, int(dur_est / 3.8)))
+
+    unique_hero_shots = {sc.get("img", "") for sc in scenes if (sc.get("img") or "").startswith("shots/")}
+
+    if approved_count < target_stickers:
+        director_scenes, approved_count = _backfill_stickers_locally(
+            director_scenes, words_rows, shots_rows, project_dir, target_stickers, approved_count
+        )
+
+    if approved_count < target_stickers:
+        stk_def = target_stickers - approved_count
+        msg = f"F_SPARSE_STICKERS_PRERENDER: Approved stickers {approved_count} < target {target_stickers} (deficit: {stk_def})"
+        continuity_warnings.append(msg)
+        audit_flags.append({"code": "F_SPARSE_STICKERS_PRERENDER", "cue": "-", "penalty": 25, "msg": msg})
+        print(f"❌ [BUDGET DEFICIT] Approved stickers: {approved_count}/{target_stickers} (Deficit: {stk_def})")
+
+    if len(unique_hero_shots) < target_shots:
+        shot_def = target_shots - len(unique_hero_shots)
+        msg = f"F_LOW_UNIQUE_SHOTS_PRERENDER: Unique Flow hero shots {len(unique_hero_shots)} < target {target_shots} (deficit: {shot_def})"
+        continuity_warnings.append(msg)
+        audit_flags.append({"code": "F_LOW_UNIQUE_SHOTS_PRERENDER", "cue": "-", "penalty": 25, "msg": msg})
+        print(f"❌ [BUDGET DEFICIT] Unique hero shots: {len(unique_hero_shots)}/{target_shots} (Deficit: {shot_def})")
+
     total_penalty = (
         min(24, sum(f["penalty"] for f in audit_flags if f["code"] == "F_READ_TOO_FAST"))
         + min(28, sum(f["penalty"] for f in audit_flags if f["code"] == "SHOT_REPEAT"))
@@ -931,6 +1116,7 @@ def supervise_project(project_dir=".", pre_spend=False):
         + sum(f["penalty"] for f in audit_flags if f["code"] == "REDUNDANT_STICKER")
         + min(24, sum(f["penalty"] for f in audit_flags if f["code"] in ("ERA_MISMATCH", "NONLITERAL_STICKER")))
         + min(25, sum(f["penalty"] for f in audit_flags if f["code"] == "F_CONSECUTIVE_CARDS"))
+        + sum(f["penalty"] for f in audit_flags if f["code"] in ("F_SPARSE_STICKERS_PRERENDER", "F_LOW_UNIQUE_SHOTS_PRERENDER"))
     )
     audit_score = max(0, 100 - total_penalty)
 
@@ -946,6 +1132,9 @@ def supervise_project(project_dir=".", pre_spend=False):
         "summary": {
             "total_scenes": len(director_scenes),
             "approved_stickers": approved_count,
+            "target_stickers": target_stickers,
+            "unique_hero_shots": len(unique_hero_shots),
+            "target_hero_shots": target_shots,
             "rejected_redundant_stickers": rejected_count,
             "flagged_offtopic_stickers": flagged_count,
             "continuity_warnings": len(continuity_warnings),
@@ -968,7 +1157,7 @@ def main():
     parser = argparse.ArgumentParser(description="Unified Director Supervisor: Gate 0, Continuity, Word-Sync & Motion Choreography")
     parser.add_argument("project_dir", nargs="?", default=".", help="Project directory")
     parser.add_argument("--pre-spend", action="store_true", help="Run Pre-Spend Gate 0 audit (estimates timings if WORDS.tsv pending)")
-    parser.add_argument("--strict", action="store_true", help="Exit non-zero if rejected redundant stickers remain or audit_score < 70")
+    parser.add_argument("--strict", action="store_true", help="Exit non-zero if rejected redundant stickers remain, budget deficit exists, or audit_score < 70")
     parser.add_argument("--warn-only", action="store_true", help="Never fail exit code; emit warnings cleanly")
     args = parser.parse_args()
 
@@ -980,12 +1169,14 @@ def main():
     sm = plan["summary"]
     print(f"🎬 DIRECTOR_PLAN.json generated for {args.project_dir} (score={plan['audit_score']}/100{' [pre-spend]' if plan['pre_spend_mode'] else ''}):")
     print(f"   • Scenes: {sm['total_scenes']} | Scale Variety: {sm['scale_variety']} | Sizes: {sm['shot_size_variety']}")
-    print(f"   • Stickers: {sm['approved_stickers']} APPROVED | {sm['rejected_redundant_stickers']} REJECTED_REDUNDANT | {sm['flagged_offtopic_stickers']} FLAGGED_OFFTOPIC")
+    print(f"   • Stickers: {sm['approved_stickers']}/{sm['target_stickers']} APPROVED | {sm['rejected_redundant_stickers']} REJECTED_REDUNDANT | {sm['flagged_offtopic_stickers']} FLAGGED_OFFTOPIC")
+    print(f"   • Hero Shots: {sm['unique_hero_shots']}/{sm['target_hero_shots']} UNIQUE")
     print(f"   • Continuity Warnings: {sm['continuity_warnings']}")
     if plan["continuity_warnings"]:
         for cw in plan["continuity_warnings"][:5]:
             print(f"     ⚠️ {cw}")
-    if args.strict and not args.warn_only and (sm["rejected_redundant_stickers"] > 0 or plan["audit_score"] < 70):
+    has_budget_fail = any(f["code"] in ("F_SPARSE_STICKERS_PRERENDER", "F_LOW_UNIQUE_SHOTS_PRERENDER") for f in plan.get("audit_breakdown", []))
+    if args.strict and not args.warn_only and (sm["rejected_redundant_stickers"] > 0 or plan["audit_score"] < 70 or has_budget_fail):
         sys.exit(2)
 
 

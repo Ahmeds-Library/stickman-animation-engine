@@ -16,9 +16,9 @@ ELEMENTS.tsv  id, ref, object   one object or one character pose per row, for th
               Downloads land in stick_<project>_el; ELPICK.tsv (shot, file) fixes swaps like PICK.tsv.
 
 SHOTS.tsv  id, ref, prompt[, space]   ref = - (no character) | a name from refs (img/ref_<name>.jpg) | sheet
-           space = right | left | top | - : that 40% of the picture stays empty and render.py puts stickers
+           space = right | left | top | - : that 40% of the picture stays empty and render_pro.py puts stickers
            there; MIX the sides across a film so frames do not all look alike
-           flip = yes: render.py mirrors the picture (after LaMa), e.g. a right-empty picture used as left
+           flip = yes: render_pro.py mirrors the picture (after LaMa), e.g. a right-empty picture used as left
 STYLE.txt  line 1 "look: <name>", then the style paragraph appended to every prompt (from looks/<name>.md,
            adapted to the topic)
 PICK.tsv   shot, file   only for shots whose picture came back under another number (Flow mispairs in
@@ -32,7 +32,28 @@ import csv, glob, hashlib, os, re, shutil, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from render import unmark  # noqa: E402
+
+def unmark(im):
+    """Fill Flow's Gemini sparkle (fixed ~58 px box inset from bottom-right of 1376x768) by harmonic fill."""
+    try:
+        import numpy as np
+        a = np.asarray(im.convert("RGB"), np.float32).copy()
+        h, w = a.shape[:2]
+        if w < 400 or h < 300:
+            return im.convert("RGB")
+        x0, y0 = w - 126, h - 126
+        x1, y1, pad = x0 + 62, y0 + 62, 6
+        reg = a[y0 - pad:y1 + pad, x0 - pad:x1 + pad]
+        m = np.zeros(reg.shape[:2], bool)
+        m[pad:-pad, pad:-pad] = True
+        reg[m] = reg[~m].mean(axis=0)
+        for _ in range(400):
+            avg = (np.roll(reg, 1, 0) + np.roll(reg, -1, 0) + np.roll(reg, 1, 1) + np.roll(reg, -1, 1)) / 4
+            reg[m] = avg[m]
+        a[y0 - pad:y1 + pad, x0 - pad:x1 + pad] = reg
+        return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+    except Exception:
+        return im.convert("RGB")
 
 FIX = (" The attached image is only a character design reference: keep the exact same 2D cartoon stickman "
        "character anatomy (clean round white ball head, dot eyes, simple ink mouth, expressive thin limbs) and "

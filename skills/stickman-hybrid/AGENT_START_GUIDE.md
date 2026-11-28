@@ -376,8 +376,8 @@ Act 6: Full-Circle Emotional Payoff       ──> Return to opening hook questio
 > When a new session starts (or the user asks to make an animation), ask these 5 questions in **ONE clean, structured message** in the user's language (Roman Urdu / Urdu / English) with no pre-selected defaults:
 > 1. **Topic**: What topic do you want the video on? (Aap apna topic bata dein ya main 10 viral topics suggest karoon?)
 > 2. **Language**: Narration language?
->    - English (Kokoro `am_michael`, local CPU)
->    - Urdu / Roman Urdu (Indic Parler `Aman` on Kaggle free GPU)
+>    - English (Kokoro `am_michael`, 100% local CPU)
+>    - Urdu / Roman Urdu (`urdu_vo.py`, Kokoro-82M + EspeakG2P, `hm_omega` / `hf_alpha`, 100% local CPU commercial-safe; Indic Parler Kaggle fallback)
 >    - Other languages
 > 3. **Format**:
 >    - `1) Long (16:9 Landscape)`: Full 1920x1080 documentary for YouTube / TV
@@ -391,14 +391,22 @@ Act 6: Full-Circle Emotional Payoff       ──> Return to opening hook questio
 Once the user answers all 5 questions, create the project and present only these **3 clean approval checkpoints**:
 
 ```
-[5 Questions Answered] ──> Generate Script ──> [CHECKPOINT 1: Approve Script]
-                                                           │ (Approved)
-                                                           ▼
-                    Generate Voice, Look & Assets ──> [CHECKPOINT 2: Approve Voice & Style]
-                                                           │ (Approved)
-                                                           ▼
-                         Render Video & QC ─────────> [CHECKPOINT 3: Deliver Final Video]
+[5 Questions Answered] ──> Generate Script + Lock Storyboard (Gate 0) ──> [CHECKPOINT 1: Approve Script & Master Storyboard]
+                                                                                   │ (Approved)
+                                                                                   ▼
+                             Generate Voice, Look & Assets ──────────────> [CHECKPOINT 2: Approve Voice & Style]
+                                                                                   │ (Approved)
+                                                                                   ▼
+                                  Render Video & RL QC ──────────────────> [CHECKPOINT 3: Deliver Final Video]
 ```
+
+> [!IMPORTANT]
+> **MANDATORY CHECKPOINT 1 PRE-SPEND GATE 0 STORYBOARD LOCK:**
+> At **Checkpoint 1**, the agent must generate `LINES.tsv`, `SCENES.tsv`, and immediately run:
+> ```bash
+> python3 studio.py storyboard <project_dir> --strict
+> ```
+> This compiles human-readable `STORYBOARD.md` and machine-readable `STORYBOARD.json`, and enforces Gate 0 pre-flight validation (auditing card spoken-word triggers, readable hold floors `>=2.0s`/`2.6s`, zero consecutive duplicate shots, zero red arrow leaks, and literal sticker matches) **BEFORE spending any Google Flow visual compute or TTS audio compute**. Only when Gate 0 passes is the storyboard presented to the user for Checkpoint 1 approval.
 
 
 

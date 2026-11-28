@@ -12,13 +12,12 @@ their own language.
 
 ```
 scripts/kokoro_vo.py      English and other languages, local CPU          -> takes/NN.wav
-kaggle/make_parler_job.py Urdu, Roman Urdu and regional languages on a free Kaggle GPU -> takes/NN.wav
+scripts/urdu_vo.py        100% local commercial-safe Urdu neural TTS      -> VO.wav + VO.tsv + WORDS.tsv
+kaggle/make_parler_job.py Regional Indian languages fallback on free Kaggle GPU -> takes/NN.wav
 scripts/vo_join.py        takes + LINES.tsv -> VO.wav + VO.tsv (silence trimmed, your gaps)
 scripts/align.py          VO.wav + VO.tsv -> WORDS.tsv (the time of every word)
 scripts/index_sfx.py      your sfx/ and music/ folders -> CATALOG.tsv (level, peak time)
 scripts/mix.py            cues.tsv + VO -> mix.wav (-14 LUFS, voice on top)
-scripts/eleven_sfx.py     make sounds with the user's ElevenLabs key (--batch sfx/STARTER.tsv)
-scripts/eleven_music.py   make an instrumental bed with ElevenLabs Music
 sfx/StableAudio/, sfx/Kenney_CC0/, sfx/Wyzowl_CC0/  the bundled free library (`1,648` total cataloged sounds including `Kenney_CC0/TactileV7/` marker scratches, ticks, clicks, scrolls & paper flips, 100% CC0)
 music/CC0_PublicDomain/   23 high-production CC0 Public Domain instrumental tracks (FreePD & Duru, 100% monetizable)
 kaggle/make_sfx_job.py    free AI sound effects on Kaggle (Stable Audio, you own the output)
@@ -44,7 +43,8 @@ had to be re-made. The reviewer approved this instead (2026-10-20, "aab aacha ha
 
    | Narration | Voice | Speed | Pauses |
    |---|---|---|---|
-   | Urdu, Roman Urdu and every regional language | Indic Parler, `natural`, seed 11 (Aman first for Urdu / Roman Urdu) | 1.0, never sped up | LINES gap + 0.3 s |
+   | Urdu / Roman Urdu (100% Local Neural) | Kokoro-82M + EspeakG2P, `urdu_vo.py` (`hm_omega` / `hf_alpha`) | 1.0 (CPU RTF ~0.40) | Broadcast vocal chain + 0.28s–0.40s list-prosody |
+   | Regional Indian Languages (Fallback) | Indic Parler, `natural`, seed 11 (Aman first) | 1.0, never sped up | LINES gap + 0.3 s |
    | English and every other language (Long Documentary) | Kokoro, `kokoro_vo.py --speed 1.0` (`am_michael`) | 1.0 | LINES gap + 0.10 s (Natural documentary prosody, 2.2–2.6 w/s) |
    | English and every other language (Viral Shorts 40–60s) | Kokoro, `kokoro_vo.py --speed 1.05` (`am_michael` / `am_fenrir`) | 1.05 | LINES gap + 0.08 s (Energetic punchy delivery, 2.6–3.2 w/s) |
 

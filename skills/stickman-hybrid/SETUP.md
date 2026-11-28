@@ -42,6 +42,8 @@ Report the OS, RAM, GPU (name + VRAM, or "none"), free disk space and the defaul
 Then decide, and tell me the decision:
 - **Strong machine** (NVIDIA GPU with ≥ 8 GB VRAM, or ≥ 16 GB RAM): Urdu / Roman Urdu voices can run locally.
 - **Weak machine** (anything less): Urdu / Roman Urdu voices will run on Kaggle's free GPU (Step 7). Kokoro (English) still runs locally on any machine.
+> [!NOTE]
+> **Urdu Voiceover Automation**: Urdu TTS runs via Kaggle free GPU (`KAGGLE_USERNAME` & `KAGGLE_KEY`). If Kaggle credentials are not configured, the pipeline pauses for manual `VO.wav` placement in the project directory before audio mixing and rendering continue.
 
 ## Step 1: Node.js + Flow Connector (verify, update if old)
 
@@ -63,7 +65,7 @@ Then decide, and tell me the decision:
   Linux: `sudo apt install ffmpeg`.
 - ✅ Checkpoint 1: `ffmpeg -version` works and `ffmpeg -hide_banner -filters` lists `ass`.
 - ✅ Checkpoint 2 (labels in every look, Urdu shaping): after Step 3, in a scratch folder run
-  `python ~/.claude/skills/stickman-hybrid/scripts/render.py --selfcheck`. It writes
+  `python ~/.claude/skills/stickman-hybrid/scripts/render_pro.py`. It writes
   `selfcheck_<look>.png` for the five looks. Open `selfcheck_warm.png` for me: the Urdu line must have properly shaped letters (श्री, क्ष, त्रि). It goes through libass with `shaping=complex`,
   because Pillow alone breaks Devanagari on most machines.
 
@@ -81,7 +83,7 @@ Then decide, and tell me the decision:
 
 *Benefit: every Flow picture carries a small Gemini sparkle near its bottom-right corner.
 LaMa paints it out properly, even on busy corners, and leaves every other pixel unchanged.
-Without it, render.py falls back to a smooth fill: invisible on sky and walls, slightly soft on
+Without it, render_pro.py falls back to a smooth fill: invisible on sky and walls, slightly soft on
 detailed corners.*
 - Licence: LaMa (Samsung AI, github.com/advimman/lama) is Apache-2.0. Use it only on your own
   Flow generations. It does not touch Google's invisible SynthID marking, and you must not claim

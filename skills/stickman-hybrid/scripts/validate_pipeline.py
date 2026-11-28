@@ -78,26 +78,37 @@ def check_flow_bridge_active(port=8791):
 
 
 def detect_image_text_leak(img_path):
-    """Automated text-leak / top-banner sanity check using tesseract OCR with confidence gating."""
+    """Full-frame automated text-leak / baked words check using tesseract OCR with confidence gating."""
     if not os.path.exists(img_path) or os.path.getsize(img_path) < 10000:
         return False, ""
     try:
         im = Image.open(img_path)
         w, h = im.size
-        # Crop top 28% where comic titles/headers appear
-        top_crop = im.crop((0, 0, w, int(h * 0.28)))
-        tmp_crop = f"/tmp/_ocr_crop_{os.getpid()}_{os.path.basename(img_path)}"
-        top_crop.save(tmp_crop)
+        # Downscale if large for speed
+        if max(w, h) > 1280:
+            scale = 1280.0 / max(w, h)
+            im_scan = im.resize((int(w * scale), int(h * scale)), Image.BILINEAR)
+        else:
+            im_scan = im
 
-        r = subprocess.run(["tesseract", tmp_crop, "stdout", "--oem", "1", "-l", "eng", "--psm", "6", "tsv"],
-                           capture_output=True, text=True, timeout=5)
-        if os.path.exists(tmp_crop):
+        tmp_scan = f"/tmp/_ocr_scan_{os.getpid()}_{os.path.basename(img_path)}"
+        im_scan.save(tmp_scan)
+
+        r = subprocess.run(["tesseract", tmp_scan, "stdout", "--oem", "1", "-l", "eng", "--psm", "11", "tsv"],
+                           capture_output=True, text=True, timeout=8)
+        if os.path.exists(tmp_scan):
             try:
-                os.remove(tmp_crop)
+                os.remove(tmp_scan)
             except OSError:
                 pass
 
         words = []
+        high_conf_words = []
+        suspect_kws = {
+            "ancient", "history", "dental", "care", "pain", "tooth", "toothache",
+            "ipsum", "lorem", "dolor", "chapter", "episode", "suspense", "danger",
+            "mystery", "baal", "god", "temple", "screen", "monitor"
+        }
         for ln in r.stdout.splitlines()[1:]:
             cols = ln.split("\t")
             if len(cols) >= 12:
@@ -107,17 +118,203 @@ def detect_image_text_leak(img_path):
                 except ValueError:
                     conf = 0.0
                 if conf >= 65.0 and re.fullmatch(r"[A-Za-z]{3,}", tok):
-                    words.append(tok)
+                    words.append((tok, conf))
+                    if conf >= 75.0 and len(tok) >= 5:
+                        high_conf_words.append(tok)
 
-        suspect_kws = {"ancient", "history", "dental", "care", "pain", "tooth", "toothache", "ipsum", "lorem", "dolor", "chapter", "episode"}
-        hit_kws = [w for w in words if w.lower() in suspect_kws]
+        word_tokens = [w[0] for w in words]
+        hit_kws = [w for w in word_tokens if w.lower() in suspect_kws]
         if hit_kws:
-            return True, f"Baked-in header/comic text detected: '{' '.join(words[:6])}' (matched {hit_kws})"
-        if len(words) >= 4:
-            return True, f"Baked-in text leak detected in top banner: '{' '.join(words[:6])}'"
+            return True, f"Baked-in keyword/header text detected: '{' '.join(word_tokens[:6])}' (matched {hit_kws})"
+        if len(high_conf_words) >= 1:
+            return True, f"Baked-in clean text detected: '{', '.join(high_conf_words[:4])}'"
+        if len(word_tokens) >= 3:
+            return True, f"Baked-in text leak detected ({len(word_tokens)} tokens): '{' '.join(word_tokens[:6])}'"
         return False, ""
     except Exception:
         return False, ""
+
+
+def measure_shot_photometrics(img_path, scene_mood="auto", prompt=""):
+    """Local NumPy/Pillow photometric inspector (Measure, Don't Guess!).
+    Computes normalized brightness_100, shadow_area_pct, saturation_pct,
+    clipped_white_pct (excluding round dark-outlined white stickman head cores),
+    and luminance contrast_std.
+    """
+    out = {
+        "ok": True,
+        "failures": [],
+        "warnings": [],
+        "mood": "daylight",
+        "brightness_100": 0.0,
+        "shadow_area_pct": 0.0,
+        "saturation_pct": 0.0,
+        "clipped_white_pct": 0.0,
+        "clipped_white_raw_pct": 0.0,
+        "contrast_std": 0.0,
+        "head_cores_excluded": 0,
+        "summary": "",
+    }
+    if not img_path or not os.path.exists(img_path):
+        out["ok"] = False
+        out["failures"].append("Image missing")
+        return out
+
+    try:
+        with Image.open(img_path) as im_src:
+            im = im_src.convert("RGB")
+            w0, h0 = im.size
+            if w0 > 640:
+                sh_h = max(64, int(round(h0 * (640.0 / w0))))
+                im = im.resize((640, sh_h), Image.Resampling.BILINEAR)
+            arr = np.asarray(im, dtype=np.float32)
+            hsv = np.asarray(im.convert("HSV"), dtype=np.float32)
+
+        luma = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+        b100 = float(luma.mean()) / 255.0 * 100.0
+        shad_pct = float((luma < 95.0).mean()) * 100.0
+        sat_pct = float(hsv[..., 1].mean()) / 255.0 * 100.0
+        c_std = float(luma.std())
+
+        clip_mask = (arr[..., 0] > 248.0) & (arr[..., 1] > 248.0) & (arr[..., 2] > 248.0)
+        clip_raw = float(clip_mask.mean()) * 100.0
+        filtered_clip = clip_mask.copy()
+        heads_excluded = 0
+
+        # Exclude compact dark-outlined white round stickman head cores from burnt-white metric
+        try:
+            from scipy import ndimage
+            labeled, n_comp = ndimage.label(clip_mask)
+            if n_comp > 0:
+                total_px = clip_mask.size
+                ink_mask = luma < 115.0
+                slices = ndimage.find_objects(labeled)
+                for cid, sl in enumerate(slices, 1):
+                    if sl is None:
+                        continue
+                    comp = (labeled[sl] == cid)
+                    area = int(comp.sum())
+                    area_ratio = area / max(1, total_px)
+                    if not (0.0012 <= area_ratio <= 0.085):
+                        continue
+                    bh = sl[0].stop - sl[0].start
+                    bw = sl[1].stop - sl[1].start
+                    if bh == 0 or bw == 0:
+                        continue
+                    aspect_r = bw / float(bh)
+                    fill_r = area / float(bw * bh)
+                    if not (0.45 <= aspect_r <= 2.2 and fill_r >= 0.45):
+                        continue
+                    # Expand slice by 3px to verify dark ink outline ring
+                    y0 = max(0, sl[0].start - 3)
+                    y1 = min(clip_mask.shape[0], sl[0].stop + 3)
+                    x0 = max(0, sl[1].start - 3)
+                    x1 = min(clip_mask.shape[1], sl[1].stop + 3)
+                    sub_comp = (labeled[y0:y1, x0:x1] == cid)
+                    ring = ndimage.binary_dilation(sub_comp, iterations=3) & (~sub_comp)
+                    ring_px = int(ring.sum())
+                    if ring_px > 0 and (float(ink_mask[y0:y1, x0:x1][ring].sum()) / ring_px) >= 0.22:
+                        filtered_clip[y0:y1, x0:x1][sub_comp] = False
+                        heads_excluded += 1
+        except Exception:
+            pass
+
+        clip_pct = float(filtered_clip.mean()) * 100.0
+        mood_txt = f"{scene_mood} {prompt}".lower()
+        mood = "sunset" if any(k in mood_txt for k in ("sunset", "dusk", "evening", "twilight", "night", "crisis")) else "daylight"
+
+        # Bright 2D editorial calibration (airy daylight B=60-82, gentle shadows 5-28%; sunset B=44-68)
+        failures = []
+        warnings = []
+        if mood == "daylight":
+            if b100 > 86.0:
+                failures.append(f"Overexposed washed-out brightness (B={b100:.1f} > 86)")
+            elif b100 < 45.0:
+                failures.append(f"Bright 2D scene too dark/gloomy (B={b100:.1f} < 45)")
+            if shad_pct > 38.0:
+                failures.append(f"Overly heavy/gloomy shadows on daylight bright scene (Shad={shad_pct:.1f}% > 38%)")
+            elif shad_pct < 3.0:
+                warnings.append(f"Ultra-low contact shadows (Shad={shad_pct:.1f}% < 3%; gentle target 5-28%)")
+        else:
+            if b100 > 84.0:
+                failures.append(f"Overexposed sunset scene (B={b100:.1f} > 84)")
+            elif b100 < 36.0:
+                failures.append(f"Overly dark gloomy sunset/evening scene (B={b100:.1f} < 36)")
+
+        if clip_pct > 14.0:
+            failures.append(f"Burnt-out white highlights (Clip={clip_pct:.1f}% > 14%)")
+
+        if c_std < 30.0:
+            failures.append(f"Milky washout haze (Std={c_std:.1f} < 30)")
+
+        if sat_pct < 16.0:
+            warnings.append(f"Low washed-out saturation (Sat={sat_pct:.1f}% < 16%)")
+        elif sat_pct > 72.0:
+            warnings.append(f"Harsh neon saturation (Sat={sat_pct:.1f}% > 72%)")
+
+        out.update({
+            "ok": len(failures) == 0,
+            "failures": failures,
+            "warnings": warnings,
+            "mood": mood,
+            "brightness_100": round(b100, 2),
+            "shadow_area_pct": round(shad_pct, 2),
+            "saturation_pct": round(sat_pct, 2),
+            "clipped_white_pct": round(clip_pct, 2),
+            "clipped_white_raw_pct": round(clip_raw, 2),
+            "contrast_std": round(c_std, 2),
+            "head_cores_excluded": heads_excluded,
+            "summary": (
+                f"B={b100:.1f} | Shad={shad_pct:.1f}% | Sat={sat_pct:.1f}% | "
+                f"Clip={clip_pct:.2f}% | Std={c_std:.1f}"
+            ),
+        })
+        return out
+    except Exception as e:
+        out["ok"] = False
+        out["failures"].append(f"Photometric read error: {e}")
+        return out
+
+
+def detect_outer_frame_border(img_path, edge_pct=0.028):
+    """Detects solid uniform comic/paper/white/black frame margins bordering the outer ~3% perimeter."""
+    res = {"ok": True, "border_detected": False, "close_ratio": 0.0, "med_rgb": [], "msg": "Borderless full-bleed"}
+    if not img_path or not os.path.exists(img_path):
+        return res
+    try:
+        with Image.open(img_path) as im_src:
+            im = im_src.convert("RGB")
+            w, h = im.size
+            if w > 640:
+                sh_h = max(64, int(round(h * (640.0 / w))))
+                im = im.resize((640, sh_h), Image.Resampling.BILINEAR)
+                w, h = im.size
+            arr = np.asarray(im, dtype=np.float32)
+
+        bw = max(2, int(round(w * edge_pct)))
+        bh = max(2, int(round(h * edge_pct)))
+        strips = [arr[:bh, :, :], arr[h - bh:, :, :], arr[:, :bw, :], arr[:, w - bw:, :]]
+        rim_rgb = np.concatenate([s.reshape(-1, 3) for s in strips], axis=0)
+        med = np.median(rim_rgb, axis=0)
+        total_close = float((np.abs(rim_rgb - med).max(axis=1) < 22.0).mean())
+        side_closes = [float((np.abs(s.reshape(-1, 3) - med).max(axis=1) < 22.0).mean()) for s in strips]
+        sides_matching = sum(1 for sc in side_closes if sc >= 0.85)
+
+        if total_close >= 0.86 and sides_matching >= 3:
+            med_int = [int(round(float(x))) for x in med]
+            msg = f"Outer comic/paper border detected ({total_close*100:.1f}% uniform rim, {sides_matching}/4 sides, rgb={med_int})"
+            return {
+                "ok": False,
+                "border_detected": True,
+                "close_ratio": round(total_close, 4),
+                "med_rgb": med_int,
+                "msg": msg,
+            }
+        res["close_ratio"] = round(total_close, 4)
+        return res
+    except Exception as e:
+        res["msg"] = f"Border check error: {e}"
+        return res
 
 
 def inspect_sticker_cutout_quality(png_path):
@@ -170,6 +367,8 @@ def validate_stickers_and_shots(project_dir="."):
     missing_stickers = []
     flawed_stickers = []
     text_leaks = []
+    photo_records = []
+    checked_shot_paths = set()
     total_scenes = 0
     total_stickers = 0
 
@@ -224,6 +423,16 @@ def validate_stickers_and_shots(project_dir="."):
                         has_leak, leak_msg = detect_image_text_leak(found_p)
                         if has_leak:
                             text_leaks.append(f"Row {row_idx}: '{shot_file}': {leak_msg}")
+                        abs_fp = os.path.abspath(found_p)
+                        if abs_fp not in checked_shot_paths:
+                            checked_shot_paths.add(abs_fp)
+                            pm = measure_shot_photometrics(found_p, prompt=r.get("text", "") or r.get("desc", ""))
+                            photo_records.append((os.path.basename(found_p), pm))
+                            if pm.get("failures"):
+                                print(f"   ⚠️ Gate 1 Photometric Alert [{os.path.basename(found_p)}]: {'; '.join(pm['failures'])} ({pm['summary']})")
+                            b_res = detect_outer_frame_border(found_p)
+                            if b_res.get("border_detected"):
+                                print(f"   ⚠️ Gate 1 Border Alert [{os.path.basename(found_p)}]: {b_res['msg']}")
 
             # Check legacy overlays column if present
             ov_raw = r.get("ov", "").strip()
@@ -244,6 +453,18 @@ def validate_stickers_and_shots(project_dir="."):
                             ok_cut, cut_reason = inspect_sticker_cutout_quality(resolved_path)
                             if not ok_cut:
                                 flawed_stickers.append(f"Row {row_idx}: '{img_token}' ({resolved_path}): {cut_reason}")
+
+    if photo_records:
+        n_pm = len(photo_records)
+        m_b = sum(p["brightness_100"] for _, p in photo_records) / n_pm
+        m_sh = sum(p["shadow_area_pct"] for _, p in photo_records) / n_pm
+        m_sat = sum(p["saturation_pct"] for _, p in photo_records) / n_pm
+        m_clip = sum(p["clipped_white_pct"] for _, p in photo_records) / n_pm
+        m_std = sum(p["contrast_std"] for _, p in photo_records) / n_pm
+        print(
+            f"   📊 Gate 1 Photometrics ({n_pm} unique shots): "
+            f"B={m_b:.1f} | Shad={m_sh:.1f}% | Sat={m_sat:.1f}% | Clip={m_clip:.2f}% | Std={m_std:.1f}"
+        )
 
     errors = []
     if missing_shots:
@@ -344,6 +565,7 @@ def validate_audio_integrity(project_dir="."):
             "shimmer", "threetone", "twotone", "pepsound", "notification_ping",
             "fairy", "glockenspiel", "arcade", "whistle", "zip-out", "zip_out",
             "scratch", "chalk", "marker", "pencil",
+            "beep", "beeps", "countdown", "reverse", "screech", "radio", "glitch", "buzz", "alarm_phone"
         )
         missing_sfx = []
         banned_hits = []
@@ -531,8 +753,90 @@ def validate_multitrack_sync(project_dir="."):
     parity_errs = validate_fact_number_parity(project_dir)
     errors.extend(parity_errs)
 
+    # 6. Card-to-Voice Sync & Minimum Readable Hold Audit
+    card_sync_errs = validate_card_voice_sync(project_dir)
+    errors.extend(card_sync_errs)
+
     is_ok = (len(errors) == 0)
     return is_ok, errors
+
+
+def validate_card_voice_sync(project_dir="."):
+    """Verifies that every editorial card aligns with spoken timestamps and holds for readable duration."""
+    words_path = os.path.join(project_dir, "WORDS.tsv")
+    scenes_path = os.path.join(project_dir, "SCENES_HYBRID.tsv")
+    if not os.path.exists(words_path) or not os.path.exists(scenes_path):
+        return []
+
+    words_list = []
+    line_words = {}
+    with open(words_path, encoding="utf-8", errors="ignore") as wf:
+        for r in csv.DictReader(wf, delimiter="\t"):
+            try:
+                item = {
+                    "line": r.get("line", ""),
+                    "i": r.get("i", ""),
+                    "start": float(r["start"]),
+                    "end": float(r["end"]),
+                    "word": r.get("word", ""),
+                    "clean": re.sub(r"[^\w]", "", r.get("word", "").lower()),
+                    "cue": f"{r.get('line', '')}.{r.get('i', '')}",
+                }
+                words_list.append(item)
+                line_words.setdefault(item["line"], []).append(item)
+            except Exception:
+                continue
+
+    scenes = []
+    with open(scenes_path, encoding="utf-8", errors="ignore") as sf:
+        for r in csv.reader(sf, delimiter="\t"):
+            if not r or r[0].startswith(("+", "#")) or r[0].lower() in ("cue", "id"):
+                continue
+            scenes.append(r)
+
+    errs = []
+    for i, sc in enumerate(scenes):
+        cue = sc[0].strip()
+        img = sc[1].strip() if len(sc) > 1 else ""
+        tok = img.split(":")[0].strip().lower()
+        is_card = tok in (
+            "card", "card_stat", "card_phrase", "card_strike_replace", "strike_replace",
+            "split_compare", "split_contrast", "scale_compare", "scale_bar",
+            "bar_timeline", "timeline", "stat_pie", "stat_ring", "chapter_breather", "breather"
+        ) or tok.startswith(("card_", "split_", "timeline_", "stat_", "bar_", "chapter_", "breather", "scale_"))
+
+        if not is_card:
+            continue
+
+        card_t0 = None
+        if "." in cue:
+            parts = cue.split(".")
+            ln, idx = parts[0], parts[1]
+            if ln in line_words:
+                for w in line_words[ln]:
+                    if w["i"] == idx:
+                        card_t0 = w["start"]
+                        break
+        if card_t0 is None:
+            continue
+
+        next_t0 = None
+        if i + 1 < len(scenes):
+            nxt_cue = scenes[i + 1][0].strip()
+            if "." in nxt_cue:
+                parts = nxt_cue.split(".")
+                ln, idx = parts[0], parts[1]
+                if ln in line_words:
+                    for w in line_words[ln]:
+                        if w["i"] == idx:
+                            next_t0 = w["start"]
+                            break
+
+        card_dur = (next_t0 - card_t0) if next_t0 is not None else 5.0
+        min_readable_dur = 2.6 if any(k in tok for k in ("split", "strike", "scale")) else 2.0
+        if card_dur < min_readable_dur - 0.05:
+            errs.append(f"F_CARD_EARLY_OR_LATE_DESYNC: Card '{cue}' ({tok}) held only {card_dur:.2f}s (< readable floor {min_readable_dur:.2f}s)")
+    return errs
 
 
 def _extract_spoken_numbers(text):
@@ -858,18 +1162,30 @@ def audit_timeline_real_visual_density(project_dir=".", format_type="9:16"):
             dedup.append(sc)
     scene_cuts = dedup
 
-    # 1. Unique Hero Shot Density (stop cheating with 6-12 recycled shots; scale cleanly for <30s proofs)
+    # 1. Unique Hero Shot Density (stop cheating with 6-12 recycled shots; scale cleanly with duration)
     unique_hero_shots = {sc[2] for sc in scene_cuts if sc[2].startswith("shots/")}
-    if dur_sec < 30.0:
-        min_req_shots = max(3, int(dur_sec / 4.5))
+    if is_shorts:
+        min_req_shots = max(6, int(dur_sec / 3.5))
     else:
-        min_req_shots = max(10, int(dur_sec / 5.5)) if is_shorts else max(25, int(dur_sec / 7.5))
+        min_req_shots = max(12, int(dur_sec / 4.4))
     if len(unique_hero_shots) < min_req_shots:
-        msg = (f"Unique Shot Density FAILED: Only {len(unique_hero_shots)} unique Flow hero shots for "
+        msg = (f"F_LOW_UNIQUE_SHOTS: Only {len(unique_hero_shots)} unique Flow hero shots for "
                f"{dur_sec:.1f}s ({'9:16 Shorts' if is_shorts else '16:9 Long'}; minimum required is {min_req_shots}). "
                f"Stop recycling {len(unique_hero_shots)} images with fake cuts!")
         errors.append(msg)
-        deductions.append(f"[-30 pts] {msg}")
+        deductions.append(f"[-25 pts] {msg}")
+
+    # Hard Blocker: Consecutive duplicate shots/*.png rows
+    consecutive_dups = []
+    for idx_c in range(len(scene_cuts) - 1):
+        _, c0, img0, _ = scene_cuts[idx_c]
+        _, c1, img1, _ = scene_cuts[idx_c + 1]
+        if img0.startswith("shots/") and img0 == img1:
+            consecutive_dups.append(f"{c0}->{c1} ({img0})")
+    if consecutive_dups:
+        msg = f"F_DUPLICATE_SHOT_TRANSITION: Consecutive duplicate shot rows detected: {', '.join(consecutive_dups[:4])}. Each narrative beat must advance to a distinct unique hero shot!"
+        errors.append(msg)
+        deductions.append(f"[-25 pts] {msg}")
 
     # 2. Check BOTH pacing extremes: Dead Stagnation (>7.5s/11s) AND Chaotic Rapid Shifting (<1.5s)
     rapid_flickers = []
@@ -1055,6 +1371,40 @@ def validate_pacing_and_density(project_dir=".", format_type="9:16"):
             interval = visual_beats[idx + 1][0] - visual_beats[idx][0]
             if interval > max_allowed_hold + 0.15:
                 errors.append(f"Visual Dead-Hold > {max_allowed_hold}s: Beat {visual_beats[idx][1]} held for {interval:.2f}s before {visual_beats[idx + 1][1]}. Insert a fresh hero shot, archetype beat, or synchronized sticker.")
+
+        # Check Sticker Density (Rule 29 & Mission Mandate)
+        stk_rows = [r for r in list(csv.DictReader(open(scenes_path, encoding="utf-8"), delimiter="\t"))
+                    if (r.get("cue") or "").startswith("+") and not (r.get("img") or "").startswith("bars:")
+                    and (r.get("img") or "") not in ("tag", "count")]
+        min_stks = 14 if is_shorts else 28
+        if len(stk_rows) < min_stks:
+            errors.append(f"F_SPARSE_STICKERS: Only {len(stk_rows)} stickers scheduled in SCENES_HYBRID.tsv (minimum required is {min_stks}). Video is under-decorated; add purposeful voice-synced stickers!")
+
+        # Check Card-to-Voice Sync Gate (F_CARD_VOICE_DESYNC)
+        all_words_list = []
+        with open(words_path, encoding="utf-8") as wf:
+            for wr in csv.DictReader(wf, delimiter="\t"):
+                all_words_list.append({"word": wr.get("word", "").lower().strip('.,!?":;'), "start": float(wr.get("start", 0.0)), "end": float(wr.get("end", 0.0))})
+
+        card_desyncs = []
+        for r in list(csv.DictReader(open(scenes_path, encoding="utf-8"), delimiter="\t")):
+            c_cue = (r.get("cue") or "").strip()
+            if not c_cue or c_cue.startswith("#") or c_cue.startswith("+"):
+                continue
+            c_img = (r.get("img") or "").strip()
+            c_tok = os.path.splitext(os.path.basename(c_img))[0].split(":")[0].strip()
+            if c_tok in ("card", "card_stat", "card_phrase", "split_compare", "split_contrast", "scale_compare", "card_strike_replace", "strike_replace"):
+                c_t0 = words_map.get(c_cue, 0.0)
+                c_text = (r.get("text") or "").strip().lower()
+                c_words = set(re.findall(r"\b[a-z]{3,}\b|\b\d+\b", c_text))
+                c_words -= {"the", "and", "for", "with", "from", "that", "this", "myth", "reality", "card", "stat"}
+                if c_words:
+                    spoken_in_win = {w["word"] for w in all_words_list if c_t0 - 0.5 <= w["start"] <= c_t0 + 4.5}
+                    overlap = c_words & spoken_in_win
+                    if not overlap and len(spoken_in_win) > 0:
+                        card_desyncs.append(f"{c_cue} ({c_tok}: '{c_text[:30]}')")
+        if card_desyncs:
+            errors.append(f"F_CARD_VOICE_DESYNC: Card text out-of-sync with spoken narration: {', '.join(card_desyncs[:3])}")
 
         # 4. Pre-Render Card & Split-Screen Pixel Content Verification
         try:

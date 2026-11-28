@@ -70,11 +70,23 @@ def _split_prosody_clauses(text):
     return [(clean, 0.0)]
 
 
+def _clean_pronunciation(text):
+    """Applies phonetic respellings for ancient/historical proper nouns mispronounced by English G2P."""
+    t = re.sub(r"\bBaal\b", "Bahl", text)
+    t = re.sub(r"\bbaal\b", "bahl", t)
+    t = re.sub(r"\bBa'al\b", "Bahl", t)
+    t = re.sub(r"\bIshbaal\b", "Ish-bahl", t)
+    t = re.sub(r"\bBeeliada\b", "Bee-el-eye-ada", t)
+    t = re.sub(r"\bZebul\b", "Zeh-bool", t)
+    t = re.sub(r"\bZevuv\b", "Zeh-voov", t)
+    return t
+
+
 def synthesize_line(pipe, text, voice="am_michael", speed=1.0):
     """Synthesizes text with natural English prosody and Clause/Enumeration Breath Pacing.
     Enforces V10 studio purity: enumerated list spacing (0.34s between items), DC-offset removal, & 14ms micro-fades.
     """
-    clauses = _split_prosody_clauses(text)
+    clauses = _split_prosody_clauses(_clean_pronunciation(text))
     chunks = []
     for clause_txt, pause_after in clauses:
         gen = pipe(clause_txt.strip(), voice=voice, speed=speed)
